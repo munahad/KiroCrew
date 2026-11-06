@@ -11,6 +11,8 @@ import {
 import { SortableAppNavRow } from './appRail'
 import { RailContextMenu, groupTitle, type RailItemMeta } from './railCustomize'
 import { RailCustomizeModal, type RailPinChange } from './railCustomizeModal'
+import { RailPaletteModal } from './railPaletteModal'
+import { useRailEditorVariant } from '../../lib/railEditorVariant'
 import { OPEN_RAIL_CUSTOMIZE_EVENT } from './railSettingsFlyout'
 import { RAIL_PIN_DROP_HOST_ID, useRailNativeDrop } from './railPinDrop'
 import { RailRenameInput } from './railRename'
@@ -86,6 +88,8 @@ export function RailGroups({ available, renderItem, collapsed, defaultGroup, met
   const sensors = useDndSensors({ distance: 8 })
   const [activeId, setActiveId] = useState<string | null>(null)
   const [customizing, setCustomizing] = useState(false)
+  // Design exploration: which editor "Customize rail" opens (list or palette).
+  const editorVariant = useRailEditorVariant()
   // The Settings flyout opens the same modal from outside this component.
   useEffect(() => {
     const open = () => setCustomizing(true)
@@ -190,14 +194,25 @@ export function RailGroups({ available, renderItem, collapsed, defaultGroup, met
     </DndContext>
     </div>
     </RailContextMenu>
-    <RailCustomizeModal
-      open={customizing}
-      onClose={() => setCustomizing(false)}
-      groups={groups}
-      hidden={hidden}
-      meta={modalMeta}
-      onCommit={commitFromModal}
-    />
+    {editorVariant === 'palette' ? (
+      <RailPaletteModal
+        open={customizing}
+        onClose={() => setCustomizing(false)}
+        groups={groups}
+        hidden={hidden}
+        meta={modalMeta}
+        onCommit={commitFromModal}
+      />
+    ) : (
+      <RailCustomizeModal
+        open={customizing}
+        onClose={() => setCustomizing(false)}
+        groups={groups}
+        hidden={hidden}
+        meta={modalMeta}
+        onCommit={commitFromModal}
+      />
+    )}
   </>)
 }
 

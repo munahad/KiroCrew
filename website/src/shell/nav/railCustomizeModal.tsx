@@ -10,6 +10,7 @@ import { useDndSensors } from '../../hooks/useDndSensors'
 import { i18nT } from '../../i18n/t'
 import { addGroup, commitRail, moveGroup, removeGroup, renameGroup, resetRailLayout, type RailGroup } from '../../lib/railLayout'
 import { groupTitle, type RailItemMeta } from './railCustomize'
+import { setRailEditorVariant } from '../../lib/railEditorVariant'
 
 /** The shelf: rows not on the rail. A pseudo-group, always last, never a real group. */
 const SHELF = '__shelf'
@@ -228,7 +229,17 @@ export function RailCustomizeModal({ open, onClose, groups, hidden, meta, onComm
       maxWidth={420}
       footer={(
         <div className="flex w-full items-center justify-between">
-          <Btn onClick={resetRailLayout}>{i18nT('nav.rail_reset')}</Btn>
+          <div className="flex items-center gap-3">
+            <Btn onClick={resetRailLayout}>{i18nT('nav.rail_reset')}</Btn>
+            {/* Design exploration: flip to the palette variation to compare. */}
+            <button
+              type="button"
+              onClick={() => setRailEditorVariant('palette')}
+              className="text-[13px] text-muted bg-transparent border-none cursor-pointer hover:text-text underline underline-offset-2"
+            >
+              {i18nT('nav.rail_editor_try_palette')}
+            </button>
+          </div>
           <Btn primary onClick={onClose}>{i18nT('nav.rail_done')}</Btn>
         </div>
       )}
