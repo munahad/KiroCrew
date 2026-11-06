@@ -1,14 +1,16 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { act, fireEvent, render, screen } from '@testing-library/react'
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
 
 import { RailGroups } from './railGroups'
 import { RAIL_LAYOUT_KEY, RAIL_PIN_MIME, insertPin, readRailLayout, writeRailLayout } from '../../lib/railLayout'
+import { setLayoutEditing } from '../../lib/shellLayout'
+import { renderWithProviders } from '../../test/helpers'
 
 const AVAILABLE = ['chat', 'members', 'apps', 'apps-library', 'app:radar']
 const LABELS: Record<string, string> = { chat: 'Sessions', members: 'Mates', apps: 'Discover', 'apps-library': 'Library', 'app:radar': 'Radar' }
 
-function renderRail(setAppPinned = vi.fn()) {
-  render(
+function renderRail(setAppPinned = vi.fn(), withProviders = false) {
+  ;(withProviders ? renderWithProviders : render)(
     <RailGroups
       available={AVAILABLE}
       collapsed={false}
@@ -22,7 +24,7 @@ function renderRail(setAppPinned = vi.fn()) {
   return setAppPinned
 }
 
-afterEach(() => localStorage.clear())
+afterEach(() => { setLayoutEditing(false); localStorage.clear() })
 
 describe('RailGroups right-click', () => {
   it('renders the default groups with their titles', () => {
@@ -54,11 +56,13 @@ describe('RailGroups right-click', () => {
     expect(readRailLayout().groups.map(g => g.id)).toEqual(['workspace', 'apps', 'group-3'])
   })
 
-  it('opens the customize modal from the menu', async () => {
-    renderRail()
+  it('opens the in-place layout editor from the menu, and Escape leaves it', async () => {
+    renderRail(vi.fn(), true)
     fireEvent.contextMenu(screen.getByText('Sessions'))
     fireEvent.click(await screen.findByRole('menuitem', { name: /Edit layout/ }))
-    expect(await screen.findByRole('dialog', { name: 'Edit layout' })).toBeTruthy()
+    expect(await screen.findByRole('region', { name: 'Edit layout' })).toBeTruthy()
+    fireEvent.keyDown(window, { key: 'Escape' })
+    await waitFor(() => expect(screen.queryByRole('region', { name: 'Edit layout' })).toBeNull())
   })
 })
 

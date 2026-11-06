@@ -7,7 +7,6 @@ import {
 } from '../../components/ui/context-menu'
 import { i18nT } from '../../i18n/t'
 import { addGroup, commitRail, moveToGroup, type RailGroup } from '../../lib/railLayout'
-import { useRailEditorVariant } from '../../lib/railEditorVariant'
 
 /** What the menu and the modal need to draw a row they do not render themselves. */
 export interface RailItemMeta { label: string; icon: ReactNode }
@@ -43,8 +42,6 @@ export function RailContextMenu({ groups, onUnpin, onCustomize, onRename, onRese
   children: ReactNode
 }) {
   const [target, setTarget] = useState<string | null>(null)
-  // Design exploration: the palette variation says "sidebar" where the list editor says "rail".
-  const editorVariant = useRailEditorVariant()
   // Rename opens a field that takes focus; the menu must not take it back on close.
   const keepFocus = useRef(false)
   const from = target ? groups.find(g => g.items.includes(target)) : undefined
@@ -82,7 +79,7 @@ export function RailContextMenu({ groups, onUnpin, onCustomize, onRename, onRese
           <ContextMenuItem onSelect={() => commitRail(addGroup(groups, '').groups)}><FolderPlus size={14} />{i18nT('nav.rail_new_group')}</ContextMenuItem>
         )}
         <ContextMenuSeparator />
-        <ContextMenuItem onSelect={onCustomize}><Settings2 size={14} />{i18nT(editorVariant === 'palette' ? 'nav.rail_palette_customize_menu' : 'nav.rail_customize')}</ContextMenuItem>
+        <ContextMenuItem onSelect={onCustomize}><Settings2 size={14} />{i18nT('nav.rail_customize')}</ContextMenuItem>
       </ContextMenuContent>
     </ContextMenu>
   )

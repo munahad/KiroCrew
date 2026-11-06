@@ -10,9 +10,8 @@ import {
 } from '../../lib/railLayout'
 import { SortableAppNavRow } from './appRail'
 import { RailContextMenu, groupTitle, type RailItemMeta } from './railCustomize'
-import { RailCustomizeModal, type RailPinChange } from './railCustomizeModal'
-import { RailPaletteModal } from './railPaletteModal'
-import { useRailEditorVariant } from '../../lib/railEditorVariant'
+import { LayoutEditPanel } from '../layout/layoutEditPanel'
+import { setLayoutEditing, useLayoutEditing } from '../../lib/shellLayout'
 import { OPEN_RAIL_CUSTOMIZE_EVENT } from './railSettingsFlyout'
 import { RAIL_PIN_DROP_HOST_ID, useRailNativeDrop } from './railPinDrop'
 import { RailRenameInput } from './railRename'
@@ -87,12 +86,11 @@ export function RailGroups({ available, renderItem, collapsed, defaultGroup, met
   // Same 8px mouse threshold as the Apps list: a plain click must reach navigation.
   const sensors = useDndSensors({ distance: 8 })
   const [activeId, setActiveId] = useState<string | null>(null)
-  const [customizing, setCustomizing] = useState(false)
-  // Design exploration: which editor "Customize rail" opens (list or palette).
-  const editorVariant = useRailEditorVariant()
-  // The Settings flyout opens the same modal from outside this component.
+  // "Edit layout" edits the real canvas in place (design exploration).
+  const editing = useLayoutEditing()
+  // The profile menu opens the same editor from outside this component.
   useEffect(() => {
-    const open = () => setCustomizing(true)
+    const open = () => setLayoutEditing(true)
     window.addEventListener(OPEN_RAIL_CUSTOMIZE_EVENT, open)
     return () => window.removeEventListener(OPEN_RAIL_CUSTOMIZE_EVENT, open)
   }, [])
@@ -104,23 +102,6 @@ export function RailGroups({ available, renderItem, collapsed, defaultGroup, met
     else if (isEntityPin(id)) updateRail(l => removePin(l, id))
     else commitRail(groups.map(g => ({ ...g, items: g.items.filter(x => x !== id) })), { add: id })
   }, [groups, isApp, setAppPinned])
-  // The customize modal's drop: a rearrangement plus at most one row moved
-  // onto or off its "Not on the rail" shelf.
-  const commitFromModal = useCallback((next: RailGroup[], change?: RailPinChange) => {
-    if (change && 'unpin' in change) {
-      const id = change.unpin
-      if (isApp(id)) { setAppPinned?.(id, false); commitRail(next) }
-      else if (isEntityPin(id)) updateRail(l => removePin(applyVisibleOrder(l, next), id))
-      else commitRail(next, { add: id })
-      return
-    }
-    if (change && 'pin' in change) {
-      if (isApp(change.pin)) setAppPinned?.(change.pin, true)
-      commitRail(next, { remove: change.pin })
-      return
-    }
-    commitRail(next)
-  }, [isApp, setAppPinned])
   const hidden = useMemo(() => {
     const avail = new Set(available)
     return [...layout.hidden.filter(id => avail.has(id)), ...unpinnedApps]
@@ -158,14 +139,14 @@ export function RailGroups({ available, renderItem, collapsed, defaultGroup, met
     <RailContextMenu
       groups={groups}
       onUnpin={unpin}
-      onCustomize={() => setCustomizing(true)}
+      onCustomize={() => setLayoutEditing(true)}
       onRename={setRenaming}
       onResetName={id => saveName(id, null)}
       isRenamed={id => !!labelOf(id)}
     >
     {/* Drop host: sessions dragged from the chat sidebar land on the zone the
         sidebar portals in here; Mates drag natively and drop on this element. */}
-    <div id={RAIL_PIN_DROP_HOST_ID} className="relative pb-6" {...nativeDrop.handlers}>
+    <div id={RAIL_PIN_DROP_HOST_ID} data-layout-zone="sidebar" className={`relative pb-6 ${editing ? 'rounded-lg outline outline-1 outline-dashed outline-accent/60 outline-offset-2' : ''}`} {...nativeDrop.handlers}>
     {nativeDrop.over && <div aria-hidden="true" className="absolute inset-0 pointer-events-none rounded-lg border-2 border-dashed border-accent bg-accent/10 z-10" />}
     <DndContext sensors={sensors} collisionDetection={closestCenter} onDragStart={onDragStart} onDragEnd={onDragEnd} onDragCancel={onDragCancel}>
       <SortableContext items={flat} strategy={verticalListSortingStrategy}>
@@ -194,23 +175,13 @@ export function RailGroups({ available, renderItem, collapsed, defaultGroup, met
     </DndContext>
     </div>
     </RailContextMenu>
-    {editorVariant === 'palette' ? (
-      <RailPaletteModal
-        open={customizing}
-        onClose={() => setCustomizing(false)}
+    {editing && (
+      <LayoutEditPanel
         groups={groups}
         hidden={hidden}
         meta={modalMeta}
-        onCommit={commitFromModal}
-      />
-    ) : (
-      <RailCustomizeModal
-        open={customizing}
-        onClose={() => setCustomizing(false)}
-        groups={groups}
-        hidden={hidden}
-        meta={modalMeta}
-        onCommit={commitFromModal}
+        isApp={isApp}
+        setAppPinned={setAppPinned}
       />
     )}
   </>)

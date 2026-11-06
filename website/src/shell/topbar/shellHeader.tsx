@@ -25,6 +25,7 @@ import type { AppShell } from '../appShell'
 import { TopBarRailToggle } from './topBarRailToggle'
 import { hiddenChromeProps } from '../focus/focusChrome'
 import { setAgentSwitchNotice } from '../../store/chatSlice'
+import { BarItems } from '../layout/barItems'
 
 // Lazy, like App.tsx's update-found popup: the pill renders nothing without an update,
 // so its code rides the on-demand chunk instead of the app core.
@@ -455,6 +456,9 @@ export function ShellHeader({ shell }: { shell: AppShell }) {
               its thresholds. Out of flow and 0x0, so it costs no ladder budget
               and adds no flex gap. */}
           <span ref={metricsProbeRef} className="tb-drop-metrics tb-metrics-probe" aria-hidden="true" />
+
+          {/* Design exploration: items the user placed in the top bar via Edit layout. */}
+          <BarItems zone="top" shell={shell} />
 
           {/* Theme decoration: extra aside control (e.g. a stardate / clock). */}
           {branding?.topBarAside && !(branding?.topBarHideOnMobile && isMobile) && (

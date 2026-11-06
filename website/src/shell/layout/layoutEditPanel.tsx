@@ -1,0 +1,244 @@
+/**
+ * "Edit layout" in place (design exploration).
+ *
+ * The real canvas becomes editable: the top bar, the sidebar and the bottom
+ * bar show dashed drop outlines, and this panel docks on the right WITHOUT
+ * dimming anything, so every change shows live at real size. It lists
+ * everything that can go on the canvas (pages, apps, mates, sessions, the
+ * terminal and phone toggles). Each item can be dragged onto a bar, or placed
+ * with its "Show in" menu, which is the keyboard and screen-reader path for
+ * every move (WCAG 2.5.7 Dragging Movements, 2.1.1 Keyboard). Moves are
+ * announced through a live region (4.1.3). Escape or Done leaves edit mode.
+ *
+ * Rendered by RailGroups, which owns the sidebar data the list needs, and
+ * portaled to the body so it floats over the page area only.
+ */
+import { useEffect, useMemo, useRef, useState } from 'react'
+import { createPortal } from 'react-dom'
+import { useQuery } from '@tanstack/react-query'
+import { GripVertical, Lock, MessageSquare, Search, Smartphone, SquareTerminal, X } from 'lucide-react'
+
+import CrewAvatar from '../../components/CrewAvatar'
+import { Btn } from '../../components/ui'
+import { membersRosterQuery } from '../../api/membersQuery'
+import { isAppNavId } from '../../appNotificationBadges'
+import { i18nT } from '../../i18n/t'
+import { useAppSelector } from '../../store'
+import {
+  MATE_PIN_PREFIX, SESSION_PIN_PREFIX, defaultGroupOf, insertPin, isEntityPin, matePinId, removePin, sessionPinId, updateRail,
+  type RailGroup,
+} from '../../lib/railLayout'
+import {
+  PHONE_ITEM, TERMINAL_ITEM, announceLayout, isWindowToggle, moveItem, resetShellLayout, setLayoutEditing,
+  useLayoutAnnouncement, useShellPlacement, zoneOf, type ShellZone,
+} from '../../lib/shellLayout'
+import { useTerminalEnabled } from '../../utils/terminalRegistry'
+import type { RailItemMeta } from '../nav/railCustomize'
+import { canSitInBar } from './shellItems'
+import { startItemDrag, zoneLabel } from './barItems'
+
+type Category = 'all' | 'pages' | 'apps' | 'mates' | 'sessions' | 'tools'
+const CATEGORIES: Category[] = ['all', 'pages', 'apps', 'mates', 'sessions', 'tools']
+const SESSION_BROWSE_LIMIT = 20
+
+interface Candidate { id: string; category: Exclude<Category, 'all'>; meta: RailItemMeta }
+
+function categoryOf(id: string): Exclude<Category, 'all'> {
+  if (id.startsWith(MATE_PIN_PREFIX)) return 'mates'
+  if (id.startsWith(SESSION_PIN_PREFIX)) return 'sessions'
+  if (isWindowToggle(id)) return 'tools'
+  // Task Runner, Discover and Library ship in the Apps group, so they read as apps.
+  return isAppNavId(id) || defaultGroupOf(id) === 'apps' ? 'apps' : 'pages'
+}
+const categoryLabel = (c: Category) => i18nT(`nav.layout_cat_${c}`)
+
+/** The places an item may go, in the order the menu lists them. */
+function placesFor(id: string): (ShellZone | 'none')[] {
+  if (isWindowToggle(id)) return ['top', 'bottom', 'none']
+  if (canSitInBar(id)) return ['sidebar', 'top', 'bottom', 'none']
+  return ['sidebar', 'none']
+}
+const placeLabel = (p: ShellZone | 'none') => (p === 'none' ? i18nT('nav.layout_zone_none') : zoneLabel(p))
+
+export function LayoutEditPanel({ groups, hidden, meta, isApp, setAppPinned }: {
+  groups: readonly RailGroup[]
+  hidden: readonly string[]
+  meta: (id: string) => RailItemMeta | null
+  isApp: (id: string) => boolean
+  setAppPinned?: (id: string, pinned: boolean) => void
+}) {
+  const [query, setQuery] = useState('')
+  const [category, setCategory] = useState<Category>('all')
+  const placement = useShellPlacement()
+  const announcement = useLayoutAnnouncement()
+  const terminalEnabled = useTerminalEnabled()
+  const slots = useAppSelector(s => s.dashboard.slots)
+  const roster = useQuery({ ...membersRosterQuery }).data
+  const panelRef = useRef<HTMLElement>(null)
+
+  // Escape leaves edit mode, from anywhere on the page.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') setLayoutEditing(false) }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [])
+  // Focus the panel on open so keyboard users land in the editor.
+  useEffect(() => { panelRef.current?.focus() }, [])
+
+  const onSidebar = useMemo(() => new Set(groups.flatMap(g => g.items)), [groups])
+
+  const candidates = useMemo((): Candidate[] => {
+    const out: Candidate[] = []
+    const seen = new Set<string>()
+    const add = (id: string, m: RailItemMeta | null) => {
+      if (!m || seen.has(id)) return
+      seen.add(id)
+      out.push({ id, category: categoryOf(id), meta: m })
+    }
+    if (terminalEnabled) add(TERMINAL_ITEM, { label: i18nT('app.terminal'), icon: <SquareTerminal size={16} /> })
+    add(PHONE_ITEM, { label: i18nT('app.connect_your_phone'), icon: <Smartphone size={16} /> })
+    for (const id of [...groups.flatMap(g => g.items), ...hidden, ...placement.top, ...placement.bottom]) {
+      if (!isEntityPin(id) && !isWindowToggle(id)) add(id, meta(id))
+    }
+    for (const m of roster ?? []) add(matePinId(m.slug), { label: m.name, icon: <CrewAvatar seed={m.name} avatar={m.avatar} size={18} /> })
+    for (const s of slots) add(sessionPinId(s.key), { label: s.title || s.key, icon: <MessageSquare size={16} /> })
+    return out
+  }, [groups, hidden, meta, placement.top, placement.bottom, roster, slots, terminalEnabled])
+
+  const q = query.trim().toLowerCase()
+  const matches = (x: Candidate) => !q || x.meta.label.toLowerCase().includes(q)
+  const counts = useMemo(() => {
+    const c: Record<Category, number> = { all: 0, pages: 0, apps: 0, mates: 0, sessions: 0, tools: 0 }
+    for (const x of candidates) if (matches(x)) { c[x.category]++; c.all++ }
+    return c
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [candidates, q])
+  const shown = useMemo(() => {
+    let list = candidates.filter(x => (category === 'all' || x.category === category) && matches(x))
+    if (!q) { let n = 0; list = list.filter(x => x.category !== 'sessions' || n++ < SESSION_BROWSE_LIMIT) }
+    return list
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [candidates, category, q])
+
+  const where = (id: string): ShellZone | 'none' => zoneOf(id, placement, onSidebar.has(id)) ?? 'none'
+
+  const place = (id: string, to: ShellZone | 'none', label: string) => {
+    if (to === where(id)) return
+    if (isApp(id)) {
+      // Installed apps: the Library owns their pin state; sidebar-only here.
+      setAppPinned?.(id, to === 'sidebar')
+    } else if (isEntityPin(id)) {
+      if (to === 'sidebar') updateRail(l => insertPin(l, id, groups[0]?.id ?? '', null))
+      else updateRail(l => removePin(l, id))
+    } else {
+      moveItem(id, to === 'none' ? null : to)
+    }
+    announceLayout(to === 'none'
+      ? i18nT('nav.layout_removed', { item: label })
+      : i18nT('nav.layout_moved', { item: label, place: zoneLabel(to) }))
+  }
+
+  return createPortal(
+    <aside
+      ref={panelRef}
+      tabIndex={-1}
+      role="region"
+      aria-label={i18nT('nav.rail_customize_title')}
+      // Docked over the page area only: below the top bar, above the bottom bar,
+      // so both stay visible while you edit them. No backdrop, nothing dims.
+      className="fixed right-3 top-[50px] bottom-[34px] z-[60] w-[320px] flex flex-col rounded-xl border border-border bg-bg-elevated text-text shadow-xl outline-none"
+      data-testid="layout-edit-panel"
+    >
+      <header className="flex items-start gap-2 px-4 pt-3 pb-2 border-b border-border">
+        <div className="flex-1 min-w-0">
+          <h2 className="m-0 text-[15px] font-semibold text-text">{i18nT('nav.rail_customize_title')}</h2>
+          <p className="mt-1 mb-0 text-[12px] text-muted">{i18nT('nav.layout_hint')}</p>
+        </div>
+        <button
+          type="button"
+          onClick={() => setLayoutEditing(false)}
+          aria-label={i18nT('nav.rail_done')}
+          title={i18nT('nav.rail_done')}
+          className="w-7 h-7 flex items-center justify-center rounded-md bg-transparent border-none cursor-pointer text-muted hover:text-text hover:bg-bg-hover"
+        >
+          <X size={15} />
+        </button>
+      </header>
+
+      <div className="px-4 pt-3 flex flex-col gap-2">
+        <label className="flex items-center gap-2 px-3 py-1.5 rounded-lg border border-border bg-bg focus-within:border-accent">
+          <Search size={14} className="text-muted shrink-0" aria-hidden="true" />
+          <input
+            value={query}
+            onChange={e => setQuery(e.target.value)}
+            placeholder={i18nT('nav.rail_palette_search')}
+            aria-label={i18nT('nav.rail_palette_search')}
+            className="flex-1 min-w-0 bg-transparent border-none outline-none text-[13px] text-text placeholder:text-muted"
+          />
+        </label>
+        <div role="tablist" aria-label={i18nT('nav.layout_categories')} className="flex flex-wrap gap-1">
+          {CATEGORIES.filter(c => c === 'all' || counts[c] > 0).map(c => (
+            <button
+              key={c}
+              type="button"
+              role="tab"
+              aria-selected={category === c}
+              onClick={() => setCategory(c)}
+              className={`px-2 py-0.5 rounded-full text-[11px] border cursor-pointer ${category === c ? 'bg-accent text-accent-fg border-accent' : 'bg-transparent text-muted border-border hover:text-text'}`}
+            >
+              {categoryLabel(c)} <span className="opacity-70">{counts[c]}</span>
+            </button>
+          ))}
+        </div>
+      </div>
+
+      <ul className="m-0 mt-2 px-2 pb-2 list-none flex-1 min-h-0 overflow-y-auto">
+        {shown.length === 0 && (
+          <li className="px-2 py-8 text-center text-[13px] text-muted">{i18nT('nav.rail_palette_no_results', { query: query.trim() })}</li>
+        )}
+        {shown.map(x => {
+          const at = where(x.id)
+          return (
+            <li
+              key={x.id}
+              draggable
+              onDragStart={e => startItemDrag(e, x.id)}
+              className="group/row flex items-center gap-2 px-2 py-1.5 rounded-lg hover:bg-bg-hover cursor-grab"
+            >
+              <GripVertical size={13} className="text-muted opacity-0 group-hover/row:opacity-100 shrink-0" aria-hidden="true" />
+              <span className="w-5 h-5 flex items-center justify-center shrink-0 text-muted">{x.meta.icon}</span>
+              <span className="flex-1 min-w-0">
+                <span className="block truncate text-[13px] text-text" title={x.meta.label}>{x.meta.label}</span>
+                <span className="block text-[11px] text-muted">{categoryLabel(x.category)}</span>
+              </span>
+              <label className="sr-only" htmlFor={`layout-place-${x.id}`}>{i18nT('nav.layout_show_in', { item: x.meta.label })}</label>
+              <select
+                id={`layout-place-${x.id}`}
+                value={at}
+                onChange={e => place(x.id, e.target.value as ShellZone | 'none', x.meta.label)}
+                onPointerDown={e => e.stopPropagation()}
+                className={`shrink-0 max-w-[110px] px-1.5 py-0.5 rounded border text-[11px] bg-bg cursor-pointer ${at === 'none' ? 'border-border text-muted' : 'border-accent/50 text-text'}`}
+              >
+                {placesFor(x.id).map(p => <option key={p} value={p}>{placeLabel(p)}</option>)}
+              </select>
+            </li>
+          )
+        })}
+      </ul>
+
+      <div className="mx-4 mb-2 flex items-center gap-2 px-3 py-2 rounded-lg border border-dashed border-border text-[12px] text-muted">
+        <Lock size={12} aria-hidden="true" />
+        <span>{i18nT('nav.layout_locked_note')}</span>
+      </div>
+
+      <footer className="flex items-center justify-between gap-2 px-4 py-3 border-t border-border">
+        <Btn onClick={() => { resetShellLayout(); announceLayout(i18nT('nav.layout_reset_done')) }}>{i18nT('nav.rail_reset')}</Btn>
+        <Btn primary onClick={() => setLayoutEditing(false)}>{i18nT('nav.rail_done')}</Btn>
+      </footer>
+
+      {/* Moves, read out to screen readers. */}
+      <div role="status" aria-live="polite" className="sr-only">{announcement}</div>
+    </aside>,
+    document.body,
+  )
+}
