@@ -489,7 +489,7 @@ describe('App routing', () => {
       expect(screen.getByRole('button', { name: 'Reload page' })).toBeInTheDocument()
       // The nav rail is still rendered around the failed route.
       expect(screen.getByText('Sessions')).toBeInTheDocument()
-      expect(screen.getByText('Settings')).toBeInTheDocument()
+      expect(screen.getByText('You')).toBeInTheDocument()
 
       fireEvent.click(within(notice).getByRole('button', { name: 'Ask the agent' }))
       expect(consumeChatHandoff()).toContain(`- Message: ${caughtDiagnostic}`)
@@ -516,14 +516,16 @@ describe('App routing', () => {
   it('renders nav items', () => {
     renderWithProviders(<App />, { route: '/chat' })
     expect(screen.getByText('Sessions')).toBeInTheDocument()
-    expect(screen.getByText('Settings')).toBeInTheDocument()
-    // Desktop: Customize left the rail for the Settings row's click menu.
+    expect(screen.getByText('You')).toBeInTheDocument()
+    // Desktop: Settings and Customize left the rail for the profile menu.
     expect(screen.queryByText('Customize')).not.toBeInTheDocument()
-    const settingsRow = screen.getByText('Settings').closest('[role="button"]')!
-    fireEvent.pointerEnter(settingsRow)
-    expect(screen.queryByRole('menu', { name: 'Settings' })).not.toBeInTheDocument()
-    fireEvent.click(settingsRow)
-    expect(within(screen.getByRole('menu', { name: 'Settings' })).getByText('Customize')).toBeInTheDocument()
+    const profileRow = screen.getByText('You').closest('[role="button"]')!
+    fireEvent.pointerEnter(profileRow)
+    expect(screen.queryByRole('menu', { name: 'Your account' })).not.toBeInTheDocument()
+    fireEvent.click(profileRow)
+    const menu = screen.getByRole('menu', { name: 'Your account' })
+    expect(within(menu).getByText('Settings')).toBeInTheDocument()
+    expect(within(menu).getByText('Customize')).toBeInTheDocument()
     // PR1 App Store split: the single 'Explore' entry is gone — the sidebar
     // now carries TWO App Store rows, Discover (/apps) and Library
     // (/apps/library).
@@ -1477,7 +1479,7 @@ describe('App routing', () => {
     const ev = new MouseEvent('contextmenu', { bubbles: true, cancelable: true, clientX: 10, clientY: 10 })
     act(() => { nav.dispatchEvent(ev) })
     expect(ev.defaultPrevented).toBe(true)
-    expect(await screen.findByRole('menuitem', { name: /Customize sidebar/ })).toBeInTheDocument()
+    expect(await screen.findByRole('menuitem', { name: /Edit layout/ })).toBeInTheDocument()
     expect(screen.getByRole('menuitem', { name: /New group/ })).toBeInTheDocument()
   })
 
@@ -1560,8 +1562,9 @@ describe('App routing', () => {
 
   it('keeps theme controls available from Settings', () => {
     renderWithProviders(<App />, { route: '/chat' })
-    // Theme controls live in Settings > Display rather than the shell header.
-    expect(screen.getByText('Settings')).toBeInTheDocument()
+    // Theme controls live in Settings > Display rather than the shell header;
+    // Settings is reached from the profile menu ("You").
+    expect(screen.getByText('You')).toBeInTheDocument()
   })
 
   it('renders approval mode buttons with tooltips', () => {

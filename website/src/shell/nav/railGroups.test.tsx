@@ -57,8 +57,8 @@ describe('RailGroups right-click', () => {
   it('opens the customize modal from the menu', async () => {
     renderRail()
     fireEvent.contextMenu(screen.getByText('Sessions'))
-    fireEvent.click(await screen.findByRole('menuitem', { name: /Customize sidebar/ }))
-    expect(await screen.findByRole('dialog', { name: 'Customize sidebar' })).toBeTruthy()
+    fireEvent.click(await screen.findByRole('menuitem', { name: /Edit layout/ }))
+    expect(await screen.findByRole('dialog', { name: 'Edit layout' })).toBeTruthy()
   })
 })
 

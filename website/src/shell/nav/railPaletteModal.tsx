@@ -28,6 +28,7 @@ import {
 import { setRailEditorVariant } from '../../lib/railEditorVariant'
 import { groupTitle, type RailItemMeta } from './railCustomize'
 import type { RailPinChange } from './railCustomizeModal'
+import { BottomBarSwitch } from './bottomBarSwitch'
 
 type Category = 'all' | 'pages' | 'apps' | 'mates' | 'sessions'
 const CATEGORIES: Category[] = ['all', 'pages', 'apps', 'mates', 'sessions']
@@ -210,6 +211,8 @@ export function RailPaletteModal({ open, onClose, groups, hidden, meta, onCommit
             <span className="flex-1">{i18nT('nav.rail_palette_settings_locked')}</span>
             <Lock size={13} aria-hidden="true" />
           </div>
+          {/* Design exploration: the opt-in bottom bar, with the other layout choices. */}
+          <BottomBarSwitch />
         </section>
 
         {/* ── Palette ── */}

@@ -11,6 +11,7 @@ import { i18nT } from '../../i18n/t'
 import { addGroup, commitRail, moveGroup, removeGroup, renameGroup, resetRailLayout, type RailGroup } from '../../lib/railLayout'
 import { groupTitle, type RailItemMeta } from './railCustomize'
 import { setRailEditorVariant } from '../../lib/railEditorVariant'
+import { BottomBarSwitch } from './bottomBarSwitch'
 
 /** The shelf: rows not on the rail. A pseudo-group, always last, never a real group. */
 const SHELF = '__shelf'
@@ -278,6 +279,8 @@ export function RailCustomizeModal({ open, onClose, groups, hidden, meta, onComm
           {activeGroup ? <div className="shadow-lg rounded-md bg-bg-elevated px-2 py-1 text-[13px] font-medium text-text">{groupTitle(activeGroup)}</div> : null}
         </DragOverlay>
       </DndContext>
+      {/* Design exploration: the opt-in bottom bar, with the other layout choices. */}
+      <div className="mt-4"><BottomBarSwitch /></div>
     </Modal>
   )
 }
