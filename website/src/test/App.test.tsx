@@ -1477,7 +1477,7 @@ describe('App routing', () => {
     const ev = new MouseEvent('contextmenu', { bubbles: true, cancelable: true, clientX: 10, clientY: 10 })
     act(() => { nav.dispatchEvent(ev) })
     expect(ev.defaultPrevented).toBe(true)
-    expect(await screen.findByRole('menuitem', { name: /Customize rail/ })).toBeInTheDocument()
+    expect(await screen.findByRole('menuitem', { name: /Customize sidebar/ })).toBeInTheDocument()
     expect(screen.getByRole('menuitem', { name: /New group/ })).toBeInTheDocument()
   })
 

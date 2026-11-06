@@ -27,6 +27,7 @@ import { useComposerInlineMarkdown } from '../hooks/useComposerInlineMarkdown'
 import { useComposerSendMode } from '../hooks/useComposerSendMode'
 import TrustDropdown from './TrustDropdown'
 import { useIsMobile } from '../hooks/useIsMobile'
+import { SessionTerminalButton } from '../pages/chat/page/SessionTerminalButton'
 import { usePressActivation } from '../hooks/usePressActivation'
 import { isTouchDevice } from '../utils/isTouchDevice'
 import { focusComposerAfterPick as pickerFocusAfterPick } from './chat-input/pickerFocus'
@@ -1929,6 +1930,8 @@ function ChatInput({
             </>
           )}
           {!!project && <ProjectAwsProfileStatus project={project} shelfCompact={shelfCompact} />}
+          {/* Design exploration: open a terminal in this folder, replacing the bottom bar's toggle. */}
+          {!!project && <SessionTerminalButton project={project} />}
           </div>
           )}
           </div>

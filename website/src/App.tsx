@@ -86,6 +86,7 @@ import { guideTarget } from './uiLocations/targetRegistry'
 import { useAppShell } from './shell/appShell'
 import { ShellHeader } from './shell/topbar/shellHeader'
 import { ShellStatusBar } from './shell/statusbar/shellStatusBar'
+import { useShowBottomBar } from './lib/shellBottomBar'
 import { ShellNavRail } from './shell/nav/navRail'
 import { NavItem, NavBadge } from './shell/nav/navRow'
 
@@ -301,6 +302,8 @@ export { NavItem, NavBadge }
 
 export default function App() {
   const shell = useAppShell()
+  // Design exploration: the bottom bar is opt-in (Settings menu), off by default.
+  const showBottomBar = useShowBottomBar()
   const {
     isEmbed, isPopout, initialPopoutPath, updateAvailable, terminalEnabled, terminalPoppedOut,
     bottomTerminalOpen, mobileConnect, activeSlotProject, terminalPosition, navigate, mayLeaveForNavigation,
@@ -886,7 +889,7 @@ export default function App() {
             can be open at once. */}
         <ComputerUseLiveView />
       </div>
-      {!isMobile && !focusActive && <ShellStatusBar shell={shell} />}
+      {!isMobile && !focusActive && showBottomBar && <ShellStatusBar shell={shell} />}
     </div>{/* /Local dashboard grid */}
       {/* Opened from the local Crew, so they hide with it (components/overlayRoot).
           The image viewer and the import notice render in place, fixed layers

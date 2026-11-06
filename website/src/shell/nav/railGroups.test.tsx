@@ -34,7 +34,7 @@ describe('RailGroups right-click', () => {
   it('unpins a static row into the layout hidden set', async () => {
     renderRail()
     fireEvent.contextMenu(screen.getByText('Mates'))
-    fireEvent.click(await screen.findByRole('menuitem', { name: /Unpin from rail/ }))
+    fireEvent.click(await screen.findByRole('menuitem', { name: /Remove from sidebar/ }))
     expect(readRailLayout().hidden).toEqual(['members'])
     expect(screen.queryByText('Mates')).toBeNull()
   })
@@ -42,7 +42,7 @@ describe('RailGroups right-click', () => {
   it('unpins an app through the Library pin state, not the layout', async () => {
     const setAppPinned = renderRail()
     fireEvent.contextMenu(screen.getByText('Radar'))
-    fireEvent.click(await screen.findByRole('menuitem', { name: /Unpin from rail/ }))
+    fireEvent.click(await screen.findByRole('menuitem', { name: /Remove from sidebar/ }))
     expect(setAppPinned).toHaveBeenCalledWith('app:radar', false)
     expect(localStorage.getItem(RAIL_LAYOUT_KEY)).toBeNull()
   })
@@ -57,8 +57,8 @@ describe('RailGroups right-click', () => {
   it('opens the customize modal from the menu', async () => {
     renderRail()
     fireEvent.contextMenu(screen.getByText('Sessions'))
-    fireEvent.click(await screen.findByRole('menuitem', { name: /Customize rail/ }))
-    expect(await screen.findByRole('dialog', { name: 'Customize rail' })).toBeTruthy()
+    fireEvent.click(await screen.findByRole('menuitem', { name: /Customize sidebar/ }))
+    expect(await screen.findByRole('dialog', { name: 'Customize sidebar' })).toBeTruthy()
   })
 })
 
@@ -69,9 +69,9 @@ describe('RailGroups rail-only names', () => {
   it('renames a row on the rail with Enter, and resets it', async () => {
     renderRail()
     fireEvent.contextMenu(screen.getByText('Sessions'))
-    fireEvent.click(await screen.findByRole('menuitem', { name: /Rename on rail/ }))
+    fireEvent.click(await screen.findByRole('menuitem', { name: /Rename in sidebar/ }))
     await flushFrame()
-    const field = screen.getByRole('textbox', { name: 'Rename on rail' })
+    const field = screen.getByRole('textbox', { name: 'Rename in sidebar' })
     fireEvent.change(field, { target: { value: '  Chats ' } })
     fireEvent.keyDown(field, { key: 'Enter' })
     expect(readRailLayout().labels).toEqual({ chat: 'Chats' })
@@ -86,18 +86,18 @@ describe('RailGroups rail-only names', () => {
   it('treats saving an unchanged name as no rename', async () => {
     renderRail()
     fireEvent.contextMenu(screen.getByText('Library'))
-    fireEvent.click(await screen.findByRole('menuitem', { name: /Rename on rail/ }))
+    fireEvent.click(await screen.findByRole('menuitem', { name: /Rename in sidebar/ }))
     await flushFrame()
-    fireEvent.keyDown(screen.getByRole('textbox', { name: 'Rename on rail' }), { key: 'Enter' })
+    fireEvent.keyDown(screen.getByRole('textbox', { name: 'Rename in sidebar' }), { key: 'Enter' })
     expect(localStorage.getItem(RAIL_LAYOUT_KEY)).toBeNull()
   })
 
   it('cancels a rename with Escape and writes nothing', async () => {
     renderRail()
     fireEvent.contextMenu(screen.getByText('Mates'))
-    fireEvent.click(await screen.findByRole('menuitem', { name: /Rename on rail/ }))
+    fireEvent.click(await screen.findByRole('menuitem', { name: /Rename in sidebar/ }))
     await flushFrame()
-    const field = screen.getByRole('textbox', { name: 'Rename on rail' })
+    const field = screen.getByRole('textbox', { name: 'Rename in sidebar' })
     fireEvent.change(field, { target: { value: 'Nope' } })
     fireEvent.keyDown(field, { key: 'Escape' })
     expect(localStorage.getItem(RAIL_LAYOUT_KEY)).toBeNull()
@@ -118,7 +118,7 @@ describe('RailGroups entity pins', () => {
       />,
     )
     fireEvent.contextMenu(screen.getByText('Standup'))
-    fireEvent.click(await screen.findByRole('menuitem', { name: /Unpin from rail/ }))
+    fireEvent.click(await screen.findByRole('menuitem', { name: /Remove from sidebar/ }))
     const stored = readRailLayout()
     expect(stored.groups.flatMap(g => g.items)).not.toContain('session:s1')
     expect(stored.hidden).toEqual([])

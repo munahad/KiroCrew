@@ -36,18 +36,18 @@ describe('RailCustomizeModal', () => {
     renderModal()
     expect(screen.getAllByRole('textbox', { name: 'Group name' })).toHaveLength(2)
     expect(screen.getByText('Sessions')).toBeTruthy()
-    expect(screen.getByText('Not on the rail')).toBeTruthy()
+    expect(screen.getByText('Not in the sidebar')).toBeTruthy()
     expect(screen.getByText('Schedule')).toBeTruthy()
   })
 
   it('unpins a row with its hover x, but offers none on the shelf', () => {
     const onCommit = renderModal()
-    fireEvent.click(screen.getByRole('button', { name: 'Unpin from rail: Mates' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Remove from sidebar: Mates' }))
     expect(onCommit).toHaveBeenCalledWith(
       [{ id: 'workspace', items: ['chat'] }, { id: 'apps', items: ['apps'] }],
       { unpin: 'members' },
     )
-    expect(screen.queryByRole('button', { name: 'Unpin from rail: Schedule' })).toBeNull()
+    expect(screen.queryByRole('button', { name: 'Remove from sidebar: Schedule' })).toBeNull()
   })
 
   it('renames a group by typing in its title', () => {

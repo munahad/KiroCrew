@@ -1,9 +1,10 @@
 import { useRef, useState, type ReactNode } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Settings2, Smartphone } from 'lucide-react'
+import { PanelBottom, Settings2, Smartphone } from 'lucide-react'
 
 import { Popover, PopoverAnchor, PopoverContent } from '../../components/ui/popover'
 import { i18nT } from '../../i18n/t'
+import { setShowBottomBar, useShowBottomBar } from '../../lib/shellBottomBar'
 import { NavItem } from './navRow'
 
 /** Window event that opens the rail customize modal from outside the rail groups. */
@@ -46,6 +47,7 @@ export function RailSettingsFlyout({ settings, customize, collapsed, activePath,
   const navigate = useNavigate()
   const [open, setOpen] = useState(false)
   const anchor = useRef<HTMLDivElement>(null)
+  const showBottomBar = useShowBottomBar()
 
   const isOn = (path: string) => activePath === path || activePath.startsWith(path + '/')
   const go = (path: string) => { setOpen(false); onNavigate?.(); navigate(path) }
@@ -82,6 +84,20 @@ export function RailSettingsFlyout({ settings, customize, collapsed, activePath,
         <div aria-hidden="true" className="my-1 h-px bg-border" />
         {phone && <FlyoutRow icon={<Smartphone size={16} />} label={i18nT('app.connect_your_phone')} onClick={() => { setOpen(false); phone.open() }} />}
         <FlyoutRow icon={<Settings2 size={16} />} label={i18nT('nav.rail_customize')} onClick={() => { setOpen(false); openRailCustomize() }} />
+        {/* Design exploration: the bottom bar is opt-in, off by default. */}
+        <button
+          type="button"
+          role="menuitemcheckbox"
+          aria-checked={showBottomBar}
+          onClick={() => setShowBottomBar(!showBottomBar)}
+          className="flex w-full items-center gap-2.5 rounded-lg px-2.5 py-1.5 text-left text-sm bg-transparent border-none cursor-pointer text-text hover:bg-bg-hover"
+        >
+          <span className="w-4 h-4 flex items-center justify-center shrink-0 text-muted"><PanelBottom size={16} /></span>
+          <span className="flex-1 min-w-0 truncate">{i18nT('nav.show_bottom_bar')}</span>
+          <span aria-hidden="true" className={`relative inline-flex h-4 w-7 shrink-0 rounded-full transition-colors ${showBottomBar ? 'bg-accent' : 'bg-border'}`}>
+            <span className={`absolute top-0.5 h-3 w-3 rounded-full bg-bg transition-[left] ${showBottomBar ? 'left-3.5' : 'left-0.5'}`} />
+          </span>
+        </button>
       </PopoverContent>
     </Popover>
   )
