@@ -166,7 +166,7 @@ export function RailSettingsFlyout({ settings, customize, collapsed, activePath,
         <div className="px-2.5 pt-1 pb-0.5 text-[11px] font-medium uppercase tracking-wide text-muted">{i18nT('nav.profile_help_heading')}</div>
         <FlyoutRow icon={<Lightbulb size={16} />} label={i18nT('nav.send_feedback')} onClick={() => { setOpen(false); sendFeedback() }} />
         {reportProblem && <FlyoutRow icon={<Bug size={16} />} label={i18nT('app.report_issue')} onClick={() => { setOpen(false); reportProblem() }} />}
-        <FlyoutLink icon={<GithubIcon size={15} />} label={i18nT('nav.profile_star_github')} href="https://github.com/kirodotdev/KiroCrew" title={i18nT('app.star_kirocrew_on_github')} />
+        <FlyoutLink icon={<GithubIcon size={15} />} label={i18nT('app.star_kirocrew_on_github')} href="https://github.com/kirodotdev/KiroCrew" title={i18nT('app.star_kirocrew_on_github')} />
         <FlyoutLink icon={<DiscordIcon size={15} />} label={i18nT('app.discord_community')} href="https://kiro.dev/discord/" title={i18nT('app.kiro_discord_community')} />
         <div aria-hidden="true" className="my-1 h-px bg-border" />
         <FlyoutRow icon={<LogOut size={16} />} label={i18nT('nav.profile_sign_out')} onClick={() => openMock('sign-out')} />
