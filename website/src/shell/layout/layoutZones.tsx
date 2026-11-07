@@ -71,8 +71,17 @@ function ZoneOutline({ zone, area, dragging }: { zone: ShellZone; area: string; 
       } : undefined}
     >
       <span
-        className={`absolute px-1.5 py-px rounded text-[10px] font-medium uppercase tracking-wide bg-accent text-accent-fg ${
-          zone === 'sidebar' ? 'left-1/2 -translate-x-1/2 -bottom-2.5' : zone === 'top' ? 'left-3 -bottom-2' : 'right-3 -top-2'
+        // One rule for all three: the tag sits on the MIDDLE of the edge that
+        // faces the page, away from the corners where two zones meet, so it can
+        // only belong to its own zone.
+        // Shown only while an item is being dragged, when "where can this go?"
+        // is the question; the rest of the time the outlines alone mark the zones.
+        className={`absolute whitespace-nowrap px-1.5 py-px rounded text-[10px] font-medium uppercase tracking-wide bg-accent text-accent-fg transition-opacity duration-150 motion-reduce:transition-none ${dragging ? 'opacity-100' : 'opacity-0'} ${
+          zone === 'sidebar'
+            ? 'right-0 top-1/2 translate-x-1/2 -translate-y-1/2'
+            : zone === 'top'
+              ? 'left-1/2 bottom-0 -translate-x-1/2 translate-y-1/2'
+              : 'left-1/2 top-0 -translate-x-1/2 -translate-y-1/2'
         }`}
       >
         {zoneLabel(zone)}
