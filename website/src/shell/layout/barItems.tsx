@@ -9,6 +9,7 @@
  * edit panel's per-item "Show in" menu, so no move needs a drag (WCAG 2.5.7).
  */
 import { useRef, useState, type DragEvent } from 'react'
+import { GripVertical } from 'lucide-react'
 import { useLocation, useNavigate } from 'react-router-dom'
 
 import { toggleBottomTerminal } from '../../hooks/useBottomTerminal'
@@ -106,8 +107,10 @@ export function BarItems({ zone, shell }: { zone: BarZone; shell: Pick<AppShell,
             aria-label={m.label}
             aria-pressed={isWindowToggle(id) ? on : undefined}
             aria-current={!isWindowToggle(id) && on ? 'page' : undefined}
-            className={`inline-flex items-center gap-1.5 shrink-0 rounded-md border-none text-[12px] ${zone === 'top' ? 'h-7 px-2' : 'h-[22px] px-1.5'} ${editing ? 'cursor-grab bg-bg-hover text-text' : `cursor-pointer ${on ? 'text-text bg-bg-hover' : 'bg-transparent text-muted hover:text-text hover:bg-bg-hover'}`}`}
+            className={`group/edit relative inline-flex items-center gap-1.5 shrink-0 rounded-md border-none text-[12px] ${zone === 'top' ? 'h-7 px-2' : 'h-[22px] px-1.5'} ${editing ? 'cursor-grab active:cursor-grabbing [&_*]:cursor-grab active:[&_*]:cursor-grabbing bg-transparent text-text hover:bg-bg-hover hover:pl-4' : `cursor-pointer ${on ? 'text-text bg-bg-hover' : 'bg-transparent text-muted hover:text-text hover:bg-bg-hover'}`}`}
           >
+            {/* While editing, hovering shows the item can be picked up. */}
+            {editing && <GripVertical size={12} aria-hidden="true" className="absolute left-0.5 top-1/2 -translate-y-1/2 text-muted opacity-0 group-hover/edit:opacity-100" />}
             <span className="w-3.5 h-3.5 flex items-center justify-center">{m.icon}</span>
             {/* The top bar is tight: icons only there, labels in the bottom bar. */}
             {zone === 'bottom' && <span>{m.label}</span>}

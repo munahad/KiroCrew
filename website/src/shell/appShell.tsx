@@ -48,6 +48,7 @@ import { useUpdateSubscription, usePolicyGovernedNotification } from '../hooks/u
 import { useBottomTerminalOpen, useTerminalPosition } from '../hooks/useBottomTerminal'
 import { useTerminalRestoreProbe } from './boot/terminalRestore'
 import { useTerminalPoppedOut } from '../utils/terminalPopout'
+import { useLayoutEditing } from '../lib/shellLayout'
 import { getBuiltinIcon } from '../apps/builtinIcons'
 import { useRequestFeature } from './topbar/requestFeature'
 import { useShellKeyboard } from './shortcuts/shellKeyboard'
@@ -823,7 +824,11 @@ export function useAppShell() {
   useEffect(() => { if (!isMobile) { setMobileNavPhase('closed'); takeOverDrawer(mobileNavX) } }, [isMobile, mobileNavX])
   // Focus mode honours the collapse preference too: the overlay rail is as wide
   // as the docked rail would be, and the collapse control toggles it the same way.
-  const effectiveCollapsed = navCollapsed && !isMobile
+  // Design exploration: while editing the layout the sidebar shows at full
+  // width, so every row shows its name and grip, and drag targets stay large
+  // (WCAG 2.5.8). It returns to the user's collapsed choice on Done.
+  const layoutEditing = useLayoutEditing()
+  const effectiveCollapsed = navCollapsed && !isMobile && !layoutEditing
   // Publish the rail track so consumers outside the shell can size against the
   // space actually left for content — ChatPage's activity panel decides
   // beside-vs-fill from it. Kept in sync with the gridTemplateColumns value

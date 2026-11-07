@@ -2,6 +2,8 @@ import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react
 import { DndContext, closestCenter, DragOverlay, type DragEndEvent, type DragStartEvent } from '@dnd-kit/core'
 import { SortableContext, arrayMove, useSortable, verticalListSortingStrategy } from '@dnd-kit/sortable'
 
+import { GripVertical } from 'lucide-react'
+
 import { useDndSensors } from '../../hooks/useDndSensors'
 import { haptic } from '../../lib/haptic'
 import {
@@ -155,8 +157,15 @@ export function RailGroups({ available, renderItem, collapsed, defaultGroup, met
             <GroupHeader group={g} first={gi === 0} collapsed={collapsed} />
             {g.items.map(id => (
               <SortableAppNavRow key={id} id={id}>
-                <div data-rail-item={id} className="relative">
+                <div
+                  data-rail-item={id}
+                  // Design exploration: while editing the layout, hovering a row shows
+                  // it can be picked up, the same way the Edit layout panel's rows do
+                  // (grey hover, muted grip, grab cursor).
+                  className={`relative ${editing ? 'group/edit rounded-lg cursor-grab active:cursor-grabbing hover:bg-bg-hover [&_*]:cursor-grab active:[&_*]:cursor-grabbing' : ''}`}
+                >
                   {renderItem(id, labelOf(id))}
+                  {editing && <GripVertical size={13} aria-hidden="true" className="absolute left-0 top-1/2 -translate-y-1/2 z-10 text-muted opacity-0 group-hover/edit:opacity-100 pointer-events-none" />}
                   {renaming === id && (
                     <RailRenameInput
                       initial={labelOf(id) ?? meta(id)?.label ?? ''}

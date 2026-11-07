@@ -215,7 +215,7 @@ export function LayoutEditPanel({ groups, hidden, meta, isApp, setAppPinned }: {
               key={x.id}
               draggable
               onDragStart={e => startItemDrag(e, x.id)}
-              className="group/row flex items-center gap-2 px-2 py-1.5 rounded-lg hover:bg-bg-hover cursor-grab"
+              className="group/row flex items-center gap-2 px-2 py-1.5 rounded-lg hover:bg-bg-hover cursor-grab active:cursor-grabbing"
             >
               <GripVertical size={13} className="text-muted opacity-0 group-hover/row:opacity-100 shrink-0" aria-hidden="true" />
               <span className="w-5 h-5 flex items-center justify-center shrink-0 text-muted">{x.meta.icon}</span>
