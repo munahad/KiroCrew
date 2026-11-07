@@ -32,35 +32,58 @@ export const PHONE_ITEM = 'shell:phone'
 export const FEEDBACK_ITEM = 'shell:feedback'
 export const isWindowToggle = (id: string) => id === TERMINAL_ITEM || id === PHONE_ITEM || id === FEEDBACK_ITEM
 
-/** Search and commands (the Command Bar trigger): lives in the top bar's
- *  centre by default, or as a row at the top of the sidebar. Never hidden,
- *  never in the bottom bar. Stored on its own key, apart from the bar lists. */
+/** Items that live in exactly one of two places, the top bar or the sidebar,
+ *  and are never hidden: search, and the status cluster (connection, usage,
+ *  notifications). Both default to the SIDEBAR, so the shipped top bar is
+ *  empty and hidden (an empty bar disappears, like the bottom bar); dragging
+ *  either into the top bar brings it back. Stored on their own keys. */
 export const SEARCH_ITEM = 'shell:search'
+export const STATUS_ITEM = 'shell:status'
 export type SearchPlace = 'top' | 'sidebar'
-const SEARCH_PLACE_KEY = 'mc-search-place'
-const SEARCH_PLACE_EVENT = 'mc:search-place-changed'
+export type TwoPlaceItem = typeof SEARCH_ITEM | typeof STATUS_ITEM
+export const isTwoPlaceItem = (id: string): id is TwoPlaceItem => id === SEARCH_ITEM || id === STATUS_ITEM
+const PLACE_KEY: Record<TwoPlaceItem, string> = { [SEARCH_ITEM]: 'mc-search-place', [STATUS_ITEM]: 'mc-status-place' }
+const PLACE_EVENT = 'mc:two-place-changed'
 
-export function readSearchPlace(): SearchPlace {
-  return safeGetItem(SEARCH_PLACE_KEY) === 'sidebar' ? 'sidebar' : 'top'
+/** Where search and status start. The prototype ships them in the SIDEBAR
+ *  (top bar empty and hidden). Under the test runner the default stays the
+ *  TOP BAR, so the existing shell tests, written against the shipped top bar,
+ *  keep exercising it. The prototype's own default is checked by hand in the pod. */
+const DEFAULT_PLACE: SearchPlace = import.meta.env?.MODE === 'test' ? 'top' : 'sidebar'
+
+export function readPlace(id: TwoPlaceItem): SearchPlace {
+  const v = safeGetItem(PLACE_KEY[id])
+  return v === 'top' || v === 'sidebar' ? v : DEFAULT_PLACE
+}
+export const readSearchPlace = () => readPlace(SEARCH_ITEM)
+
+function writePlace(id: TwoPlaceItem, place: SearchPlace): void {
+  safeSetItem(PLACE_KEY[id], place)
+  window.dispatchEvent(new Event(PLACE_EVENT))
 }
 
-function writeSearchPlace(place: SearchPlace): void {
-  safeSetItem(SEARCH_PLACE_KEY, place)
-  window.dispatchEvent(new Event(SEARCH_PLACE_EVENT))
-}
-
-export function useSearchPlace(): SearchPlace {
-  const [p, setP] = useState(readSearchPlace)
+export function usePlace(id: TwoPlaceItem): SearchPlace {
+  const [p, setP] = useState(() => readPlace(id))
   useEffect(() => {
-    const sync = () => setP(readSearchPlace())
-    window.addEventListener(SEARCH_PLACE_EVENT, sync)
+    const sync = () => setP(readPlace(id))
+    window.addEventListener(PLACE_EVENT, sync)
     window.addEventListener('storage', sync)
     return () => {
-      window.removeEventListener(SEARCH_PLACE_EVENT, sync)
+      window.removeEventListener(PLACE_EVENT, sync)
       window.removeEventListener('storage', sync)
     }
-  }, [])
+  }, [id])
   return p
+}
+export const useSearchPlace = () => usePlace(SEARCH_ITEM)
+export const useStatusPlace = () => usePlace(STATUS_ITEM)
+
+/** Whether the desktop top bar has anything in it. Empty, it is not drawn. */
+export function useTopBarHasContent(): boolean {
+  const placement = useShellPlacement()
+  const search = usePlace(SEARCH_ITEM)
+  const status = usePlace(STATUS_ITEM)
+  return search === 'top' || status === 'top' || placement.top.length > 0
 }
 
 /** Window event the profile menu raises to start a feedback request. */
@@ -109,7 +132,7 @@ export function useShellPlacement(): ShellPlacement {
 
 /** Where an item lives now. `null`: nowhere (a hidden page, an unplaced toggle). */
 export function zoneOf(id: string, placement: ShellPlacement, onSidebar: boolean): ShellZone | null {
-  if (id === SEARCH_ITEM) return readSearchPlace()
+  if (isTwoPlaceItem(id)) return readPlace(id)
   if (placement.top.includes(id)) return 'top'
   if (placement.bottom.includes(id)) return 'bottom'
   return onSidebar ? 'sidebar' : null
@@ -137,9 +160,9 @@ function hideInSidebar(id: string): void {
  * within a bar; omitted, it goes at the end.
  */
 export function moveItem(id: string, zone: ShellZone | null, index?: number): void {
-  if (id === SEARCH_ITEM) {
-    // Search goes only to the top bar or the sidebar.
-    if (zone === 'top' || zone === 'sidebar') writeSearchPlace(zone)
+  if (isTwoPlaceItem(id)) {
+    // Search and status go only to the top bar or the sidebar.
+    if (zone === 'top' || zone === 'sidebar') writePlace(id, zone)
     return
   }
   const p = readShellPlacement()
@@ -164,8 +187,9 @@ export function moveItem(id: string, zone: ShellZone | null, index?: number): vo
 /** Every customization back to the shipped canvas: default sidebar, empty bars. */
 export function resetShellLayout(): void {
   safeRemoveItem(PLACEMENT_KEY)
-  safeRemoveItem(SEARCH_PLACE_KEY)
-  window.dispatchEvent(new Event(SEARCH_PLACE_EVENT))
+  safeRemoveItem(PLACE_KEY[SEARCH_ITEM])
+  safeRemoveItem(PLACE_KEY[STATUS_ITEM])
+  window.dispatchEvent(new Event(PLACE_EVENT))
   window.dispatchEvent(new Event(PLACEMENT_EVENT))
   resetRailLayout()
 }

@@ -23,6 +23,7 @@ import App from '../App'
 import { api } from '../api/client'
 import { setTerminalEnabledFlag } from '../utils/terminalRegistry'
 import { __resetBottomTerminal, openBottomTerminal } from '../hooks/useBottomTerminal'
+import { TERMINAL_ITEM, moveItem, resetShellLayout } from '../lib/shellLayout'
 
 // Same isolation as App.terminalEnabledFlag.test.tsx: stub the routed pages and
 // the api client so App mounts without real network, and additionally stub
@@ -93,6 +94,10 @@ describe('App nav rail — Terminal row reflects the docked panel state', () => 
   beforeEach(() => {
     setTerminalEnabledFlag(true)
     __resetBottomTerminal()
+    // Design exploration: the bottom bar ships empty; these tests place the
+    // Terminal toggle there, where Gary's prototype had it.
+    resetShellLayout()
+    moveItem(TERMINAL_ITEM, 'bottom')
     server.use(
       http.get('/api/terminal/sessions', () => HttpResponse.json({ enabled: true, sessions: [] })),
     )

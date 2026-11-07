@@ -531,22 +531,11 @@ describe('App routing', () => {
     // (/apps/library).
     expect(screen.getByText('Discover')).toBeInTheDocument()
     expect(screen.getByText('Library')).toBeInTheDocument()
-    // The bottom-pinned community row: the GitHub mark fronts a "Star us" link
-    // plus a "Report issue" BUTTON (it opens the diagnostics flow rather than
-    // navigating to the issue list), and the icon-only Discord link. The
-    // kiro.dev link was removed.
-    expect(screen.getByText('Star us')).toBeInTheDocument()
-    expect(screen.getByText('Report issue')).toBeInTheDocument()
-    expect(screen.getByLabelText('Star Kiro Crew on GitHub')).toBeInTheDocument()
-    expect(
-      screen.getByLabelText(
-        'Report a problem — collects logs and crash reports, secrets removed',
-      ),
-    ).toBeInTheDocument()
-    // The old bare link to the issue list is gone — reporting now goes through
-    // the collector so triage gets logs instead of an empty issue form.
+    // Design exploration: the community row (Star us, Report issue, Discord)
+    // left the sidebar footer for the profile menu's Help and community group;
+    // see 'gathers help and community links in the profile menu'.
+    expect(screen.queryByText('Star us')).not.toBeInTheDocument()
     expect(screen.queryByLabelText('Report an issue on GitHub')).not.toBeInTheDocument()
-    expect(screen.getByLabelText('Kiro Discord community')).toBeInTheDocument()
     expect(screen.queryByLabelText('Kiro website (kiro.dev)')).not.toBeInTheDocument()
   })
 
@@ -555,9 +544,9 @@ describe('App routing', () => {
     // triage needs. It must now mount the same shared modal as
     // Settings › About › Support.
     renderWithProviders(<App />, { route: '/chat' })
-    const trigger = screen.getByLabelText(
-      'Report a problem — collects logs and crash reports, secrets removed',
-    )
+    // Design exploration: Report issue now lives in the profile menu.
+    fireEvent.click(screen.getByText('You').closest('[role="button"]')!)
+    const trigger = screen.getByRole('menuitem', { name: 'Report issue' })
     expect(trigger.tagName).toBe('BUTTON')
     expect(trigger).not.toHaveAttribute('href')
 
@@ -1483,18 +1472,17 @@ describe('App routing', () => {
     expect(screen.getByRole('menuitem', { name: /New group/ })).toBeInTheDocument()
   })
 
-  it('hides the community row when the sidebar is collapsed', () => {
-    localStorage.setItem('mc-nav', '0')
+  it('gathers help and community links in the profile menu', () => {
     renderWithProviders(<App />, { route: '/chat' })
-    const nav = screen.getByRole('navigation', { name: 'Main navigation' })
-    const contact = within(nav).getByText('Star us')
-    expect(contact).toBeVisible()
-    fireEvent.click(screen.getByRole('button', { name: 'Collapse sidebar' }))
-    // The row folds away (max-h-0 + opacity-0 + inert) instead of unmounting.
-    const wrapper = contact.closest('[class*="max-h-0"]')
-    expect(wrapper).not.toBeNull()
-    expect(wrapper).toHaveAttribute('inert')
-    localStorage.removeItem('mc-nav')
+    // Design exploration: Star us, Report issue and Discord moved from the
+    // sidebar footer into the profile menu, so they work in a collapsed sidebar too.
+    fireEvent.click(screen.getByText('You').closest('[role="button"]')!)
+    const menu = screen.getByRole('menu', { name: 'Your account' })
+    expect(within(menu).getByText('Help and community')).toBeInTheDocument()
+    expect(within(menu).getByRole('menuitem', { name: 'Send feedback' })).toBeInTheDocument()
+    expect(within(menu).getByRole('menuitem', { name: 'Report issue' })).toBeInTheDocument()
+    expect(within(menu).getByRole('menuitem', { name: 'Star Kiro Crew on GitHub' })).toHaveAttribute('href', 'https://github.com/kirodotdev/KiroCrew')
+    expect(within(menu).getByRole('menuitem', { name: 'Kiro Discord community' })).toHaveAttribute('href', 'https://kiro.dev/discord/')
   })
 
   it('keeps feedback out of the top bar by default and in the profile menu as Send feedback', () => {

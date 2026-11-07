@@ -1,6 +1,7 @@
 import { useRef, useState, type ReactNode } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { ArrowLeftRight, CircleUserRound, Lightbulb, Lock, LogOut, Settings2, Smartphone } from 'lucide-react'
+import { ArrowLeftRight, Bug, ChevronRight, CircleUserRound, ExternalLink, Lightbulb, Lock, LogOut, Settings2, Smartphone } from 'lucide-react'
+import { DiscordIcon, GithubIcon } from '../../components/BrandIcon'
 
 import Modal from '../../components/Modal'
 import { Btn } from '../../components/ui'
@@ -62,14 +63,34 @@ function MockDialog({ open, title, body, confirm, onClose }: { open: boolean; ti
 /**
  * The rail's one permanent row (design exploration): the user's avatar,
  * opening a profile menu, the pattern Claude, Slack and Codex use. Who you are
- * comes first, then configuration (Settings, Customize agents, Customize
- * sidebar), then device and connection (phone, remote
- * switching), then Sign out. Remote switching and Sign out are prototype
- * mocks: they explain what they would do and change nothing. The flyout is a
+ * comes first, then configuration (Settings, Customize, Edit layout), then
+ * device and connection (phone, remote switching), then help and community
+ * (Send feedback, Report issue, GitHub, Discord), then Sign out. The row shows
+ * a chevron so it reads as opening a menu. Remote switching and Sign out are
+ * prototype mocks: they explain what they would do and change nothing. The flyout is a
  * Radix popover, portaled to the overlay root so the rail's `overflow-hidden`
  * cannot clip it.
  */
-export function RailSettingsFlyout({ settings, customize, collapsed, activePath, badge, phone, onNavigate }: {
+/** A menu row that opens an outside page in a new tab, marked with an arrow-out icon. */
+function FlyoutLink({ icon, label, href, title }: { icon: ReactNode; label: string; href: string; title: string }) {
+  return (
+    <a
+      role="menuitem"
+      href={href}
+      target="_blank"
+      rel="noopener noreferrer"
+      title={title}
+      aria-label={title}
+      className="flex w-full items-center gap-2.5 rounded-lg px-2.5 py-1.5 text-left text-sm text-text no-underline hover:bg-bg-hover"
+    >
+      <span className="w-4 h-4 flex items-center justify-center shrink-0 text-muted">{icon}</span>
+      <span className="flex-1 min-w-0 truncate">{label}</span>
+      <ExternalLink size={12} aria-hidden="true" className="text-muted shrink-0" />
+    </a>
+  )
+}
+
+export function RailSettingsFlyout({ settings, customize, collapsed, activePath, badge, phone, onNavigate, reportProblem }: {
   settings: FlyoutRoute
   customize: FlyoutRoute
   collapsed: boolean
@@ -78,6 +99,8 @@ export function RailSettingsFlyout({ settings, customize, collapsed, activePath,
   /** Present when phone connect can render. */
   phone?: { open: () => void }
   onNavigate?: () => void
+  /** Opens the Report a problem flow (diagnostics, then a pre-filled issue). */
+  reportProblem?: () => void
 }) {
   const navigate = useNavigate()
   const [open, setOpen] = useState(false)
@@ -104,7 +127,9 @@ export function RailSettingsFlyout({ settings, customize, collapsed, activePath,
             onClickOverride={() => setOpen(o => !o)}
             badge={editing
               ? <span className="inline-flex items-center justify-center w-4 h-4 rounded-full bg-bg border border-border text-muted" title={i18nT('nav.layout_locked_title')} aria-label={i18nT('nav.layout_locked_title')}><Lock size={9} /></span>
-              : badge}
+              // A chevron says this row opens a menu to the side, not a page.
+              // Collapsed, the strip has no room, so only the row's badge shows.
+              : collapsed ? badge : <span className="inline-flex items-center gap-1">{badge}<ChevronRight size={14} aria-hidden="true" className={`text-muted transition-transform ${open ? 'translate-x-0.5' : ''}`} /></span>}
           />
         </div>
       </PopoverAnchor>
@@ -129,12 +154,20 @@ export function RailSettingsFlyout({ settings, customize, collapsed, activePath,
         </div>
         <div aria-hidden="true" className="my-1 h-px bg-border" />
         <FlyoutRow icon={settings.icon} label={settings.label} active={isOn(settings.path)} onClick={() => go(settings.path)} />
-        <FlyoutRow icon={<Lightbulb size={16} />} label={i18nT('nav.send_feedback')} onClick={() => { setOpen(false); sendFeedback() }} />
         <FlyoutRow icon={customize.icon} label={i18nT('nav.profile_customize_agents')} active={isOn(customize.path)} onClick={() => go(customize.path)} />
         <FlyoutRow icon={<Settings2 size={16} />} label={i18nT('nav.rail_customize')} onClick={() => { setOpen(false); openRailCustomize() }} />
         <div aria-hidden="true" className="my-1 h-px bg-border" />
         {phone && <FlyoutRow icon={<Smartphone size={16} />} label={i18nT('app.connect_your_phone')} onClick={() => { setOpen(false); phone.open() }} />}
         <FlyoutRow icon={<ArrowLeftRight size={16} />} label={i18nT('nav.profile_switch_remote')} onClick={() => openMock('remote')} />
+        <div aria-hidden="true" className="my-1 h-px bg-border" />
+        {/* Help and community: feedback, problem reports and the project's
+            public places, gathered from the top bar pill and the old sidebar
+            footer links. */}
+        <div className="px-2.5 pt-1 pb-0.5 text-[11px] font-medium uppercase tracking-wide text-muted">{i18nT('nav.profile_help_heading')}</div>
+        <FlyoutRow icon={<Lightbulb size={16} />} label={i18nT('nav.send_feedback')} onClick={() => { setOpen(false); sendFeedback() }} />
+        {reportProblem && <FlyoutRow icon={<Bug size={16} />} label={i18nT('app.report_issue')} onClick={() => { setOpen(false); reportProblem() }} />}
+        <FlyoutLink icon={<GithubIcon size={15} />} label={i18nT('nav.profile_star_github')} href="https://github.com/kirodotdev/KiroCrew" title={i18nT('app.star_kirocrew_on_github')} />
+        <FlyoutLink icon={<DiscordIcon size={15} />} label={i18nT('app.discord_community')} href="https://kiro.dev/discord/" title={i18nT('app.kiro_discord_community')} />
         <div aria-hidden="true" className="my-1 h-px bg-border" />
         <FlyoutRow icon={<LogOut size={16} />} label={i18nT('nav.profile_sign_out')} onClick={() => openMock('sign-out')} />
       </PopoverContent>

@@ -33,7 +33,7 @@ const terminal = vi.hoisted(() => ({
   callbacks: new Map<string, () => void>(),
 }))
 // The folder chip's terminal button (design exploration) is not under test here.
-vi.mock('../pages/chat/page/SessionTerminalButton', () => ({ SessionTerminalButton: () => null }))
+vi.mock('../shell/layout/sessionTerminalButton', () => ({ SessionTerminalButton: () => null }))
 vi.mock('../hooks/useBottomTerminal', () => ({
   addTab: (cwd?: string, chatSlot?: string) => { terminal.chatSlot = chatSlot; return terminal.addTab(cwd) },
 }))

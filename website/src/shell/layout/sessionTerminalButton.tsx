@@ -10,12 +10,12 @@
  */
 import { SquareTerminal } from 'lucide-react'
 
-import { toggleBottomTerminal, useBottomTerminalOpen } from '../../../hooks/useBottomTerminal'
-import { useIsMobile } from '../../../hooks/useIsMobile'
-import { i18nT } from '../../../i18n/t'
-import { TERMINAL_ITEM, useShellPlacement } from '../../../lib/shellLayout'
-import { useTerminalEnabled } from '../../../utils/terminalRegistry'
-import { focusPopout as focusTerminalPopout, useTerminalPoppedOut } from '../../../utils/terminalPopout'
+import { toggleBottomTerminal, useBottomTerminalOpen } from '../../hooks/useBottomTerminal'
+import { useIsMobile } from '../../hooks/useIsMobile'
+import { i18nT } from '../../i18n/t'
+import { TERMINAL_ITEM, useShellPlacement } from '../../lib/shellLayout'
+import { useTerminalEnabled } from '../../utils/terminalRegistry'
+import { focusPopout as focusTerminalPopout, useTerminalPoppedOut } from '../../utils/terminalPopout'
 
 /** `project`: the session's project folder, where the terminal opens. */
 export function SessionTerminalButton({ project }: { project?: string }) {

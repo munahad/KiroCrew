@@ -16,7 +16,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { useQuery } from '@tanstack/react-query'
-import { ArrowLeftRight, Bell, CircleUserRound, Gauge, GripVertical, Lightbulb, Lock, MessageSquare, PanelLeft, Search, Smartphone, SquareTerminal, X } from 'lucide-react'
+import { ArrowLeftRight, Bell, CircleUserRound, GripVertical, Lightbulb, Lock, MessageSquare, PanelLeft, Search, Smartphone, SquareTerminal, X } from 'lucide-react'
 
 import CrewAvatar from '../../components/CrewAvatar'
 import { Btn } from '../../components/ui'
@@ -29,7 +29,7 @@ import {
   type RailGroup,
 } from '../../lib/railLayout'
 import {
-  FEEDBACK_ITEM, PHONE_ITEM, SEARCH_ITEM, TERMINAL_ITEM, announceLayout, isWindowToggle, moveItem, resetShellLayout, setLayoutEditing,
+  FEEDBACK_ITEM, PHONE_ITEM, SEARCH_ITEM, STATUS_ITEM, TERMINAL_ITEM, isTwoPlaceItem, announceLayout, isWindowToggle, moveItem, resetShellLayout, setLayoutEditing,
   useLayoutAnnouncement, useShellPlacement, zoneOf, type ShellZone,
 } from '../../lib/shellLayout'
 import { useTerminalEnabled } from '../../utils/terminalRegistry'
@@ -45,8 +45,6 @@ const LOCKED: { key: string; icon: JSX.Element; zone: 'sidebar' | 'top' }[] = [
   { key: 'nav.layout_locked_brand', icon: <PanelLeft size={16} />, zone: 'sidebar' },
   { key: 'nav.layout_locked_back_forward', icon: <ArrowLeftRight size={16} />, zone: 'sidebar' },
   { key: 'nav.profile_menu_name', icon: <CircleUserRound size={16} />, zone: 'sidebar' },
-  { key: 'nav.layout_locked_readouts', icon: <Gauge size={16} />, zone: 'top' },
-  { key: 'nav.layout_locked_notifications', icon: <Bell size={16} />, zone: 'top' },
 ]
 
 /** Built-in surfaces that read as apps (the App Store rows and Task Runner). */
@@ -61,7 +59,7 @@ interface Candidate { id: string; category: Exclude<Category, 'all'>; meta: Rail
 function categoryOf(id: string): Exclude<Category, 'all'> {
   if (id.startsWith(MATE_PIN_PREFIX)) return 'mates'
   if (id.startsWith(SESSION_PIN_PREFIX)) return 'sessions'
-  if (isWindowToggle(id) || id === SEARCH_ITEM) return 'tools'
+  if (isWindowToggle(id) || isTwoPlaceItem(id)) return 'tools'
   // Task Runner, Discover and Library ship in the Apps group, so they read as apps.
   return isAppNavId(id) || APP_STORE_IDS.has(id) ? 'apps' : 'pages'
 }
@@ -69,7 +67,7 @@ const categoryLabel = (c: Category) => i18nT(`nav.layout_cat_${c}`)
 
 /** The places an item may go, in the order the menu lists them. */
 function placesFor(id: string): (ShellZone | 'none')[] {
-  if (id === SEARCH_ITEM) return ['top', 'sidebar']
+  if (isTwoPlaceItem(id)) return ['top', 'sidebar']
   if (isWindowToggle(id)) return ['top', 'bottom', 'none']
   if (canSitInBar(id)) return ['sidebar', 'top', 'bottom', 'none']
   return ['sidebar', 'none']
@@ -112,6 +110,7 @@ export function LayoutEditPanel({ groups, hidden, meta, isApp, setAppPinned }: {
       out.push({ id, category: categoryOf(id), meta: m })
     }
     add(SEARCH_ITEM, { label: i18nT('nav.layout_locked_search'), icon: <Search size={16} /> })
+    add(STATUS_ITEM, { label: i18nT('nav.layout_status_item'), icon: <Bell size={16} /> })
     if (terminalEnabled) add(TERMINAL_ITEM, { label: i18nT('app.terminal'), icon: <SquareTerminal size={16} /> })
     add(PHONE_ITEM, { label: i18nT('app.connect_your_phone'), icon: <Smartphone size={16} /> })
     add(FEEDBACK_ITEM, { label: i18nT('nav.send_feedback'), icon: <Lightbulb size={16} /> })
@@ -164,7 +163,7 @@ export function LayoutEditPanel({ groups, hidden, meta, isApp, setAppPinned }: {
       aria-label={i18nT('nav.rail_customize_title')}
       // Docked over the page area only: below the top bar, above the bottom bar,
       // so both stay visible while you edit them. No backdrop, nothing dims.
-      className="fixed right-3 top-[50px] bottom-[34px] z-[60] w-[320px] flex flex-col rounded-xl border border-border bg-bg-elevated text-text shadow-xl outline-none"
+      className="fixed right-safe mr-3 top-safe-offset-[50px] bottom-safe-offset-[34px] z-[60] w-[320px] flex flex-col rounded-xl border border-border bg-bg-elevated text-text shadow-xl outline-none"
       data-testid="layout-edit-panel"
     >
       <header className="flex items-start gap-2 px-4 pt-3 pb-2 border-b border-border">

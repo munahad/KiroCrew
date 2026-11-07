@@ -15,7 +15,8 @@ import { NavHistoryArrows } from '../../components/NavHistoryArrows'
 import { PinnedRailGroups } from './railPins'
 import { forwardRailContextMenu, pinAtPoint } from './railPinDrop'
 import { RAIL_PIN_MIME } from '../../lib/railLayout'
-import { SEARCH_ITEM, moveItem, removeFromBars, useSearchPlace } from '../../lib/shellLayout'
+import { isTwoPlaceItem, moveItem, removeFromBars, useSearchPlace, useStatusPlace } from '../../lib/shellLayout'
+import { SidebarStatus } from '../layout/sidebarStatus'
 import { SearchTrigger } from '../layout/searchTrigger'
 
 /** Sidebar-wide drop while editing: the groups' own drop host handles drops over
@@ -26,7 +27,7 @@ const railWideDropProps = {
     if (e.defaultPrevented || !e.dataTransfer.types.includes(RAIL_PIN_MIME)) return
     e.preventDefault()
     const id = e.dataTransfer.getData(RAIL_PIN_MIME)
-    if (id === SEARCH_ITEM) { moveItem(id, 'sidebar'); return }
+    if (isTwoPlaceItem(id)) { moveItem(id, 'sidebar'); return }
     if (id && pinAtPoint(id, e.clientY)) removeFromBars(id)
   },
 }
@@ -61,6 +62,7 @@ export function ShellNavRail({ shell }: { shell: AppShell }) {
     discoverNavActive, isChat, navRowActive,
   } = shell
   const searchPlace = useSearchPlace()
+  const statusPlace = useStatusPlace()
 
   // Render one standard nav row (used by the top-fixed mains, the Apps list,
   // and the bottom-fixed section). Active-state, mobile close, chat pin
@@ -245,6 +247,11 @@ export function ShellNavRail({ shell }: { shell: AppShell }) {
           // (statusbar/shellStatusBar.tsx). The phone drawer keeps every row.
           if (!isMobile) return (
             <div className="shrink-0 grid gap-0.5 px-2 pt-1 pb-2">
+              {/* Design exploration: connection, credits and notifications live
+                  here by default, so the top bar can be empty and hidden. */}
+              {statusPlace === 'sidebar' && <SidebarStatus shell={shell} collapsed={effectiveCollapsed} />}
+              {/* The profile row starts the account area: a divider above it. */}
+              <div aria-hidden="true" className="h-px bg-border mx-1 my-1" />
               <RailSettingsFlyout
                 settings={{ path: s.path, label: surfaceLabel(s), icon: s.icon }}
                 customize={{ path: cap.path, label: surfaceLabel(cap), icon: cap.icon }}
@@ -253,9 +260,10 @@ export function ShellNavRail({ shell }: { shell: AppShell }) {
                 badge={updateBadge}
                 phone={hasRenderableMobileConnect ? { open: () => setMobileConnectOpen(true) } : undefined}
                 onNavigate={closeMobileNav}
+                reportProblem={() => setReportProblemOpen(true)}
               />
-              {/* Expanded-only footer; folds away when collapsed. */}
-              <RailCommunityLinks effectiveCollapsed={effectiveCollapsed} setReportProblemOpen={setReportProblemOpen} />
+              {/* Design exploration: Star us, Report issue and Discord moved into
+                  the profile menu's Help and community group. */}
             </div>
           )
           return (
@@ -391,7 +399,7 @@ export function ShellNavRail({ shell }: { shell: AppShell }) {
           // eslint-disable-next-line jsx-a11y/no-noninteractive-element-interactions
           <nav
             ref={railPeekSurface}
-            className={`focus-chrome-rail bg-bg-elevated border border-border rounded-xl flex flex-col mx-2 ${focusActive ? 'mt-0' : 'mt-2'} mb-2 shadow-sm z-50 overflow-hidden`}
+            className="focus-chrome-rail bg-bg-elevated border border-border rounded-xl flex flex-col mx-2 mt-0 mb-2 shadow-sm z-50 overflow-hidden"
             // Focus mode: same overlay treatment as the header. The rail's own
             // `mx-2` means translateX(-100%) would leave its 8px left margin
             // showing as a sliver, hence the extra 12px of travel. Width has to
@@ -411,7 +419,9 @@ export function ShellNavRail({ shell }: { shell: AppShell }) {
                 transition: 'transform 200ms cubic-bezier(0.2, 0, 0, 1)',
                 pointerEvents: railPeek.open ? 'auto' : 'none',
               }
-              : { gridArea: 'nav', width: 'auto' }}
+              // Design exploration: the sidebar now starts at the window top,
+              // so it takes the same 8px gap above as it has below.
+              : { gridArea: 'nav', width: 'auto', marginTop: 8 }}
             role="navigation"
             aria-label={i18nT('app.main_navigation')}
             // Anywhere on the rail opens the rail's own menu, not the OS one.

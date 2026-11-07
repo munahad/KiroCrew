@@ -13,7 +13,7 @@ import { createPortal } from 'react-dom'
 import { useDroppable } from '@dnd-kit/core'
 
 import { insertPin, RAIL_PIN_MIME, updateRail } from '../../lib/railLayout'
-import { SEARCH_ITEM, moveItem, removeFromBars } from '../../lib/shellLayout'
+import { isTwoPlaceItem, moveItem, removeFromBars } from '../../lib/shellLayout'
 import { i18nT } from '../../i18n/t'
 
 /** Droppable `type` of the rail zone inside the sidebar's DndContext. */
@@ -94,7 +94,7 @@ export function useRailNativeDrop() {
     e.preventDefault()
     const id = e.dataTransfer.getData(RAIL_PIN_MIME)
     // Design exploration: search moves as a whole (top bar or sidebar), it is not a pin.
-    if (id === SEARCH_ITEM) { moveItem(id, 'sidebar'); return }
+    if (isTwoPlaceItem(id)) { moveItem(id, 'sidebar'); return }
     // Design exploration: an item dragged off the top or bottom bar leaves it.
     if (id && pinAtPoint(id, e.clientY)) removeFromBars(id)
   }, [])

@@ -23,7 +23,7 @@ import type { AppShell } from '../appShell'
 import { hiddenChromeProps } from '../focus/focusChrome'
 import { setAgentSwitchNotice } from '../../store/chatSlice'
 import { BarItems } from '../layout/barItems'
-import { SEND_FEEDBACK_EVENT, useSearchPlace } from '../../lib/shellLayout'
+import { SEND_FEEDBACK_EVENT, useSearchPlace, useStatusPlace } from '../../lib/shellLayout'
 import { SearchTrigger } from '../layout/searchTrigger'
 
 // Lazy, like App.tsx's update-found popup: the pill renders nothing without an update,
@@ -83,7 +83,7 @@ export function MobileNavGlyph({ avatar }: { avatar: string }) {
  * backdrop-filter containing block); clicking an item slides out a detail panel. The full page is
  * preserved at /notifications via the popover's "Open inbox" link.
  */
-function NotificationsBellButton() {
+export function NotificationsBellButton() {
   // The Notifications surface is `hiddenFromNav`, so this bell — not a rail row —
   // is the control Alt+N operates. Resolved through the same route-keyed helper
   // the rail uses, so the chord has exactly one derivation in the dashboard.
@@ -161,6 +161,9 @@ export function ShellHeader({ shell }: { shell: AppShell }) {
   }, [requestFeature])
   void setReportProblemOpen
   const searchPlace = useSearchPlace()
+  // Design exploration: the status cluster (connection, usage, bell) lives in
+  // the sidebar by default; the capsule and bell draw here only when moved back.
+  const statusTop = useStatusPlace() === 'top'
   return (
     <>
       {/* Topbar */}
@@ -454,7 +457,7 @@ export function ShellHeader({ shell }: { shell: AppShell }) {
               (bell + the chat page's overflow menu) and a resource readout is
               not something a phone user acts on; the session-expired banner
               stays the offline signal there. */}
-          {!isMobile && (() => {
+          {!isMobile && statusTop && (() => {
             const offline = !connected
             // `gatewayStatusMsg` (useAppShell) is the announced cause; see its
             // comment for why auth wording wins over transport state. It mirrors
@@ -599,7 +602,7 @@ export function ShellHeader({ shell }: { shell: AppShell }) {
               (The activity-panel open toggle now lives in the session header,
               beside the pop-out control — see ChatPage — so opening the panel
               no longer narrows this full-width header.) */}
-          <NotificationsBellButton />
+          {(isMobile || statusTop) && <NotificationsBellButton />}
           </div>
         </div>
         )}

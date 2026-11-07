@@ -86,7 +86,7 @@ import { guideTarget } from './uiLocations/targetRegistry'
 import { useAppShell } from './shell/appShell'
 import { ShellHeader } from './shell/topbar/shellHeader'
 import { ShellStatusBar } from './shell/statusbar/shellStatusBar'
-import { useLayoutEditing, useShellPlacement } from './lib/shellLayout'
+import { useLayoutEditing, useShellPlacement, useTopBarHasContent } from './lib/shellLayout'
 import { LayoutZoneOutlines } from './shell/layout/layoutZones'
 import { LAYOUT_PANEL_ROOM } from './shell/layout/layoutEditPanel'
 import { ShellNavRail } from './shell/nav/navRail'
@@ -327,6 +327,12 @@ export default function App() {
   // While editing, the middle row gives up the Edit layout panel's width, so the
   // docked panel never covers the page (the top and bottom bars stay full width).
   const editRoom = layoutEditing && !isMobile && !focusActive
+  // Design exploration: the desktop top bar is drawn only when it has something
+  // in it (search, status, placed items, or a pending update), or while editing
+  // as a drop target. Empty, its row collapses and each page's own header is
+  // the top of the window, so there is one bar, not two.
+  const topBarHasContent = useTopBarHasContent()
+  const hideTopBar = !isMobile && !focusActive && !layoutEditing && !topBarHasContent && !updateAvailable
   // The page steps back while editing: half opacity, slightly greyed. The
   // chrome you can edit (outlined bars, the panel) stays at full strength.
   const pageEditStyle: React.CSSProperties = editRoom
@@ -620,6 +626,9 @@ export default function App() {
         // Focus mode collapses the chrome tracks. Inline so it beats the Tailwind
         // `grid-rows-[42px_...]` class rather than having to fight it there, and
         // so the one platform that needs a gutter (see FOCUS_INSET) can keep it.
+        ...(hideTopBar && {
+          gridTemplateRows: bottomDock ? '0px minmax(0,1fr) auto auto' : '0px minmax(0,1fr) auto',
+        }),
         ...(focusActive && {
           gridTemplateRows: bottomDock
             ? `${FOCUS_INSET}px minmax(0,1fr) auto`
@@ -716,7 +725,7 @@ export default function App() {
         </>
       )}
 
-      <ShellHeader shell={shell} />
+      {!hideTopBar && <ShellHeader shell={shell} />}
 
       {agentSwitchNotice && <AgentSwitchNoticeBanner notice={agentSwitchNotice} />}
 
