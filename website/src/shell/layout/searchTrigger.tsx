@@ -7,6 +7,10 @@
  * The same control can sit at the top of the sidebar instead; Edit layout
  * moves it between the two, and while editing it drags like any other item.
  *
+ * "Show as icon" (the search row in Edit layout) draws it as the magnifier
+ * alone, wherever it lives. In the expanded sidebar that icon moves up into
+ * the header row, next to Back/Forward, instead of taking a row of its own.
+ *
  * Responsive: when the top bar gets narrow (a small window, or a wide sidebar
  * plus the activity panel), the field shrinks to a magnifier button so the
  * other controls keep their room. It keeps its name and shortcut for
@@ -18,7 +22,7 @@ import { GripVertical, Search } from 'lucide-react'
 import { IS_MAC } from '../../hooks/useKeyboardShortcuts'
 import { i18nT } from '../../i18n/t'
 import { uiLocation } from '../../uiLocations/uiLocation'
-import { SEARCH_ITEM, useLayoutEditing } from '../../lib/shellLayout'
+import { SEARCH_ITEM, useLayoutEditing, useSearchStyle } from '../../lib/shellLayout'
 import { startItemDrag } from './barItems'
 
 /** Below this top-bar width (px) the top-bar field becomes an icon. */
@@ -49,16 +53,27 @@ function useNarrowTopBar(enabled: boolean) {
   return { ref, narrow: enabled && narrow }
 }
 
-export function SearchTrigger({ onOpen, launcherOwned, variant, collapsed = false }: {
+export function SearchTrigger({ onOpen, launcherOwned, variant, collapsed = false, inHeader = false }: {
   onOpen: () => void
   /** An app owns the quick-search slot: the gesture opens a command launcher. */
   launcherOwned: boolean
   variant: 'top' | 'sidebar'
   /** Sidebar collapsed to its icon strip: the field shrinks to a magnifier button. */
   collapsed?: boolean
+  /** "Show as icon" in the expanded sidebar: a borderless icon in the header
+   *  row, sized like the Back/Forward arrows beside it. */
+  inHeader?: boolean
 }) {
   const editing = useLayoutEditing()
+  const iconStyle = useSearchStyle() === 'icon'
   const { ref, narrow } = useNarrowTopBar(variant === 'top')
+  // An icon in the top bar gives its centre track back, as a narrow bar does.
+  useEffect(() => {
+    if (variant !== 'top' || !iconStyle) return
+    const bar = ref.current?.closest<HTMLElement>('.topbar')
+    bar?.setAttribute('data-search-compact', '')
+    return () => { if (!narrow) bar?.removeAttribute('data-search-compact') }
+  }, [variant, iconStyle, narrow, ref])
   const label = launcherOwned ? i18nT('app.open_command_bar') : i18nT('app.search_sessions_files_and_commands')
   const placeholder = launcherOwned ? i18nT('app.k_run_a_command') : i18nT('nav.search_placeholder')
   const chord = IS_MAC ? '⌘K' : 'Ctrl K'
@@ -67,8 +82,28 @@ export function SearchTrigger({ onOpen, launcherOwned, variant, collapsed = fals
     : {}
   const editCls = editing ? 'group/edit relative cursor-grab active:cursor-grabbing [&_*]:cursor-grab hover:bg-bg-hover' : 'cursor-pointer hover:border-text/30'
 
-  // Collapsed sidebar, or a narrow top bar: a magnifier button only.
-  if ((variant === 'sidebar' && collapsed) || narrow) {
+  // Header-row icon (expanded sidebar, "Show as icon").
+  if (inHeader) {
+    return (
+      <button
+        type="button"
+        onClick={editing ? undefined : onOpen}
+        aria-label={label}
+        title={`${label} (${chord})`}
+        aria-keyshortcuts={IS_MAC ? 'Meta+K' : 'Control+K'}
+        data-bar-item={SEARCH_ITEM}
+        data-testid="search-trigger-sidebar"
+        {...uiLocation('shell.search')}
+        {...drag}
+        className={`w-7 h-7 shrink-0 flex items-center justify-center rounded-md bg-transparent border-none text-muted hover:text-text hover:bg-bg-hover ${editing ? 'cursor-grab active:cursor-grabbing' : 'cursor-pointer'}`}
+      >
+        <Search size={15} />
+      </button>
+    )
+  }
+
+  // Collapsed sidebar, a narrow top bar, or "Show as icon": a magnifier button only.
+  if ((variant === 'sidebar' && collapsed) || narrow || iconStyle) {
     return (
       <button
         ref={ref}

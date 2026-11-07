@@ -78,6 +78,37 @@ export function usePlace(id: TwoPlaceItem): SearchPlace {
 export const useSearchPlace = () => usePlace(SEARCH_ITEM)
 export const useStatusPlace = () => usePlace(STATUS_ITEM)
 
+/** How search is drawn: the full field (default) or only its magnifier icon.
+ *  Set from the search row in Edit layout; applies wherever search lives. In
+ *  the expanded sidebar the icon joins the header row, beside Back/Forward. */
+export type SearchStyle = 'field' | 'icon'
+const SEARCH_STYLE_KEY = 'mc-search-style'
+const SEARCH_STYLE_EVENT = 'mc:search-style-changed'
+
+export function readSearchStyle(): SearchStyle {
+  return safeGetItem(SEARCH_STYLE_KEY) === 'icon' ? 'icon' : 'field'
+}
+
+export function setSearchStyle(style: SearchStyle): void {
+  if (style === 'field') safeRemoveItem(SEARCH_STYLE_KEY)
+  else safeSetItem(SEARCH_STYLE_KEY, style)
+  window.dispatchEvent(new Event(SEARCH_STYLE_EVENT))
+}
+
+export function useSearchStyle(): SearchStyle {
+  const [s, setS] = useState(readSearchStyle)
+  useEffect(() => {
+    const sync = () => setS(readSearchStyle())
+    window.addEventListener(SEARCH_STYLE_EVENT, sync)
+    window.addEventListener('storage', sync)
+    return () => {
+      window.removeEventListener(SEARCH_STYLE_EVENT, sync)
+      window.removeEventListener('storage', sync)
+    }
+  }, [])
+  return s
+}
+
 /** Whether the desktop top bar has anything in it. Empty, it is not drawn. */
 export function useTopBarHasContent(): boolean {
   const placement = useShellPlacement()
@@ -189,7 +220,9 @@ export function resetShellLayout(): void {
   safeRemoveItem(PLACEMENT_KEY)
   safeRemoveItem(PLACE_KEY[SEARCH_ITEM])
   safeRemoveItem(PLACE_KEY[STATUS_ITEM])
+  safeRemoveItem(SEARCH_STYLE_KEY)
   window.dispatchEvent(new Event(PLACE_EVENT))
+  window.dispatchEvent(new Event(SEARCH_STYLE_EVENT))
   window.dispatchEvent(new Event(PLACEMENT_EVENT))
   resetRailLayout()
 }

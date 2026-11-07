@@ -20,6 +20,7 @@ import { FirstRunChapters } from './shell/boot/firstRun'
 import ErrorNotice from './components/ErrorNotice'
 import { MobileConnectDialog } from './shell/nav/mobileConnect'
 import { isMacElectron, isWinElectron, isLinuxFramelessElectron } from './lib/electron'
+import { MacWindowButtonsPreview, isMacPreview } from './shell/platform/macWindowButtons'
 import ChatPage from './pages/ChatPage'
 import PopoutFrame from './pages/PopoutFrame'
 import ArtifactPopoutFrame from './pages/ArtifactPopoutFrame'
@@ -593,7 +594,7 @@ export default function App() {
     <div
       ref={shellRef}
       data-testid="dashboard-shell"
-      className={`relative z-[1] h-full grid ${shellEntered ? '' : 'animate-rise'} overflow-hidden bg-bg p-safe ${isMacElectron ? `mac-electron ${macFullscreen ? 'mac-fullscreen' : ''}` : ''} ${isWinElectron ? 'win-electron' : ''} ${isLinuxFramelessElectron ? 'linux-electron' : ''} ${isMobile ? 'grid-cols-[minmax(0,1fr)] grid-rows-[42px_minmax(0,1fr)]' : bottomDock ? 'grid-rows-[42px_minmax(0,1fr)_auto_auto]' : 'grid-rows-[42px_minmax(0,1fr)_auto]'}`}
+      className={`relative z-[1] h-full grid ${shellEntered ? '' : 'animate-rise'} overflow-hidden bg-bg p-safe ${isMacElectron || isMacPreview ? `mac-electron ${macFullscreen ? 'mac-fullscreen' : ''}` : ''} ${(isMacElectron || isMacPreview) && !macFullscreen && !isMobile && !focusActive ? 'mac-sidebar-top' : ''} ${isWinElectron ? 'win-electron' : ''} ${isLinuxFramelessElectron ? 'linux-electron' : ''} ${isMobile ? 'grid-cols-[minmax(0,1fr)] grid-rows-[42px_minmax(0,1fr)]' : bottomDock ? 'grid-rows-[42px_minmax(0,1fr)_auto_auto]' : 'grid-rows-[42px_minmax(0,1fr)_auto]'}`}
       // Retire the entrance animation once it has played, so re-showing this
       // pane cannot replay it. Guarded on BOTH the keyframe name and the event
       // target: `animationend` bubbles, and descendants (banners, cards) use
@@ -645,6 +646,7 @@ export default function App() {
           pointerEvents opts its own iframe back in); its own stacking context
           at OVERLAY_Z_MAX so nothing inside can outrank the header (TOPBAR_Z /
           TOPBAR_FOCUS_Z). Must precede the header in DOM order. */}
+      <MacWindowButtonsPreview />
       <div
         id={THEME_DECOR_SLOT_ID}
         ref={registerThemeDecorSlot}

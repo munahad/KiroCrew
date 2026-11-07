@@ -30,7 +30,7 @@ import {
 } from '../../lib/railLayout'
 import {
   FEEDBACK_ITEM, PHONE_ITEM, SEARCH_ITEM, STATUS_ITEM, TERMINAL_ITEM, isTwoPlaceItem, announceLayout, isWindowToggle, moveItem, resetShellLayout, setLayoutEditing,
-  useLayoutAnnouncement, useShellPlacement, zoneOf, type ShellZone,
+  setSearchStyle, useLayoutAnnouncement, useSearchStyle, useShellPlacement, zoneOf, type SearchStyle, type ShellZone,
 } from '../../lib/shellLayout'
 import { useTerminalEnabled } from '../../utils/terminalRegistry'
 import type { RailItemMeta } from '../nav/railCustomize'
@@ -63,7 +63,16 @@ function categoryOf(id: string): Exclude<Category, 'all'> {
   // Task Runner, Discover and Library ship in the Apps group, so they read as apps.
   return isAppNavId(id) || APP_STORE_IDS.has(id) ? 'apps' : 'pages'
 }
-const categoryLabel = (c: Category) => i18nT(`nav.layout_cat_${c}`)
+/** Literal keys, so the catalog checks can see each one is used. */
+const CATEGORY_KEY: Record<Category, string> = {
+  all: 'nav.layout_cat_all',
+  pages: 'nav.layout_cat_pages',
+  apps: 'nav.layout_cat_apps',
+  mates: 'nav.layout_cat_mates',
+  sessions: 'nav.layout_cat_sessions',
+  tools: 'nav.layout_cat_tools',
+}
+const categoryLabel = (c: Category) => i18nT(CATEGORY_KEY[c])
 
 /** The places an item may go, in the order the menu lists them. */
 function placesFor(id: string): (ShellZone | 'none')[] {
@@ -84,6 +93,7 @@ export function LayoutEditPanel({ groups, hidden, meta, isApp, setAppPinned }: {
   const [query, setQuery] = useState('')
   const [category, setCategory] = useState<Category>('all')
   const placement = useShellPlacement()
+  const searchStyle = useSearchStyle()
   const announcement = useLayoutAnnouncement()
   const terminalEnabled = useTerminalEnabled()
   const slots = useAppSelector(s => s.dashboard.slots)
@@ -220,8 +230,9 @@ export function LayoutEditPanel({ groups, hidden, meta, isApp, setAppPinned }: {
               key={x.id}
               draggable
               onDragStart={e => startItemDrag(e, x.id)}
-              className="group/row flex items-center gap-2 px-2 py-1.5 rounded-lg hover:bg-bg-hover cursor-grab active:cursor-grabbing"
+              className="group/row flex flex-col gap-1 px-2 py-1.5 rounded-lg hover:bg-bg-hover cursor-grab active:cursor-grabbing"
             >
+              <div className="flex items-center gap-2">
               <GripVertical size={13} className="text-muted opacity-0 group-hover/row:opacity-100 shrink-0" aria-hidden="true" />
               <span className="w-5 h-5 flex items-center justify-center shrink-0 text-muted">{x.meta.icon}</span>
               <span className="flex-1 min-w-0">
@@ -238,6 +249,27 @@ export function LayoutEditPanel({ groups, hidden, meta, isApp, setAppPinned }: {
               >
                 {placesFor(x.id).map(p => <option key={p} value={p}>{placeLabel(p)}</option>)}
               </select>
+              </div>
+              {/* Search only: draw it as the full field or the icon alone. */}
+              {x.id === SEARCH_ITEM && (
+                <div className="flex items-center gap-2 pl-[49px] pb-0.5">
+                  <label htmlFor="layout-search-style" className="flex-1 text-[11px] text-muted">{i18nT('nav.layout_show_as')}</label>
+                  <select
+                    id="layout-search-style"
+                    value={searchStyle}
+                    onChange={e => {
+                      const style = e.target.value as SearchStyle
+                      setSearchStyle(style)
+                      announceLayout(i18nT(style === 'icon' ? 'nav.layout_search_now_icon' : 'nav.layout_search_now_field'))
+                    }}
+                    onPointerDown={e => e.stopPropagation()}
+                    className="shrink-0 max-w-[110px] px-1.5 py-0.5 rounded border border-border text-[11px] bg-bg text-text cursor-pointer"
+                  >
+                    <option value="field">{i18nT('nav.layout_search_field')}</option>
+                    <option value="icon">{i18nT('nav.layout_search_icon')}</option>
+                  </select>
+                </div>
+              )}
             </li>
           )
         })}

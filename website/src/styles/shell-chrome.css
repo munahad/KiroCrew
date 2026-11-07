@@ -380,6 +380,14 @@
 /* Fullscreen: AppKit hides the traffic lights, so the clearance inset drops
    and the branding sits flush left again (back to the header's own pl-5). */
 .mac-electron.mac-fullscreen header.topbar-glass{padding-left:1.25rem}
+/* Design exploration: the sidebar runs the full window height, so the traffic
+   lights sit over the SIDEBAR, not the top bar. The top bar starts right of the
+   sidebar and drops its inset; the sidebar gets an empty band above its logo
+   row for the lights (as in Finder and Notes). The 8px rail margin plus 24px
+   of padding puts the logo row's top at 32px, 9px below the lights' bottom
+   edge at 23px. See shell/platform/macWindowButtons.tsx. */
+.mac-electron.mac-sidebar-top header.topbar-glass{padding-left:1.25rem}
+.mac-sidebar-top .sidebar-top{padding-top:24px}
 
 /* ── Frameless Electron window (Windows) ──
    titleBarOverlay places native caption controls (min/max/close) in a 138px

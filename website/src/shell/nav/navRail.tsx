@@ -15,7 +15,7 @@ import { NavHistoryArrows } from '../../components/NavHistoryArrows'
 import { PinnedRailGroups } from './railPins'
 import { forwardRailContextMenu, pinAtPoint } from './railPinDrop'
 import { RAIL_PIN_MIME } from '../../lib/railLayout'
-import { isTwoPlaceItem, moveItem, removeFromBars, useSearchPlace, useStatusPlace } from '../../lib/shellLayout'
+import { isTwoPlaceItem, moveItem, removeFromBars, useSearchPlace, useSearchStyle, useStatusPlace } from '../../lib/shellLayout'
 import { SidebarStatus } from '../layout/sidebarStatus'
 import { SearchTrigger } from '../layout/searchTrigger'
 
@@ -62,7 +62,9 @@ export function ShellNavRail({ shell }: { shell: AppShell }) {
     discoverNavActive, isChat, navRowActive,
   } = shell
   const searchPlace = useSearchPlace()
+  const searchStyle = useSearchStyle()
   const statusPlace = useStatusPlace()
+  const searchInHeader = !isMobile && searchPlace === 'sidebar' && searchStyle === 'icon' && !effectiveCollapsed
 
   // Render one standard nav row (used by the top-fixed mains, the Apps list,
   // and the bottom-fixed section). Active-state, mobile close, chat pin
@@ -143,7 +145,7 @@ export function ShellNavRail({ shell }: { shell: AppShell }) {
       {(() => {
         const navBody = (<>
         {/* Top-fixed: the menu row. The sidebar toggle lives HERE, not in the topbar. */}
-        <div className="shrink-0 flex flex-col gap-0.5 px-2 pt-2">
+        <div className="sidebar-top shrink-0 flex flex-col gap-0.5 px-2 pt-2">
           {/* Desktop: the brand + expand toggle moved to the top bar
               (topbar/topBarRailToggle.tsx). The phone drawer keeps its header. */}
           {isMobile ? (
@@ -158,10 +160,15 @@ export function ShellNavRail({ shell }: { shell: AppShell }) {
                 <RailBrandToggle effectiveCollapsed={effectiveCollapsed} toggleNav={toggleNav} avatar={avatar} branding={branding} botName={botName} />
               </div>
               <NavHistoryArrows vertical={effectiveCollapsed} />
+              {/* "Show as icon": search joins the header row (expanded only;
+                  the collapsed strip keeps its own icon row below). */}
+              {searchInHeader && (
+                <SearchTrigger variant="sidebar" inHeader onOpen={commandPalette.openPalette} launcherOwned={!!slotOwners['quick-search']} />
+              )}
             </div>
           )}
           {/* Design exploration: search can live here instead of the top bar. */}
-          {!isMobile && searchPlace === 'sidebar' && (
+          {!isMobile && searchPlace === 'sidebar' && !searchInHeader && (
             <SearchTrigger variant="sidebar" collapsed={effectiveCollapsed} onOpen={commandPalette.openPalette} launcherOwned={!!slotOwners['quick-search']} />
           )}
           {/* Hairline under the expanded header (collapsed rail has none —
