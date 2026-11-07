@@ -6,7 +6,13 @@
  * modest width in the top bar's centre rather than stretching across it.
  * The same control can sit at the top of the sidebar instead; Edit layout
  * moves it between the two, and while editing it drags like any other item.
+ *
+ * Responsive: when the top bar gets narrow (a small window, or a wide sidebar
+ * plus the activity panel), the field shrinks to a magnifier button so the
+ * other controls keep their room. It keeps its name and shortcut for
+ * assistive tech either way.
  */
+import { useEffect, useRef, useState } from 'react'
 import { GripVertical, Search } from 'lucide-react'
 
 import { IS_MAC } from '../../hooks/useKeyboardShortcuts'
@@ -14,6 +20,34 @@ import { i18nT } from '../../i18n/t'
 import { uiLocation } from '../../uiLocations/uiLocation'
 import { SEARCH_ITEM, useLayoutEditing } from '../../lib/shellLayout'
 import { startItemDrag } from './barItems'
+
+/** Below this top-bar width (px) the top-bar field becomes an icon. */
+export const SEARCH_ICON_BELOW = 820
+
+/** Whether the top bar this element sits in is narrower than SEARCH_ICON_BELOW.
+ *  Measures the BAR, not the field's own cell, so the switch cannot oscillate
+ *  when the narrower trigger gives its track back. Marks the bar so its centre
+ *  track shrinks to the icon too. */
+function useNarrowTopBar(enabled: boolean) {
+  const ref = useRef<HTMLButtonElement>(null)
+  const [narrow, setNarrow] = useState(false)
+  useEffect(() => {
+    const bar = enabled ? ref.current?.closest<HTMLElement>('.topbar') : null
+    if (!bar || typeof ResizeObserver === 'undefined') return
+    const check = () => setNarrow(bar.getBoundingClientRect().width < SEARCH_ICON_BELOW)
+    check()
+    const ro = new ResizeObserver(check)
+    ro.observe(bar)
+    return () => { ro.disconnect(); bar.removeAttribute('data-search-compact') }
+  }, [enabled])
+  useEffect(() => {
+    const bar = ref.current?.closest<HTMLElement>('.topbar')
+    if (!bar) return
+    if (enabled && narrow) bar.setAttribute('data-search-compact', '')
+    else bar.removeAttribute('data-search-compact')
+  }, [enabled, narrow])
+  return { ref, narrow: enabled && narrow }
+}
 
 export function SearchTrigger({ onOpen, launcherOwned, variant, collapsed = false }: {
   onOpen: () => void
@@ -24,6 +58,7 @@ export function SearchTrigger({ onOpen, launcherOwned, variant, collapsed = fals
   collapsed?: boolean
 }) {
   const editing = useLayoutEditing()
+  const { ref, narrow } = useNarrowTopBar(variant === 'top')
   const label = launcherOwned ? i18nT('app.open_command_bar') : i18nT('app.search_sessions_files_and_commands')
   const placeholder = launcherOwned ? i18nT('app.k_run_a_command') : i18nT('nav.search_placeholder')
   const chord = IS_MAC ? '⌘K' : 'Ctrl K'
@@ -32,16 +67,21 @@ export function SearchTrigger({ onOpen, launcherOwned, variant, collapsed = fals
     : {}
   const editCls = editing ? 'group/edit relative cursor-grab active:cursor-grabbing [&_*]:cursor-grab hover:bg-bg-hover' : 'cursor-pointer hover:border-text/30'
 
-  if (variant === 'sidebar' && collapsed) {
+  // Collapsed sidebar, or a narrow top bar: a magnifier button only.
+  if ((variant === 'sidebar' && collapsed) || narrow) {
     return (
       <button
+        ref={ref}
         type="button"
         onClick={editing ? undefined : onOpen}
         aria-label={label}
         title={`${label} (${chord})`}
+        aria-keyshortcuts={IS_MAC ? 'Meta+K' : 'Control+K'}
         data-bar-item={SEARCH_ITEM}
+        data-testid={`search-trigger-${variant}`}
+        {...(variant === 'top' ? uiLocation('shell.search') : {})}
         {...drag}
-        className={`mx-auto mb-1.5 w-9 h-8 flex items-center justify-center rounded-lg border border-border bg-bg text-muted hover:text-text ${editCls}`}
+        className={`${variant === 'top' ? 'h-7 w-8' : 'mx-auto mb-1.5 w-9 h-8'} shrink-0 flex items-center justify-center rounded-lg border border-border bg-bg text-muted hover:text-text ${editCls}`}
       >
         <Search size={15} />
       </button>
@@ -50,6 +90,7 @@ export function SearchTrigger({ onOpen, launcherOwned, variant, collapsed = fals
 
   return (
     <button
+      ref={ref}
       type="button"
       onClick={editing ? undefined : onOpen}
       aria-label={label}

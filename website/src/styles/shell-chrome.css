@@ -69,6 +69,9 @@
 @media (max-width:767px){
   .topbar{grid-template-columns:minmax(0,1fr) auto minmax(0,1fr)}
 }
+/* Design exploration: a narrow desktop top bar draws search as an icon
+   (SearchTrigger marks the bar), so the centre track shrinks to fit it. */
+.topbar[data-search-compact]{grid-template-columns:minmax(0,1fr) auto minmax(0,1fr)}
 /* Phone chat page (`topbar-single`, App.tsx): the header is the ONE bar for
    shell and conversation, so its centre cell is the chat page's title slot and
    has to take every pixel the side cells leave -- the opposite of the
