@@ -16,7 +16,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { useQuery } from '@tanstack/react-query'
-import { GripVertical, Lock, MessageSquare, Search, Smartphone, SquareTerminal, X } from 'lucide-react'
+import { ArrowLeftRight, Bell, CircleUserRound, Gauge, GripVertical, Lock, MessageSquare, Search, Smartphone, SquareTerminal, X } from 'lucide-react'
 
 import CrewAvatar from '../../components/CrewAvatar'
 import { Btn } from '../../components/ui'
@@ -36,6 +36,18 @@ import { useTerminalEnabled } from '../../utils/terminalRegistry'
 import type { RailItemMeta } from '../nav/railCustomize'
 import { canSitInBar } from './shellItems'
 import { startItemDrag, zoneLabel } from './barItems'
+
+/** Room the middle row gives up while editing: panel width plus its 12px inset and a 12px gap. */
+export const LAYOUT_PANEL_ROOM = 344
+
+/** Items that never move, listed so their place reads as deliberate. */
+const LOCKED: { key: string; icon: JSX.Element; zone: 'sidebar' | 'top' }[] = [
+  { key: 'nav.profile_menu_name', icon: <CircleUserRound size={16} />, zone: 'sidebar' },
+  { key: 'nav.layout_locked_search', icon: <Search size={16} />, zone: 'top' },
+  { key: 'nav.layout_locked_back_forward', icon: <ArrowLeftRight size={16} />, zone: 'top' },
+  { key: 'nav.layout_locked_readouts', icon: <Gauge size={16} />, zone: 'top' },
+  { key: 'nav.layout_locked_notifications', icon: <Bell size={16} />, zone: 'top' },
+]
 
 type Category = 'all' | 'pages' | 'apps' | 'mates' | 'sessions' | 'tools'
 const CATEGORIES: Category[] = ['all', 'pages', 'apps', 'mates', 'sessions', 'tools']
@@ -224,12 +236,31 @@ export function LayoutEditPanel({ groups, hidden, meta, isApp, setAppPinned }: {
             </li>
           )
         })}
+        {/* Always-here items, after everything you can move: their place and a
+            lock, never a menu. */}
+        {category === 'all' && LOCKED.some(l => !q || i18nT(l.key).toLowerCase().includes(q)) && (
+          <li aria-hidden="true" className="mt-2 mb-1 mx-2 pt-2 border-t border-border text-[11px] font-medium uppercase tracking-wide text-muted">
+            {i18nT('nav.layout_always_here')}
+          </li>
+        )}
+        {category === 'all' && LOCKED.filter(l => !q || i18nT(l.key).toLowerCase().includes(q)).map(l => (
+          <li key={l.key} className="flex items-center gap-2 px-2 py-1.5 rounded-lg">
+            <span className="w-[13px] shrink-0" aria-hidden="true" />
+            <span className="w-5 h-5 flex items-center justify-center shrink-0 text-muted">{l.icon}</span>
+            <span className="flex-1 min-w-0">
+              <span className="block truncate text-[13px] text-text">{i18nT(l.key)}</span>
+            </span>
+            <span
+              className="shrink-0 inline-flex items-center gap-1 px-1.5 py-0.5 rounded border border-dashed border-border text-[11px] text-muted"
+              title={i18nT('nav.layout_locked_title')}
+            >
+              <Lock size={11} aria-hidden="true" />
+              {zoneLabel(l.zone)}
+              <span className="sr-only">{i18nT('nav.layout_locked_title')}</span>
+            </span>
+          </li>
+        ))}
       </ul>
-
-      <div className="mx-4 mb-2 flex items-center gap-2 px-3 py-2 rounded-lg border border-dashed border-border text-[12px] text-muted">
-        <Lock size={12} aria-hidden="true" />
-        <span>{i18nT('nav.layout_locked_note')}</span>
-      </div>
 
       <footer className="flex items-center justify-between gap-2 px-4 py-3 border-t border-border">
         <Btn onClick={() => { resetShellLayout(); announceLayout(i18nT('nav.layout_reset_done')) }}>{i18nT('nav.rail_reset')}</Btn>

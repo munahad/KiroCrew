@@ -1,11 +1,12 @@
 import { useRef, useState, type ReactNode } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { ArrowLeftRight, CircleUserRound, LogOut, Settings2, Smartphone } from 'lucide-react'
+import { ArrowLeftRight, CircleUserRound, Lock, LogOut, Settings2, Smartphone } from 'lucide-react'
 
 import Modal from '../../components/Modal'
 import { Btn } from '../../components/ui'
 import { Popover, PopoverAnchor, PopoverContent } from '../../components/ui/popover'
 import { i18nT } from '../../i18n/t'
+import { useLayoutEditing } from '../../lib/shellLayout'
 import { NavItem } from './navRow'
 
 /** Window event that opens the rail customize modal from outside the rail groups. */
@@ -82,6 +83,8 @@ export function RailSettingsFlyout({ settings, customize, collapsed, activePath,
   const [open, setOpen] = useState(false)
   const [mock, setMock] = useState<'sign-out' | 'remote' | null>(null)
   const anchor = useRef<HTMLDivElement>(null)
+  // While editing the layout, "You" shows it is locked in place.
+  const editing = useLayoutEditing()
 
   const isOn = (path: string) => activePath === path || activePath.startsWith(path + '/')
   const go = (path: string) => { setOpen(false); onNavigate?.(); navigate(path) }
@@ -99,7 +102,9 @@ export function RailSettingsFlyout({ settings, customize, collapsed, activePath,
             collapsed={collapsed}
             // Clicking the avatar opens the menu.
             onClickOverride={() => setOpen(o => !o)}
-            badge={badge}
+            badge={editing
+              ? <span className="inline-flex items-center justify-center w-4 h-4 rounded-full bg-bg border border-border text-muted" title={i18nT('nav.layout_locked_title')} aria-label={i18nT('nav.layout_locked_title')}><Lock size={9} /></span>
+              : badge}
           />
         </div>
       </PopoverAnchor>

@@ -48,9 +48,9 @@ describe('ShellStatusBar', () => {
     expect(screen.getByRole('button', { name: 'Terminal' })).toHaveAttribute('aria-pressed', 'true')
   })
 
-  it('shows a drop target while editing the layout', () => {
+  it('keeps the empty bar on screen as a drop target while editing the layout', () => {
     setLayoutEditing(true)
     renderBar(shellWith({}))
-    expect(screen.getByText('Drop here to add to the Bottom bar')).toBeInTheDocument()
+    expect(screen.getByRole('toolbar', { name: 'Bottom bar' })).toBeInTheDocument()
   })
 })

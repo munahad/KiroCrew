@@ -146,7 +146,7 @@ export function RailGroups({ available, renderItem, collapsed, defaultGroup, met
     >
     {/* Drop host: sessions dragged from the chat sidebar land on the zone the
         sidebar portals in here; Mates drag natively and drop on this element. */}
-    <div id={RAIL_PIN_DROP_HOST_ID} data-layout-zone="sidebar" className={`relative pb-6 ${editing ? 'rounded-lg outline outline-1 outline-dashed outline-accent/60 outline-offset-2' : ''}`} {...nativeDrop.handlers}>
+    <div id={RAIL_PIN_DROP_HOST_ID} data-layout-zone="sidebar" className="relative pb-6" {...nativeDrop.handlers}>
     {nativeDrop.over && <div aria-hidden="true" className="absolute inset-0 pointer-events-none rounded-lg border-2 border-dashed border-accent bg-accent/10 z-10" />}
     <DndContext sensors={sensors} collisionDetection={closestCenter} onDragStart={onDragStart} onDragEnd={onDragEnd} onDragCancel={onDragCancel}>
       <SortableContext items={flat} strategy={verticalListSortingStrategy}>

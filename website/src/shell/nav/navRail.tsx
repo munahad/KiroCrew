@@ -12,7 +12,21 @@ import { NAV_ITEMS } from './navItems'
 import { isChatRoute } from './routeActive'
 import { RailBrandToggle, RailCommunityLinks } from './railChrome'
 import { PinnedRailGroups } from './railPins'
-import { forwardRailContextMenu } from './railPinDrop'
+import { forwardRailContextMenu, pinAtPoint } from './railPinDrop'
+import { RAIL_PIN_MIME } from '../../lib/railLayout'
+import { removeFromBars } from '../../lib/shellLayout'
+
+/** Sidebar-wide drop while editing: the groups' own drop host handles drops over
+ *  them (and marks the event handled); this catches the rest of the sidebar. */
+const railWideDropProps = {
+  onDragOver: (e: React.DragEvent) => { if (e.dataTransfer.types.includes(RAIL_PIN_MIME)) e.preventDefault() },
+  onDrop: (e: React.DragEvent) => {
+    if (e.defaultPrevented || !e.dataTransfer.types.includes(RAIL_PIN_MIME)) return
+    e.preventDefault()
+    const id = e.dataTransfer.getData(RAIL_PIN_MIME)
+    if (id && pinAtPoint(id, e.clientY)) removeFromBars(id)
+  },
+}
 import { RailSettingsFlyout } from './railSettingsFlyout'
 import { defaultGroupOf } from '../../lib/railLayout'
 import { readAppNavHidden, toggleAppNavHidden } from '../../lib/appNavHidden'
@@ -383,6 +397,9 @@ export function ShellNavRail({ shell }: { shell: AppShell }) {
             // Mouse-only by nature; keyboard users reach the same menu with
             // Shift+F10 / the Menu key on any rail row.
             onContextMenu={forwardRailContextMenu}
+            // Design exploration: while editing the layout, a drop anywhere on
+            // the sidebar (not only over its groups) pins the item there.
+            {...railWideDropProps}
             {...hiddenChromeProps(focusActive && !railPeek.open && focusChromeInert)}
             {...(focusActive ? railPeek.surfaceProps : {})}
           >

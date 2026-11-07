@@ -4,8 +4,8 @@
  *
  * Outside edit mode an item is a plain control: a page opens, the terminal
  * toggles, phone connect opens its dialog. In edit mode every item drags
- * (between bars, or back onto the sidebar) and the bar shows a dashed outline;
- * an empty bar shows where to drop. The keyboard path for every move is the
+ * (between bars, or back onto the sidebar); the full-size dashed outline for
+ * each area is drawn by `layoutZones.tsx`. The keyboard path for every move is the
  * edit panel's per-item "Show in" menu, so no move needs a drag (WCAG 2.5.7).
  */
 import { useRef, useState, type DragEvent } from 'react'
@@ -88,7 +88,7 @@ export function BarItems({ zone, shell }: { zone: BarZone; shell: Pick<AppShell,
       role="toolbar"
       aria-label={zoneLabel(zone)}
       data-layout-zone={zone}
-      className={`flex items-center gap-1 min-w-0 rounded-md transition-colors ${editing ? `border border-dashed px-1 ${over ? 'border-accent bg-accent/10' : 'border-accent/60'}` : ''} ${zone === 'top' ? 'h-8' : 'h-[22px]'}`}
+      className={`flex items-center gap-1 min-w-0 rounded-md transition-colors ${over ? 'bg-accent/10' : ''} ${zone === 'top' ? 'h-8' : 'h-[22px]'}`}
       {...dropHandlers}
     >
       {ids.map(id => {
@@ -114,9 +114,6 @@ export function BarItems({ zone, shell }: { zone: BarZone; shell: Pick<AppShell,
           </button>
         )
       })}
-      {editing && ids.length === 0 && (
-        <span className="px-2 text-[11px] text-accent whitespace-nowrap">{i18nT('nav.layout_drop_here', { place: zoneLabel(zone) })}</span>
-      )}
     </div>
   )
 }

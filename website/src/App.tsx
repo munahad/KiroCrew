@@ -87,6 +87,8 @@ import { useAppShell } from './shell/appShell'
 import { ShellHeader } from './shell/topbar/shellHeader'
 import { ShellStatusBar } from './shell/statusbar/shellStatusBar'
 import { useLayoutEditing, useShellPlacement } from './lib/shellLayout'
+import { LayoutZoneOutlines } from './shell/layout/layoutZones'
+import { LAYOUT_PANEL_ROOM } from './shell/layout/layoutEditPanel'
 import { ShellNavRail } from './shell/nav/navRail'
 import { NavItem, NavBadge } from './shell/nav/navRow'
 
@@ -322,6 +324,14 @@ export default function App() {
     setUpdateError, startupVideo, reportProblemOpen, setReportProblemOpen, effectiveCollapsed, activePath,
     libraryNavActive, discoverNavActive, isChat, needsFixedHeight, navRowActive, membersRoute, mobileSingle,
   } = shell
+  // While editing, the middle row gives up the Edit layout panel's width, so the
+  // docked panel never covers the page (the top and bottom bars stay full width).
+  const editRoom = layoutEditing && !isMobile && !focusActive
+  // The page steps back while editing: half opacity, slightly greyed. The
+  // chrome you can edit (outlined bars, the panel) stays at full strength.
+  const pageEditStyle: React.CSSProperties = editRoom
+    ? { opacity: 0.5, filter: 'grayscale(0.6)', transition: 'opacity 150ms ease, filter 150ms ease' }
+    : { transition: 'opacity 150ms ease, filter 150ms ease' }
   // "Run in terminal" from a code block outside every chat, on any route.
   const runInTerminal = useRunInTerminalShellBridge(activeSlotProject, !isPopout && !isEmbed)
 
@@ -645,7 +655,7 @@ export default function App() {
           Activity panel here on desktop so it spans the window top-to-bottom
           instead of sitting below the header row. Empty (0 width) when the
           panel is closed or on non-chat routes. */}
-      {!isMobile && <div id="activity-bar-slot" className="h-full min-h-0 min-w-0" style={{ gridArea: 'actbar' }} />}
+      {!isMobile && <div id="activity-bar-slot" className="h-full min-h-0 min-w-0" style={{ gridArea: 'actbar', ...(editRoom ? { marginRight: LAYOUT_PANEL_ROOM } : {}), ...pageEditStyle }} {...(editRoom ? { inert: '' } : {})} />}
 
       {/* Skip to content — visible only on focus for keyboard users */}
       <a href="#main-content" className="sr-only focus:not-sr-only focus:fixed focus:top-2 focus:left-2 focus:z-[9999] focus:px-4 focus:py-2 focus:rounded-lg focus:bg-accent focus:text-accent-fg focus:text-sm focus:font-medium">{i18nT('app.skip_to_content')}</a>
@@ -780,7 +790,10 @@ export default function App() {
             paddingLeft: FOCUS_INSET,
             transition: 'padding-left 150ms cubic-bezier(0.2, 0, 0, 1)',
           }
-          : { gridArea: 'content' }}
+          : { gridArea: 'content', ...(editRoom && bottomDock ? { marginRight: LAYOUT_PANEL_ROOM } : {}), ...pageEditStyle }}
+        // Design exploration: while editing the layout the page is background,
+        // so it is skipped by clicks, the keyboard and screen readers (`inert`).
+        {...(editRoom ? { inert: '' } : {})}
       >
         <div className={`flex min-h-0 min-w-0 flex-1 ${terminalPosition === 'right' ? 'flex-row' : 'flex-col'}`}>
         {/* `outline-hidden`: main is a programmatic focus target (the skip
@@ -893,6 +906,8 @@ export default function App() {
         <ComputerUseLiveView />
       </div>
       {!isMobile && !focusActive && showBottomBar && <ShellStatusBar shell={shell} />}
+      {/* Design exploration: full-size drop zones while editing the layout. */}
+      {!isMobile && !focusActive && <LayoutZoneOutlines />}
     </div>{/* /Local dashboard grid */}
       {/* Opened from the local Crew, so they hide with it (components/overlayRoot).
           The image viewer and the import notice render in place, fixed layers
