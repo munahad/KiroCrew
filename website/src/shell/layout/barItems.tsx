@@ -16,7 +16,7 @@ import { toggleBottomTerminal } from '../../hooks/useBottomTerminal'
 import { i18nT } from '../../i18n/t'
 import { RAIL_PIN_MIME } from '../../lib/railLayout'
 import {
-  PHONE_ITEM, SHELL_ITEM_MIME, TERMINAL_ITEM, announceLayout, isWindowToggle, moveItem, useLayoutEditing, useShellPlacement,
+  FEEDBACK_ITEM, PHONE_ITEM, SHELL_ITEM_MIME, TERMINAL_ITEM, announceLayout, isWindowToggle, moveItem, useLayoutEditing, useShellPlacement,
   type BarZone,
 } from '../../lib/shellLayout'
 import { focusPopout as focusTerminalPopout } from '../../utils/terminalPopout'
@@ -33,7 +33,7 @@ export function startItemDrag(e: DragEvent, id: string) {
   e.dataTransfer.effectAllowed = 'move'
 }
 
-export function BarItems({ zone, shell }: { zone: BarZone; shell: Pick<AppShell, 'terminalEnabled' | 'terminalPoppedOut' | 'bottomTerminalOpen' | 'activeSlotProject' | 'hasRenderableMobileConnect' | 'mobileConnectOpen' | 'setMobileConnectOpen'> }) {
+export function BarItems({ zone, shell }: { zone: BarZone; shell: Pick<AppShell, 'terminalEnabled' | 'terminalPoppedOut' | 'bottomTerminalOpen' | 'activeSlotProject' | 'hasRenderableMobileConnect' | 'mobileConnectOpen' | 'setMobileConnectOpen' | 'requestFeature'> }) {
   const placement = useShellPlacement()
   const editing = useLayoutEditing()
   const navigate = useNavigate()
@@ -73,6 +73,7 @@ export function BarItems({ zone, shell }: { zone: BarZone; shell: Pick<AppShell,
   const act = (id: string) => {
     if (id === TERMINAL_ITEM) { if (shell.terminalPoppedOut) focusTerminalPopout(); else toggleBottomTerminal(shell.activeSlotProject); return }
     if (id === PHONE_ITEM) { shell.setMobileConnectOpen(true); return }
+    if (id === FEEDBACK_ITEM) { void shell.requestFeature(); return }
     const path = shellItemMeta(id)?.path
     if (path) navigate(path)
   }
@@ -103,9 +104,12 @@ export function BarItems({ zone, shell }: { zone: BarZone; shell: Pick<AppShell,
             draggable={editing}
             onDragStart={editing ? e => startItemDrag(e, id) : undefined}
             onClick={editing ? undefined : () => act(id)}
-            title={m.label}
+            // Feedback explains itself in real copy (it starts a chat and uses the
+            // plan's monthly usage), read on focus too, not in a hover-only title.
+            title={id === FEEDBACK_ITEM ? undefined : m.label}
             aria-label={m.label}
-            aria-pressed={isWindowToggle(id) ? on : undefined}
+            aria-describedby={id === FEEDBACK_ITEM ? `bar-feedback-desc-${zone}` : undefined}
+            aria-pressed={id === TERMINAL_ITEM || id === PHONE_ITEM ? on : undefined}
             aria-current={!isWindowToggle(id) && on ? 'page' : undefined}
             className={`group/edit relative inline-flex items-center gap-1.5 shrink-0 rounded-md border-none text-[12px] ${zone === 'top' ? 'h-7 px-2' : 'h-[22px] px-1.5'} ${editing ? 'cursor-grab active:cursor-grabbing [&_*]:cursor-grab active:[&_*]:cursor-grabbing bg-transparent text-text hover:bg-bg-hover hover:pl-4' : `cursor-pointer ${on ? 'text-text bg-bg-hover' : 'bg-transparent text-muted hover:text-text hover:bg-bg-hover'}`}`}
           >
@@ -114,6 +118,7 @@ export function BarItems({ zone, shell }: { zone: BarZone; shell: Pick<AppShell,
             <span className="w-3.5 h-3.5 flex items-center justify-center">{m.icon}</span>
             {/* The top bar is tight: icons only there, labels in the bottom bar. */}
             {zone === 'bottom' && <span>{m.label}</span>}
+            {id === FEEDBACK_ITEM && <span id={`bar-feedback-desc-${zone}`} className="sr-only">{i18nT('components.feedbackPill.request_feature_starts_agent')}</span>}
           </button>
         )
       })}

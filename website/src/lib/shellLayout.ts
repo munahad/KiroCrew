@@ -27,7 +27,14 @@ export interface ShellPlacement { top: string[]; bottom: string[] }
 /** Window toggles: not sidebar destinations, so they live in a bar or nowhere. */
 export const TERMINAL_ITEM = 'shell:terminal'
 export const PHONE_ITEM = 'shell:phone'
-export const isWindowToggle = (id: string) => id === TERMINAL_ITEM || id === PHONE_ITEM
+/** "Send feedback": starts a feature-request chat. Optional and pinnable: it
+ *  lives in the profile menu, and a user can also put it in a bar. */
+export const FEEDBACK_ITEM = 'shell:feedback'
+export const isWindowToggle = (id: string) => id === TERMINAL_ITEM || id === PHONE_ITEM || id === FEEDBACK_ITEM
+
+/** Window event the profile menu raises to start a feedback request. */
+export const SEND_FEEDBACK_EVENT = 'mc:send-feedback'
+export const sendFeedback = () => window.dispatchEvent(new Event(SEND_FEEDBACK_EVENT))
 
 /** Native-drag MIME for an item moving between the palette and the bars. */
 export const SHELL_ITEM_MIME = 'application/x-kirocrew-shell-item'

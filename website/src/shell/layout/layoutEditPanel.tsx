@@ -16,7 +16,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { useQuery } from '@tanstack/react-query'
-import { ArrowLeftRight, Bell, CircleUserRound, Gauge, GripVertical, Lock, MessageSquare, Search, Smartphone, SquareTerminal, X } from 'lucide-react'
+import { ArrowLeftRight, Bell, CircleUserRound, Gauge, GripVertical, Lightbulb, Lock, MessageSquare, Search, Smartphone, SquareTerminal, X } from 'lucide-react'
 
 import CrewAvatar from '../../components/CrewAvatar'
 import { Btn } from '../../components/ui'
@@ -29,7 +29,7 @@ import {
   type RailGroup,
 } from '../../lib/railLayout'
 import {
-  PHONE_ITEM, TERMINAL_ITEM, announceLayout, isWindowToggle, moveItem, resetShellLayout, setLayoutEditing,
+  FEEDBACK_ITEM, PHONE_ITEM, TERMINAL_ITEM, announceLayout, isWindowToggle, moveItem, resetShellLayout, setLayoutEditing,
   useLayoutAnnouncement, useShellPlacement, zoneOf, type ShellZone,
 } from '../../lib/shellLayout'
 import { useTerminalEnabled } from '../../utils/terminalRegistry'
@@ -109,6 +109,7 @@ export function LayoutEditPanel({ groups, hidden, meta, isApp, setAppPinned }: {
     }
     if (terminalEnabled) add(TERMINAL_ITEM, { label: i18nT('app.terminal'), icon: <SquareTerminal size={16} /> })
     add(PHONE_ITEM, { label: i18nT('app.connect_your_phone'), icon: <Smartphone size={16} /> })
+    add(FEEDBACK_ITEM, { label: i18nT('nav.send_feedback'), icon: <Lightbulb size={16} /> })
     for (const id of [...groups.flatMap(g => g.items), ...hidden, ...placement.top, ...placement.bottom]) {
       if (!isEntityPin(id) && !isWindowToggle(id)) add(id, meta(id))
     }

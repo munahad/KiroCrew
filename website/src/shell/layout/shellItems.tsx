@@ -5,17 +5,18 @@
  * window toggles act instead of navigating.
  */
 import type { ReactNode } from 'react'
-import { Compass, LayoutGrid, Smartphone, SquareTerminal } from 'lucide-react'
+import { Compass, LayoutGrid, Lightbulb, Smartphone, SquareTerminal } from 'lucide-react'
 
 import { i18nT } from '../../i18n/t'
 import { getBuiltinSurface, surfaceLabel } from '../../surfaces/registry'
-import { PHONE_ITEM, TERMINAL_ITEM } from '../../lib/shellLayout'
+import { FEEDBACK_ITEM, PHONE_ITEM, TERMINAL_ITEM } from '../../lib/shellLayout'
 
 export interface ShellItemMeta { label: string; icon: ReactNode; path?: string }
 
 export function shellItemMeta(id: string, size = 16): ShellItemMeta | null {
   if (id === TERMINAL_ITEM) return { label: i18nT('app.terminal'), icon: <SquareTerminal size={size} /> }
   if (id === PHONE_ITEM) return { label: i18nT('app.connect_your_phone'), icon: <Smartphone size={size} /> }
+  if (id === FEEDBACK_ITEM) return { label: i18nT('nav.send_feedback'), icon: <Lightbulb size={size} /> }
   if (id === 'apps') return { label: i18nT('nav.discover'), icon: <Compass size={size} />, path: '/apps' }
   if (id === 'apps-library') return { label: i18nT('nav.library'), icon: <LayoutGrid size={size} />, path: '/apps/library' }
   const s = getBuiltinSurface(id)

@@ -14,7 +14,6 @@ import { getTopBarWidgets } from '../../apps/topBarWidgets'
 import { getCapsuleSegments } from '../../apps/capsuleSegments'
 import { IS_MAC } from '../../hooks/useKeyboardShortcuts'
 import { useNavShortcutHint } from '../../hooks/useNavShortcutHint'
-import FeedbackPill from '../../components/FeedbackPill'
 import { Glass } from '../../components/Glass'
 import WindowsTitlebarMenu from '../../components/WindowsTitlebarMenu'
 import { NavHistoryArrows } from '../../components/NavHistoryArrows'
@@ -26,6 +25,7 @@ import { TopBarRailToggle } from './topBarRailToggle'
 import { hiddenChromeProps } from '../focus/focusChrome'
 import { setAgentSwitchNotice } from '../../store/chatSlice'
 import { BarItems } from '../layout/barItems'
+import { SEND_FEEDBACK_EVENT } from '../../lib/shellLayout'
 
 // Lazy, like App.tsx's update-found popup: the pill renders nothing without an update,
 // so its code rides the on-demand chunk instead of the app core.
@@ -153,6 +153,14 @@ export function ShellHeader({ shell }: { shell: AppShell }) {
     capsuleLayoutPulse, pulseCapsuleLayout, sysMetrics, metricsProbeRef, metricsGroupRef, setReportProblemOpen,
     requestFeature, toggleNav, effectiveCollapsed, botName, mobileSingle, membersRoute, membersBarPending, mobileNavOpen,
   } = shell
+  // Design exploration: the profile menu's "Send feedback" starts the same
+  // feature-request flow the top bar's pill used to.
+  useEffect(() => {
+    const onSend = () => { void requestFeature() }
+    window.addEventListener(SEND_FEEDBACK_EVENT, onSend)
+    return () => window.removeEventListener(SEND_FEEDBACK_EVENT, onSend)
+  }, [requestFeature])
+  void setReportProblemOpen
   return (
     <>
       {/* Topbar */}
@@ -619,18 +627,9 @@ export function ShellHeader({ shell }: { shell: AppShell }) {
               <UpdatePill />
             </Suspense>
           )}
-          {/* Feedback — "Request a Feature" plus, on a prerelease build, a
-              channel chip that opens the same Report a Problem flow. Its own
-              bordered pill (28px tall, 12px radius), separated from the readout
-              capsule (item 2.3). */}
-          {!isMobile && (
-            <span className="tb-drop-feedback flex items-center">
-              <FeedbackPill
-                onRequestFeature={requestFeature}
-                onReportProblem={() => setReportProblemOpen(true)}
-              />
-            </span>
-          )}
+          {/* Design exploration: feedback left the top bar. It lives in the
+              profile menu as "Send feedback", and a user can pin it to a bar
+              through Edit layout (it is optional and pinnable). */}
           {/* Notifications bell — borderless icon button, rightmost control.
               (The activity-panel open toggle now lives in the session header,
               beside the pop-out control — see ChatPage — so opening the panel

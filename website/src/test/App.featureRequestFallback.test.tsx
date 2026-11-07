@@ -16,6 +16,7 @@
  * Same mocks as App.featureRequestFailure.test.tsx, so the two files drive the
  * same real flow: `createSlot` thunk, seed, `sendTurn`, receipt.
  */
+import { FEEDBACK_ITEM, moveItem } from '../lib/shellLayout'
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { screen, fireEvent, act } from '@testing-library/react'
 import { renderWithProviders } from './helpers'
@@ -86,8 +87,8 @@ const connectedState = {
 
 /** Mount, click the feedback pill's Request-a-Feature action, and settle. */
 async function clickRequestFeature() {
-  const rendered = renderWithProviders(<App />, { route: '/chat', preloadedState: connectedState })
-  const button = await screen.findByRole('button', { name: i18nT('app.request_a_feature_2') })
+  const rendered = (moveItem(FEEDBACK_ITEM, 'top'), renderWithProviders(<App />, { route: '/chat', preloadedState: connectedState }))
+  const button = await screen.findByRole('button', { name: i18nT('nav.send_feedback') })
   await act(async () => {
     fireEvent.click(button)
     await new Promise(res => setTimeout(res, 0))
@@ -184,8 +185,8 @@ describe('Request a Feature — the non-inference exit is wired (#13342)', () =>
     let settleCreate!: (v: unknown) => void
     createChatSlotMock.mockImplementation(() => new Promise(resolve => { settleCreate = resolve }))
     sendChatMock.mockResolvedValue({ ok: true, json: vi.fn().mockResolvedValue({ ok: true }) })
-    const rendered = renderWithProviders(<App />, { route: '/chat', preloadedState: connectedState })
-    const button = await screen.findByRole('button', { name: i18nT('app.request_a_feature_2') })
+    const rendered = (moveItem(FEEDBACK_ITEM, 'top'), renderWithProviders(<App />, { route: '/chat', preloadedState: connectedState }))
+    const button = await screen.findByRole('button', { name: i18nT('nav.send_feedback') })
     await act(async () => { fireEvent.click(button); await Promise.resolve() })
     // While the create is in flight the user moves on and sends from another slot.
     act(() => {
@@ -214,6 +215,6 @@ describe('Request a Feature — the non-inference exit is wired (#13342)', () =>
     expect(button).toHaveAttribute('aria-describedby')
     expect(button).not.toHaveAttribute('title')
     // The visible label is still the action, so the accessible name is unchanged.
-    expect(button).toHaveAccessibleName(i18nT('app.request_a_feature_2'))
+    expect(button).toHaveAccessibleName(i18nT('nav.send_feedback'))
   })
 })

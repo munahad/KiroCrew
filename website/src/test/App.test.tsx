@@ -1497,21 +1497,13 @@ describe('App routing', () => {
     localStorage.removeItem('mc-nav')
   })
 
-  it('keeps Request a Feature visible in the header actions cluster in both sidebar states', () => {
-    safeSetItem('mc-nav', '1')
+  it('keeps feedback out of the top bar by default and in the profile menu as Send feedback', () => {
     renderWithProviders(<App />, { route: '/chat' })
-
-    // Request a Feature moved out of the brand region into its own pill in the
-    // header's right-side actions cluster; it stays visible regardless of the
-    // sidebar's collapsed/expanded state.
-    expect(screen.getByRole('button', { name: 'Request a Feature' })).toBeInTheDocument()
-
-    screen.getByRole('navigation', { name: 'Main navigation' })
-    fireEvent.click(screen.getByRole('button', { name: 'Expand sidebar' }))
-    expect(screen.getByRole('button', { name: 'Collapse sidebar' })).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: 'Request a Feature' })).toBeInTheDocument()
-    expect(localStorage.getItem('mc-nav')).toBe('0')
-    localStorage.removeItem('mc-nav')
+    // Design exploration: feedback is optional and pinnable, not permanent chrome.
+    expect(screen.queryByRole('button', { name: 'Request a Feature' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Send feedback' })).not.toBeInTheDocument()
+    fireEvent.click(screen.getByText('You').closest('[role="button"]')!)
+    expect(within(screen.getByRole('menu', { name: 'Your account' })).getByRole('menuitem', { name: 'Send feedback' })).toBeInTheDocument()
   })
 
   it('keeps feature-request instructions hidden from the persisted user message', async () => {
@@ -1521,7 +1513,9 @@ describe('App routing', () => {
     vi.mocked(api.sendChat).mockClear()
     renderWithProviders(<App />, { route: '/chat' })
 
-    fireEvent.click(screen.getByRole('button', { name: 'Request a Feature' }))
+    // Design exploration: the request starts from the profile menu's Send feedback.
+    fireEvent.click(screen.getByText('You').closest('[role="button"]')!)
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Send feedback' }))
 
     await waitFor(() => {
       expect(api.chatSlotContext).toHaveBeenCalledWith(

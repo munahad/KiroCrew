@@ -1,12 +1,12 @@
 import { useRef, useState, type ReactNode } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { ArrowLeftRight, CircleUserRound, Lock, LogOut, Settings2, Smartphone } from 'lucide-react'
+import { ArrowLeftRight, CircleUserRound, Lightbulb, Lock, LogOut, Settings2, Smartphone } from 'lucide-react'
 
 import Modal from '../../components/Modal'
 import { Btn } from '../../components/ui'
 import { Popover, PopoverAnchor, PopoverContent } from '../../components/ui/popover'
 import { i18nT } from '../../i18n/t'
-import { useLayoutEditing } from '../../lib/shellLayout'
+import { sendFeedback, useLayoutEditing } from '../../lib/shellLayout'
 import { NavItem } from './navRow'
 
 /** Window event that opens the rail customize modal from outside the rail groups. */
@@ -129,6 +129,7 @@ export function RailSettingsFlyout({ settings, customize, collapsed, activePath,
         </div>
         <div aria-hidden="true" className="my-1 h-px bg-border" />
         <FlyoutRow icon={settings.icon} label={settings.label} active={isOn(settings.path)} onClick={() => go(settings.path)} />
+        <FlyoutRow icon={<Lightbulb size={16} />} label={i18nT('nav.send_feedback')} onClick={() => { setOpen(false); sendFeedback() }} />
         <FlyoutRow icon={customize.icon} label={i18nT('nav.profile_customize_agents')} active={isOn(customize.path)} onClick={() => go(customize.path)} />
         <FlyoutRow icon={<Settings2 size={16} />} label={i18nT('nav.rail_customize')} onClick={() => { setOpen(false); openRailCustomize() }} />
         <div aria-hidden="true" className="my-1 h-px bg-border" />

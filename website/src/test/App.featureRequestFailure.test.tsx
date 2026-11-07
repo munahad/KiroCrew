@@ -14,6 +14,7 @@
  * `pages.chatPage.send_failed` catalog entry, and the optimistic running state
  * is undone. The accepted-receipt case pins that success stays untouched.
  */
+import { FEEDBACK_ITEM, moveItem } from '../lib/shellLayout'
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { screen, fireEvent, act } from '@testing-library/react'
 import { renderWithProviders } from './helpers'
@@ -82,8 +83,8 @@ const connectedState = {
 
 /** Mount, click the feedback pill's Request-a-Feature action, and settle. */
 async function clickRequestFeature() {
-  const rendered = renderWithProviders(<App />, { route: '/chat', preloadedState: connectedState })
-  const button = await screen.findByRole('button', { name: i18nT('app.request_a_feature_2') })
+  const rendered = (moveItem(FEEDBACK_ITEM, 'top'), renderWithProviders(<App />, { route: '/chat', preloadedState: connectedState }))
+  const button = await screen.findByRole('button', { name: i18nT('nav.send_feedback') })
   await act(async () => {
     fireEvent.click(button)
     // Drain the flow's await chain: skills → createSlot thunk → sendChat →
