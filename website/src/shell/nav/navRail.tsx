@@ -11,10 +11,12 @@ import { isAppNavId } from '../../appNotificationBadges'
 import { NAV_ITEMS } from './navItems'
 import { isChatRoute } from './routeActive'
 import { RailBrandToggle, RailCommunityLinks } from './railChrome'
+import { NavHistoryArrows } from '../../components/NavHistoryArrows'
 import { PinnedRailGroups } from './railPins'
 import { forwardRailContextMenu, pinAtPoint } from './railPinDrop'
 import { RAIL_PIN_MIME } from '../../lib/railLayout'
-import { removeFromBars } from '../../lib/shellLayout'
+import { SEARCH_ITEM, moveItem, removeFromBars, useSearchPlace } from '../../lib/shellLayout'
+import { SearchTrigger } from '../layout/searchTrigger'
 
 /** Sidebar-wide drop while editing: the groups' own drop host handles drops over
  *  them (and marks the event handled); this catches the rest of the sidebar. */
@@ -24,6 +26,7 @@ const railWideDropProps = {
     if (e.defaultPrevented || !e.dataTransfer.types.includes(RAIL_PIN_MIME)) return
     e.preventDefault()
     const id = e.dataTransfer.getData(RAIL_PIN_MIME)
+    if (id === SEARCH_ITEM) { moveItem(id, 'sidebar'); return }
     if (id && pinAtPoint(id, e.clientY)) removeFromBars(id)
   },
 }
@@ -57,6 +60,7 @@ export function ShellNavRail({ shell }: { shell: AppShell }) {
     setReportProblemOpen, toggleNav, effectiveCollapsed, closeMobileNav, activePath, libraryNavActive,
     discoverNavActive, isChat, navRowActive,
   } = shell
+  const searchPlace = useSearchPlace()
 
   // Render one standard nav row (used by the top-fixed mains, the Apps list,
   // and the bottom-fixed section). Active-state, mobile close, chat pin
@@ -140,7 +144,24 @@ export function ShellNavRail({ shell }: { shell: AppShell }) {
         <div className="shrink-0 flex flex-col gap-0.5 px-2 pt-2">
           {/* Desktop: the brand + expand toggle moved to the top bar
               (topbar/topBarRailToggle.tsx). The phone drawer keeps its header. */}
-          {isMobile && <RailBrandToggle effectiveCollapsed={effectiveCollapsed} toggleNav={toggleNav} avatar={avatar} branding={branding} botName={botName} />}
+          {isMobile ? (
+            <RailBrandToggle effectiveCollapsed={effectiveCollapsed} toggleNav={toggleNav} avatar={avatar} branding={branding} botName={botName} />
+          ) : (
+            /* Design exploration: the brand, the collapse toggle and Back/Forward
+               head the sidebar (as in Claude, Codex and Slack) instead of the
+               top bar. Expanded they share one row; collapsed, the logo is the
+               expand control and the arrows stack under it. */
+            <div className={`flex mb-1.5 ${effectiveCollapsed ? 'flex-col items-center gap-1' : 'items-start gap-1'}`} data-testid="sidebar-header">
+              <div className="flex-1 min-w-0 w-full [&>div]:mb-0">
+                <RailBrandToggle effectiveCollapsed={effectiveCollapsed} toggleNav={toggleNav} avatar={avatar} branding={branding} botName={botName} />
+              </div>
+              <NavHistoryArrows vertical={effectiveCollapsed} />
+            </div>
+          )}
+          {/* Design exploration: search can live here instead of the top bar. */}
+          {!isMobile && searchPlace === 'sidebar' && (
+            <SearchTrigger variant="sidebar" collapsed={effectiveCollapsed} onOpen={commandPalette.openPalette} launcherOwned={!!slotOwners['quick-search']} />
+          )}
           {/* Hairline under the expanded header (collapsed rail has none —
               the big logo alone separates well). */}
           {isMobile && !effectiveCollapsed && <div aria-hidden="true" className="h-px bg-border shrink-0 mb-[7px]" />}
@@ -370,7 +391,7 @@ export function ShellNavRail({ shell }: { shell: AppShell }) {
           // eslint-disable-next-line jsx-a11y/no-noninteractive-element-interactions
           <nav
             ref={railPeekSurface}
-            className="focus-chrome-rail bg-bg-elevated border border-border rounded-xl flex flex-col mx-2 mt-0 mb-2 shadow-sm z-50 overflow-hidden"
+            className={`focus-chrome-rail bg-bg-elevated border border-border rounded-xl flex flex-col mx-2 ${focusActive ? 'mt-0' : 'mt-2'} mb-2 shadow-sm z-50 overflow-hidden`}
             // Focus mode: same overlay treatment as the header. The rail's own
             // `mx-2` means translateX(-100%) would leave its 8px left margin
             // showing as a sliver, hence the extra 12px of travel. Width has to

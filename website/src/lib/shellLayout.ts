@@ -32,6 +32,37 @@ export const PHONE_ITEM = 'shell:phone'
 export const FEEDBACK_ITEM = 'shell:feedback'
 export const isWindowToggle = (id: string) => id === TERMINAL_ITEM || id === PHONE_ITEM || id === FEEDBACK_ITEM
 
+/** Search and commands (the Command Bar trigger): lives in the top bar's
+ *  centre by default, or as a row at the top of the sidebar. Never hidden,
+ *  never in the bottom bar. Stored on its own key, apart from the bar lists. */
+export const SEARCH_ITEM = 'shell:search'
+export type SearchPlace = 'top' | 'sidebar'
+const SEARCH_PLACE_KEY = 'mc-search-place'
+const SEARCH_PLACE_EVENT = 'mc:search-place-changed'
+
+export function readSearchPlace(): SearchPlace {
+  return safeGetItem(SEARCH_PLACE_KEY) === 'sidebar' ? 'sidebar' : 'top'
+}
+
+function writeSearchPlace(place: SearchPlace): void {
+  safeSetItem(SEARCH_PLACE_KEY, place)
+  window.dispatchEvent(new Event(SEARCH_PLACE_EVENT))
+}
+
+export function useSearchPlace(): SearchPlace {
+  const [p, setP] = useState(readSearchPlace)
+  useEffect(() => {
+    const sync = () => setP(readSearchPlace())
+    window.addEventListener(SEARCH_PLACE_EVENT, sync)
+    window.addEventListener('storage', sync)
+    return () => {
+      window.removeEventListener(SEARCH_PLACE_EVENT, sync)
+      window.removeEventListener('storage', sync)
+    }
+  }, [])
+  return p
+}
+
 /** Window event the profile menu raises to start a feedback request. */
 export const SEND_FEEDBACK_EVENT = 'mc:send-feedback'
 export const sendFeedback = () => window.dispatchEvent(new Event(SEND_FEEDBACK_EVENT))
@@ -78,6 +109,7 @@ export function useShellPlacement(): ShellPlacement {
 
 /** Where an item lives now. `null`: nowhere (a hidden page, an unplaced toggle). */
 export function zoneOf(id: string, placement: ShellPlacement, onSidebar: boolean): ShellZone | null {
+  if (id === SEARCH_ITEM) return readSearchPlace()
   if (placement.top.includes(id)) return 'top'
   if (placement.bottom.includes(id)) return 'bottom'
   return onSidebar ? 'sidebar' : null
@@ -105,6 +137,11 @@ function hideInSidebar(id: string): void {
  * within a bar; omitted, it goes at the end.
  */
 export function moveItem(id: string, zone: ShellZone | null, index?: number): void {
+  if (id === SEARCH_ITEM) {
+    // Search goes only to the top bar or the sidebar.
+    if (zone === 'top' || zone === 'sidebar') writeSearchPlace(zone)
+    return
+  }
   const p = readShellPlacement()
   const top = p.top.filter(x => x !== id)
   const bottom = p.bottom.filter(x => x !== id)
@@ -127,6 +164,8 @@ export function moveItem(id: string, zone: ShellZone | null, index?: number): vo
 /** Every customization back to the shipped canvas: default sidebar, empty bars. */
 export function resetShellLayout(): void {
   safeRemoveItem(PLACEMENT_KEY)
+  safeRemoveItem(SEARCH_PLACE_KEY)
+  window.dispatchEvent(new Event(SEARCH_PLACE_EVENT))
   window.dispatchEvent(new Event(PLACEMENT_EVENT))
   resetRailLayout()
 }

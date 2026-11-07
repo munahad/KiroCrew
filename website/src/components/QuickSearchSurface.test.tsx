@@ -313,11 +313,13 @@ describe('QuickSearchSurface', () => {
     // the source rather than by mounting App: this is a one-line branch inside a very
     // large component, and the repo already uses source-shape assertions for exactly
     // this trade-off (see providerLabels.test.ts).
-    const src = ['App.tsx', 'shell/appShell.tsx', 'shell/topbar/shellHeader.tsx', 'shell/nav/navRail.tsx', 'shell/nav/navRow.tsx'].map(f => readFileSync(path.join(__dirname, '..', f), 'utf-8')).join('\n')
+    const src = ['App.tsx', 'shell/appShell.tsx', 'shell/topbar/shellHeader.tsx', 'shell/nav/navRail.tsx', 'shell/nav/navRow.tsx', 'shell/layout/searchTrigger.tsx'].map(f => readFileSync(path.join(__dirname, '..', f), 'utf-8')).join('\n')
     // Both the visible label and the accessible name follow ownership, and the mobile
     // icon-only trigger carries the same accessible name as the desktop one.
     expect(src).toContain("i18nT('app.k_run_a_command')")
-    const owned = src.split("slotOwners['quick-search']").length - 1
+    // Design exploration: the desktop trigger is now SearchTrigger, which takes
+    // ownership as `launcherOwned` and gates its label and accessible name on it.
+    const owned = src.split("slotOwners['quick-search']").length - 1 + src.split('launcherOwned ?').length - 1
     expect(owned).toBeGreaterThanOrEqual(4)
   })
   it('only the newest app-nav response may publish slot ownership', () => {
@@ -325,7 +327,7 @@ describe('QuickSearchSurface', () => {
     // a slow mount response landing after an enable/disable refresh would publish
     // stale ownership and bind the quick-search gesture to the wrong surface. Both the
     // resolve and the reject path must drop a superseded generation.
-    const src = ['App.tsx', 'shell/appShell.tsx', 'shell/topbar/shellHeader.tsx', 'shell/nav/navRail.tsx', 'shell/nav/navRow.tsx'].map(f => readFileSync(path.join(__dirname, '..', f), 'utf-8')).join('\n')
+    const src = ['App.tsx', 'shell/appShell.tsx', 'shell/topbar/shellHeader.tsx', 'shell/nav/navRail.tsx', 'shell/nav/navRow.tsx', 'shell/layout/searchTrigger.tsx'].map(f => readFileSync(path.join(__dirname, '..', f), 'utf-8')).join('\n')
     expect(src).toContain('const gen = ++appNavGenRef.current')
     const guards = src.split('gen !== appNavGenRef.current').length - 1
     expect(guards).toBeGreaterThanOrEqual(2)
@@ -336,9 +338,9 @@ describe('QuickSearchSurface', () => {
     // omits while the words under the cursor said otherwise. The recurring cause is
     // fixing one attribute of a set, so the assertion is on the SET: no promise-bearing
     // attribute on either trigger may mention search unconditionally.
-    const src = ['App.tsx', 'shell/appShell.tsx', 'shell/topbar/shellHeader.tsx', 'shell/nav/navRail.tsx', 'shell/nav/navRow.tsx'].map(f => readFileSync(path.join(__dirname, '..', f), 'utf-8')).join('\n')
+    const src = ['App.tsx', 'shell/appShell.tsx', 'shell/topbar/shellHeader.tsx', 'shell/nav/navRail.tsx', 'shell/nav/navRow.tsx', 'shell/layout/searchTrigger.tsx'].map(f => readFileSync(path.join(__dirname, '..', f), 'utf-8')).join('\n')
     expect(src).not.toMatch(/title=\{i18nT\('app\.search_everywhere_k'\)\}/)
-    const gated = src.split("slotOwners['quick-search']").length - 1
+    const gated = src.split("slotOwners['quick-search']").length - 1 + src.split('launcherOwned ?').length - 1
     expect(gated).toBeGreaterThanOrEqual(5)
   })
 })

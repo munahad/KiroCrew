@@ -33,8 +33,9 @@ afterEach(() => localStorage.clear())
 describe('railLayout', () => {
   it('falls back to the shipped default when nothing is stored', () => {
     expect(readRailLayout()).toEqual(DEFAULT_RAIL_LAYOUT)
+    // Design exploration: the shipped default is ONE flat list.
     expect(resolveRailLayout(readRailLayout(), ALL).map(g => g.items)).toEqual([
-      ['chat', 'members', 'schedule', 'artifacts'], ['apps', 'apps-library'],
+      ['chat', 'members', 'schedule', 'artifacts', 'apps', 'apps-library'],
     ])
   })
 
@@ -58,8 +59,9 @@ describe('railLayout', () => {
   it('skips unavailable ids and places unlisted ones in their default group', () => {
     const stored = layout([{ id: 'apps', items: ['apps', 'gone'] }, { id: 'workspace', items: ['schedule'] }])
     expect(resolveRailLayout(stored, ALL)).toEqual([
-      { id: 'apps', items: ['apps', 'apps-library'] },
-      { id: 'workspace', items: ['schedule', 'chat', 'members', 'artifacts'] },
+      // Every shipped id's default group is now the one flat list.
+      { id: 'apps', items: ['apps'] },
+      { id: 'workspace', items: ['schedule', 'chat', 'members', 'artifacts', 'apps-library'] },
     ])
   })
 
@@ -70,7 +72,9 @@ describe('railLayout', () => {
   it('places a never-listed app in the group the caller names, in available order', () => {
     const groupOf = (id: string) => (id.startsWith('app:') ? 'apps' : 'workspace')
     const groups = resolveRailLayout(DEFAULT_RAIL_LAYOUT, [...ALL, 'app:b', 'app:a'], groupOf)
-    expect(groups[1].items).toEqual(['apps', 'apps-library', 'app:b', 'app:a'])
+    // No shipped "apps" group any more: a named group that does not exist sends
+    // the app to the last group, the flat list, after the shipped rows.
+    expect(groups[0].items).toEqual(['chat', 'members', 'schedule', 'artifacts', 'apps', 'apps-library', 'app:b', 'app:a'])
   })
 
   it('never shows a hidden id', () => {

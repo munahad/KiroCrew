@@ -16,7 +16,7 @@
 import { useEffect, useState, type DragEvent } from 'react'
 
 import { i18nT } from '../../i18n/t'
-import { SHELL_ITEM_MIME, announceLayout, moveItem, useLayoutEditing, type BarZone, type ShellZone } from '../../lib/shellLayout'
+import { SEARCH_ITEM, SHELL_ITEM_MIME, announceLayout, moveItem, useLayoutEditing, type BarZone, type ShellZone } from '../../lib/shellLayout'
 import { shellItemMeta } from './shellItems'
 import { zoneLabel } from './barItems'
 
@@ -66,6 +66,8 @@ function ZoneOutline({ zone, area, dragging }: { zone: ShellZone; area: string; 
         const id = e.dataTransfer.getData(SHELL_ITEM_MIME)
         if (!id) return
         const bar = zone as BarZone
+        // Search lives in the top bar or the sidebar only.
+        if (id === SEARCH_ITEM && bar === 'bottom') return
         moveItem(id, bar, barIndexAt(bar, e.clientX))
         announceLayout(i18nT('nav.layout_moved', { item: shellItemMeta(id)?.label ?? id, place: zoneLabel(bar) }))
       } : undefined}

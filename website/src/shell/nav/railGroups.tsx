@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { DndContext, closestCenter, DragOverlay, type DragEndEvent, type DragStartEvent } from '@dnd-kit/core'
 import { SortableContext, arrayMove, useSortable, verticalListSortingStrategy } from '@dnd-kit/sortable'
 
@@ -6,8 +6,9 @@ import { GripVertical } from 'lucide-react'
 
 import { useDndSensors } from '../../hooks/useDndSensors'
 import { haptic } from '../../lib/haptic'
+import { i18nT } from '../../i18n/t'
 import {
-  applyVisibleOrder, commitRail, isEntityPin, readRailLayout, removePin, resolveRailLayout, setRailLabel, updateRail,
+  FALLBACK_GROUP_ID, applyVisibleOrder, commitRail, isEntityPin, renameGroup, readRailLayout, removePin, resolveRailLayout, setRailLabel, updateRail,
   useRailLayout, writeRailLayout, type RailGroup,
 } from '../../lib/railLayout'
 import { SortableAppNavRow } from './appRail'
@@ -44,9 +45,61 @@ export function regroupFlat(flat: readonly string[], groups: readonly RailGroup[
 /** A group header: a divider when collapsed, a title when expanded. It is a
  *  droppable slot in the flat list (so a row can be dropped at a group's top)
  *  but never draggable itself. */
-function GroupHeader({ group, first, collapsed }: { group: RailGroup; first: boolean; collapsed: boolean }) {
+/** A group's name typed in place over its header: Enter or leaving saves, Escape cancels. */
+function GroupNameInput({ initial, onSave, onCancel }: { initial: string; onSave: (name: string) => void; onCancel: () => void }) {
+  const [value, setValue] = useState(initial)
+  const ref = useRef<HTMLInputElement>(null)
+  const done = useRef(false)
+  // Focus on the next frame, as the row rename does: the right-click menu that
+  // opened this is still closing, and focusing now would lose the field to it.
+  const focused = useRef(false)
+  useEffect(() => {
+    const f = requestAnimationFrame(() => { ref.current?.focus(); ref.current?.select(); focused.current = true })
+    return () => cancelAnimationFrame(f)
+  }, [])
+  const finish = (save: boolean) => {
+    if (done.current) return
+    done.current = true
+    if (save) onSave(value)
+    else onCancel()
+  }
+  return (
+    <input
+      ref={ref}
+      value={value}
+      aria-label={i18nT('nav.rail_group_name')}
+      placeholder={i18nT('nav.rail_new_group')}
+      maxLength={60}
+      onChange={e => setValue(e.target.value)}
+      // A blur before the field ever had focus is the menu closing, not the user leaving.
+      onBlur={() => { if (focused.current) finish(true) }}
+      // Typing must not reach the sidebar's drag sensors.
+      onPointerDown={e => e.stopPropagation()}
+      onKeyDown={e => {
+        e.stopPropagation()
+        if (e.key === 'Enter') { e.preventDefault(); finish(true) }
+        else if (e.key === 'Escape') { e.preventDefault(); finish(false) }
+      }}
+      className="flex-1 min-w-0 h-6 px-1.5 -mx-1.5 rounded border border-accent bg-bg text-[13px] font-medium text-text outline-none"
+    />
+  )
+}
+
+function GroupHeader({ group, first, collapsed, renaming = false, onRenamed }: {
+  group: RailGroup
+  first: boolean
+  collapsed: boolean
+  /** Design exploration: the header is being renamed (Rename group, or a new group). */
+  renaming?: boolean
+  onRenamed?: (name: string | null) => void
+}) {
   const { setNodeRef } = useSortable({ id: headerId(group.id), disabled: { draggable: true, droppable: false } })
   const title = groupTitle(group)
+  // Design exploration: the base list (the shipped flat list) has no header.
+  // It stays a drop slot, so a row can still be dropped at the very top.
+  if (group.id === FALLBACK_GROUP_ID && !group.title) {
+    return <div ref={setNodeRef} role="presentation" className="h-0" />
+  }
   if (collapsed) {
     return (
       <div ref={setNodeRef} role="presentation" className={first ? 'h-0' : 'py-1.5 px-2'}>
@@ -56,8 +109,10 @@ function GroupHeader({ group, first, collapsed }: { group: RailGroup; first: boo
   }
   return (
     <div ref={setNodeRef} className={`nav-section flex items-center pl-3 pr-1 pb-1 ${first ? 'pt-1' : 'pt-3'}`}>
-      {/* Clipped by nowrap/overflow in a longer locale, so `title` keeps the full string. */}
-      <span title={title} className="text-[13px] font-medium text-muted whitespace-nowrap overflow-hidden">{title}</span>
+      {renaming && onRenamed
+        ? <GroupNameInput initial={group.title ?? ''} onSave={name => onRenamed(name)} onCancel={() => onRenamed(null)} />
+        : /* Clipped by nowrap/overflow in a longer locale, so `title` keeps the full string. */
+          <span title={title} className="text-[13px] font-medium text-muted whitespace-nowrap overflow-hidden">{title}</span>}
     </div>
   )
 }
@@ -110,6 +165,12 @@ export function RailGroups({ available, renderItem, collapsed, defaultGroup, met
   }, [layout.hidden, available, unpinnedApps])
 
   const [renaming, setRenaming] = useState<string | null>(null)
+  // Design exploration: the group whose name is open for editing, if any.
+  const [renamingGroup, setRenamingGroup] = useState<string | null>(null)
+  const saveGroupName = useCallback((groupId: string, name: string | null) => {
+    setRenamingGroup(null)
+    if (name !== null) commitRail(renameGroup(groups, groupId, name))
+  }, [groups])
   const labelOf = useCallback((id: string) => layout.labels?.[id], [layout.labels])
   const saveName = useCallback((id: string, name: string | null) => {
     setRenaming(null)
@@ -145,6 +206,8 @@ export function RailGroups({ available, renderItem, collapsed, defaultGroup, met
       onRename={setRenaming}
       onResetName={id => saveName(id, null)}
       isRenamed={id => !!labelOf(id)}
+      onRenameGroup={setRenamingGroup}
+      onGroupCreated={setRenamingGroup}
     >
     {/* Drop host: sessions dragged from the chat sidebar land on the zone the
         sidebar portals in here; Mates drag natively and drop on this element. */}
@@ -154,7 +217,7 @@ export function RailGroups({ available, renderItem, collapsed, defaultGroup, met
       <SortableContext items={flat} strategy={verticalListSortingStrategy}>
         {groups.map((g, gi) => (
           <div key={g.id} role="group" aria-label={groupTitle(g)} className="flex flex-col gap-0.5" data-rail-group={g.id}>
-            <GroupHeader group={g} first={gi === 0} collapsed={collapsed} />
+            <GroupHeader group={g} first={gi === 0} collapsed={collapsed} renaming={renamingGroup === g.id} onRenamed={name => saveGroupName(g.id, name)} />
             {g.items.map(id => (
               <SortableAppNavRow key={id} id={id}>
                 <div

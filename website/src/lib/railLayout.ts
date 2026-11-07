@@ -59,9 +59,10 @@ export const RAIL_PIN_MIME = 'application/x-kirocrew-rail-pin'
 /** The shipped arrangement. Group ids double as the i18n lookup for titles. */
 export const DEFAULT_RAIL_LAYOUT: RailLayout = {
   version: RAIL_LAYOUT_VERSION,
+  // Design exploration: ONE flat list, no headers. Users create their own
+  // groups (right-click > New group); the base list itself never shows a title.
   groups: [
-    { id: 'workspace', items: ['chat', 'members', 'schedule', 'artifacts'] },
-    { id: 'apps', items: ['apps', 'apps-library'] },
+    { id: 'workspace', items: ['chat', 'members', 'schedule', 'artifacts', 'apps', 'apps-library'] },
   ],
   hidden: [],
 }

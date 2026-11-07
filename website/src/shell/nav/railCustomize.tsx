@@ -6,7 +6,7 @@ import {
   ContextMenuSub, ContextMenuSubContent, ContextMenuSubTrigger, ContextMenuTrigger,
 } from '../../components/ui/context-menu'
 import { i18nT } from '../../i18n/t'
-import { addGroup, commitRail, moveToGroup, type RailGroup } from '../../lib/railLayout'
+import { FALLBACK_GROUP_ID, addGroup, commitRail, moveToGroup, type RailGroup } from '../../lib/railLayout'
 
 /** What the menu and the modal need to draw a row they do not render themselves. */
 export interface RailItemMeta { label: string; icon: ReactNode }
@@ -17,6 +17,12 @@ export function groupTitle(g: RailGroup): string {
   if (g.id === 'workspace') return i18nT('nav.rail_group_workspace')
   if (g.id === 'apps') return i18nT('app.apps')
   return i18nT('nav.rail_new_group')
+}
+
+/** The group a right-click landed in (on a row or its header), or null. */
+function railGroupAt(target: EventTarget | null): string | null {
+  if (!(target instanceof Element)) return null
+  return target.closest('[data-rail-group]')?.getAttribute('data-rail-group') ?? null
 }
 
 /** The id of the rail row a right-click landed on, or null for empty rail space. */
@@ -31,7 +37,7 @@ function railItemAt(target: EventTarget | null): string | null {
  * row ("Unpin", "Move to group") and empty rail space ("New group"). Radix
  * supplies the keyboard form (Shift+F10 / the Menu key) on a focused row.
  */
-export function RailContextMenu({ groups, onUnpin, onCustomize, onRename, onResetName, isRenamed, children }: {
+export function RailContextMenu({ groups, onUnpin, onCustomize, onRename, onResetName, isRenamed, onRenameGroup, onGroupCreated, children }: {
   groups: readonly RailGroup[]
   onUnpin: (id: string) => void
   onCustomize: () => void
@@ -39,9 +45,14 @@ export function RailContextMenu({ groups, onUnpin, onCustomize, onRename, onRese
   onRename: (id: string) => void
   onResetName: (id: string) => void
   isRenamed: (id: string) => boolean
+  /** Start renaming a group you made (the base flat list has no name to edit). */
+  onRenameGroup?: (groupId: string) => void
+  /** A group was just created: the caller opens its name for editing. */
+  onGroupCreated?: (groupId: string) => void
   children: ReactNode
 }) {
   const [target, setTarget] = useState<string | null>(null)
+  const [targetGroup, setTargetGroup] = useState<string | null>(null)
   // Rename opens a field that takes focus; the menu must not take it back on close.
   const keepFocus = useRef(false)
   const from = target ? groups.find(g => g.items.includes(target)) : undefined
@@ -50,11 +61,24 @@ export function RailContextMenu({ groups, onUnpin, onCustomize, onRename, onRese
     if (!target) return
     const { groups: withNew, groupId } = addGroup(groups, '')
     commitRail(moveToGroup(withNew, target, groupId))
+    keepFocus.current = true
+    onGroupCreated?.(groupId)
   }
+  const newGroup = () => {
+    const { groups: withNew, groupId } = addGroup(groups, '')
+    commitRail(withNew)
+    keepFocus.current = true
+    onGroupCreated?.(groupId)
+  }
+  // A group you made can be renamed; the base flat list is never shown with a name.
+  const renamable = targetGroup && targetGroup !== FALLBACK_GROUP_ID && groups.some(g => g.id === targetGroup) ? targetGroup : null
+  const renameGroupItem = renamable && onRenameGroup ? (
+    <ContextMenuItem onSelect={() => { keepFocus.current = true; onRenameGroup(renamable) }}><Pencil size={14} />{i18nT('nav.rail_rename_group')}</ContextMenuItem>
+  ) : null
   return (
     <ContextMenu>
       <ContextMenuTrigger asChild>
-        <div onContextMenuCapture={e => setTarget(railItemAt(e.target))} className="contents">{children}</div>
+        <div onContextMenuCapture={e => { setTarget(railItemAt(e.target)); setTargetGroup(railGroupAt(e.target)) }} className="contents">{children}</div>
       </ContextMenuTrigger>
       <ContextMenuContent onCloseAutoFocus={e => { if (keepFocus.current) { keepFocus.current = false; e.preventDefault() } }}>
         {target && from ? (
@@ -74,9 +98,13 @@ export function RailContextMenu({ groups, onUnpin, onCustomize, onRename, onRese
                 <ContextMenuItem onSelect={moveIntoNew}><FolderPlus size={14} />{i18nT('nav.rail_move_to_new_group')}</ContextMenuItem>
               </ContextMenuSubContent>
             </ContextMenuSub>
+            {renameGroupItem}
           </>
         ) : (
-          <ContextMenuItem onSelect={() => commitRail(addGroup(groups, '').groups)}><FolderPlus size={14} />{i18nT('nav.rail_new_group')}</ContextMenuItem>
+          <>
+            {renameGroupItem}
+            <ContextMenuItem onSelect={newGroup}><FolderPlus size={14} />{i18nT('nav.rail_new_group')}</ContextMenuItem>
+          </>
         )}
         <ContextMenuSeparator />
         <ContextMenuItem onSelect={onCustomize}><Settings2 size={14} />{i18nT('nav.rail_customize')}</ContextMenuItem>

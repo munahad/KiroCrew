@@ -16,16 +16,15 @@ import { IS_MAC } from '../../hooks/useKeyboardShortcuts'
 import { useNavShortcutHint } from '../../hooks/useNavShortcutHint'
 import { Glass } from '../../components/Glass'
 import WindowsTitlebarMenu from '../../components/WindowsTitlebarMenu'
-import { NavHistoryArrows } from '../../components/NavHistoryArrows'
 import { i18nT } from '../../i18n/t'
 import { uiLocation } from '../../uiLocations/uiLocation'
 import { GuideRevealScope } from '../../guide/GuideRevealScope'
 import type { AppShell } from '../appShell'
-import { TopBarRailToggle } from './topBarRailToggle'
 import { hiddenChromeProps } from '../focus/focusChrome'
 import { setAgentSwitchNotice } from '../../store/chatSlice'
 import { BarItems } from '../layout/barItems'
-import { SEND_FEEDBACK_EVENT } from '../../lib/shellLayout'
+import { SEND_FEEDBACK_EVENT, useSearchPlace } from '../../lib/shellLayout'
+import { SearchTrigger } from '../layout/searchTrigger'
 
 // Lazy, like App.tsx's update-found popup: the pill renders nothing without an update,
 // so its code rides the on-demand chunk instead of the app core.
@@ -161,6 +160,7 @@ export function ShellHeader({ shell }: { shell: AppShell }) {
     return () => window.removeEventListener(SEND_FEEDBACK_EVENT, onSend)
   }, [requestFeature])
   void setReportProblemOpen
+  const searchPlace = useSearchPlace()
   return (
     <>
       {/* Topbar */}
@@ -248,10 +248,8 @@ export function ShellHeader({ shell }: { shell: AppShell }) {
               matching where every browser puts it. */}
           {/* Left-rail POC: the rail's brand + expand toggle lives here on
               desktop, ahead of Back/Forward. The phone keeps its drawer header. */}
-          {!isMobile && (
-            <TopBarRailToggle collapsed={effectiveCollapsed} toggleNav={toggleNav} avatar={avatar} branding={branding} botName={botName} />
-          )}
-          {!isMobile && <NavHistoryArrows />}
+          {/* Design exploration: the brand, collapse toggle and Back/Forward
+              moved to the head of the sidebar (see navRail's sidebar header). */}
           {isMobile && (
             <button className="group p-2 rounded-md bg-transparent border-none cursor-pointer text-muted hover:text-text shrink-0" onClick={toggleNav} aria-label={i18nT('app.open_menu')} {...uiLocation('shell.mobile-menu')}>
               {/* The product logo, not a generic menu glyph. A narrow layout has exactly
@@ -319,46 +317,13 @@ export function ShellHeader({ shell }: { shell: AppShell }) {
             capture-crew-chip-shrink.mjs) to find this cell; nothing in src/
             reads it any more. Keep it. */}
         {!isMobile && (
-          <div data-topbar-overlay className="flex items-center gap-1.5 min-w-0">
-          {/* The trigger IS a Liquid Glass pane (components/Glass.tsx, chip
-              recipe) rendered as the button, the same material as the
-              sidebar's search field and the composer dock: no border and no
-              fill of its own, `glass-hover` for the hover step. */}
-          <Glass
-            as="button"
-            type="button"
-            variant="chip"
-            radius={TOPBAR_PILL_RADIUS}
-            onClick={commandPalette.openPalette}
-            {...uiLocation('shell.search')}
-            className="glass-shadow glass-hover h-7 flex-1 min-w-0 px-3 text-muted hover:text-text transition-colors flex items-center justify-center gap-2 cursor-pointer"
-            /* The trigger has to describe the surface it actually opens. While an app
-               owns the quick-search slot the gesture opens a launcher -- typing runs
-               commands and does not search the corpora this label promises -- so
-               naming "search for anything" there is the most visible mispromise in
-               the product. */
-            aria-label={
-              slotOwners['quick-search']
-                ? i18nT('app.open_command_bar')
-                : i18nT('app.search_sessions_files_and_commands')
-            }
-            // Gated on the same condition as the label and aria-label above. Leaving
-            // this one unconditional made the hover contradict the words under the
-            // cursor and promise the corpus search the launcher deliberately omits --
-            // the diff's own fix applied to two of three attributes. The owned branch
-            // drops "(K)" because the chord is already printed in the visible label.
-            title={
-              slotOwners['quick-search']
-                ? i18nT('app.open_command_bar')
-                : i18nT('app.search_everywhere_k')
-            }
-          >
-            <span className="text-[13px] truncate min-w-0">
-              {slotOwners['quick-search']
-                ? i18nT('app.k_run_a_command')
-                : i18nT('app.k_search_for_anything')}
-            </span>
-          </Glass>
+          <div data-topbar-overlay className="flex items-center justify-center gap-1.5 min-w-0">
+          {/* Design exploration: the Command Bar trigger, drawn as a compact
+              search field. It sits here unless Edit layout moved it to the
+              sidebar; a spacer keeps the focus-mode toggle in place. */}
+          {searchPlace === 'top'
+            ? <SearchTrigger variant="top" onOpen={commandPalette.openPalette} launcherOwned={!!slotOwners['quick-search']} />
+            : <span className="flex-1 min-w-0" aria-hidden="true" />}
           {/* Focus mode. `aria-pressed` rather than a second label, so a screen
               reader gets the state from the control instead of from copy that
               would have to be kept in step with the icon. */}

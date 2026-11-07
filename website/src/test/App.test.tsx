@@ -1019,7 +1019,7 @@ describe('App routing', () => {
     const view = renderWithProviders(<App />, { route: '/chat' })
     try {
       screen.getByRole('navigation', { name: 'Main navigation' })
-      const brand = screen.getByTestId('topbar-brand') // top-bar brand mark
+      const brand = screen.getByTestId('sidebar-header') // top-bar brand mark
       await waitFor(() => expect(brand).toHaveTextContent('KIRO CREW'))
       expect(brand.querySelector('img')).toHaveAttribute(
         'src',
@@ -1040,15 +1040,13 @@ describe('App routing', () => {
     }
   })
 
-  it('opens Search Everywhere from the glass header trigger', () => {
+  it('opens Search Everywhere from the header search field', () => {
     renderWithProviders(<App />, { route: '/chat' })
     const trigger = screen.getByRole('button', { name: 'Search sessions, files, and commands' })
-    // The trigger IS the Liquid Glass pane (components/Glass.tsx, rendered as
-    // the button): the material carries the edge, so the control has no border,
-    // fill or utility radius of its own -- only the hover tint step and the
-    // neutral rest shadow every pane wears.
-    expect(trigger).toHaveClass('liquid-glass', 'glass-hover', 'glass-shadow')
-    expect(trigger).not.toHaveClass('border-border', 'bg-card', 'rounded-md', 'rounded-full')
+    // Design exploration: the trigger is drawn as a compact search field
+    // (bordered box, magnifier, placeholder, shortcut hint).
+    expect(trigger).toHaveClass('border', 'border-border')
+    expect(within(trigger).getByText('Search')).toBeInTheDocument()
     fireEvent.click(trigger)
     expect(screen.getByRole('dialog', { name: 'Search everywhere' })).toBeInTheDocument()
   })
@@ -1066,7 +1064,9 @@ describe('App routing', () => {
     // cell (`flex-1`) rather than the track directly — the cell is what fills
     // the track. Both halves of the original assertion still hold: nothing here
     // is positioned, and the header keeps exactly three in-flow children.
-    expect(trigger).toHaveClass('flex-1')
+    // Design exploration: compact, a fixed modest width centred in its cell
+    // rather than stretching across it.
+    expect(trigger).toHaveClass('w-[240px]')
     expect(trigger).not.toHaveClass('absolute')
     expect(trigger.style.left).toBe('')
     expect(trigger.style.width).toBe('')
@@ -1417,7 +1417,7 @@ describe('App routing', () => {
     const nav = screen.getByRole('navigation', { name: 'Main navigation' })
     // Brand (logo + name) now lives in the rail's menu row, replacing the old
     // hamburger; the collapse control is an arrow-left-to-line button.
-    expect(within(screen.getByTestId('topbar-brand')).getByText('Crew')).toBeInTheDocument()
+    expect(within(screen.getByTestId('sidebar-header')).getByText('Crew')).toBeInTheDocument()
     const collapse = screen.getByRole('button', { name: 'Collapse sidebar' })
     expect(within(nav).queryByRole('button', { name: 'Toggle sidebar' })).not.toBeInTheDocument()
     expect(within(nav).queryByText('Main')).not.toBeInTheDocument()

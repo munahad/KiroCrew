@@ -601,9 +601,12 @@ export default function App() {
         // focus mode drops it along with the other chrome tracks.
         gridTemplateAreas: isMobile
           ? '"topbar" "content"'
+          // Design exploration: the sidebar runs the full height (it now holds
+          // the logo, collapse toggle and Back/Forward), so the top bar spans
+          // only the page side. Focus mode keeps the full-width top row.
           : bottomDock
-            ? `"topbar topbar" "nav content" "nav actbar"${focusActive ? '' : ' "status status"'}`
-            : `"topbar topbar topbar" "nav content actbar"${focusActive ? '' : ' "status status status"'}`,
+            ? `${focusActive ? '"topbar topbar"' : '"nav topbar"'} "nav content" "nav actbar"${focusActive ? '' : ' "status status"'}`
+            : `${focusActive ? '"topbar topbar topbar"' : '"nav topbar topbar"'} "nav content actbar"${focusActive ? '' : ' "status status status"'}`,
         ...(!isMobile && {
           gridTemplateColumns: bottomDock
             ? `${focusActive ? 0 : railWidthFor({ isMobile, collapsed: effectiveCollapsed })}px minmax(0,1fr)`

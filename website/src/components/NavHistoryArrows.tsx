@@ -57,7 +57,8 @@ export function RouteHistoryTracker() {
  * `max-two-buttons-per-row` cap, and pagination-style arrows are its named
  * exemption besides.
  */
-export function NavHistoryArrows() {
+/** `vertical`: stack the two arrows, for the collapsed sidebar's narrow strip. */
+export function NavHistoryArrows({ vertical = false }: { vertical?: boolean } = {}) {
   const step = useGuardedHistoryStep()
   const pos = useSyncExternalStore(subscribeRouteHistoryPosition, getRouteHistoryPosition)
   // Chord advertisements (aria-keyshortcuts, the chord-carrying tooltip) are
@@ -104,7 +105,7 @@ export function NavHistoryArrows() {
   // events also means no hover state, so no disabled:hover resets are needed.
   const btn = 'flex items-center justify-center w-7 h-7 rounded-md hover:bg-bg-hover transition-colors bg-transparent border-none text-muted hover:text-text shrink-0 cursor-pointer disabled:opacity-30 disabled:pointer-events-none'
   return (
-    <div className="tb-drop-navhistory flex items-center shrink-0" data-testid="nav-history-arrows">
+    <div className={`tb-drop-navhistory flex items-center shrink-0 ${vertical ? 'flex-col gap-0.5' : ''}`} data-testid="nav-history-arrows">
       <HistoryArrow
         direction={-1}
         className={btn}

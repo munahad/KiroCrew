@@ -27,10 +27,13 @@ function renderRail(setAppPinned = vi.fn(), withProviders = false) {
 afterEach(() => { setLayoutEditing(false); localStorage.clear() })
 
 describe('RailGroups right-click', () => {
-  it('renders the default groups with their titles', () => {
+  it('renders one flat list by default, with no group header', () => {
     renderRail()
-    expect(screen.getByRole('group', { name: 'Workspace' })).toBeTruthy()
-    expect(screen.getByRole('group', { name: 'Apps' })).toBeTruthy()
+    // Design exploration: the shipped sidebar is one flat list. Its group is
+    // still named for assistive tech, but no header is drawn.
+    expect(screen.getAllByRole('group')).toHaveLength(1)
+    expect(screen.getByRole('group', { name: 'Main list' })).toBeTruthy()
+    expect(screen.queryByText('Main list')).toBeNull()
   })
 
   it('unpins a static row into the layout hidden set', async () => {
@@ -51,9 +54,35 @@ describe('RailGroups right-click', () => {
 
   it('offers New group on empty rail space and adds one', async () => {
     renderRail()
-    fireEvent.contextMenu(screen.getByRole('group', { name: 'Apps' }))
+    fireEvent.contextMenu(screen.getByRole('group', { name: 'Main list' }))
     fireEvent.click(await screen.findByRole('menuitem', { name: /New group/ }))
-    expect(readRailLayout().groups.map(g => g.id)).toEqual(['workspace', 'apps', 'group-3'])
+    expect(readRailLayout().groups.map(g => g.id)).toEqual(['workspace', 'group-2'])
+  })
+
+  it('opens a new group\'s name for typing, and Rename group edits it later', async () => {
+    renderRail()
+    fireEvent.contextMenu(screen.getByRole('group', { name: 'Main list' }))
+    fireEvent.click(await screen.findByRole('menuitem', { name: /New group/ }))
+    await flushFrame()
+    const field = await screen.findByRole('textbox', { name: 'Group name' })
+    fireEvent.change(field, { target: { value: 'Design' } })
+    fireEvent.keyDown(field, { key: 'Enter' })
+    expect(readRailLayout().groups.find(g => g.id === 'group-2')?.title).toBe('Design')
+
+    fireEvent.contextMenu(screen.getByRole('group', { name: 'Design' }))
+    fireEvent.click(await screen.findByRole('menuitem', { name: /Rename group/ }))
+    await flushFrame()
+    const again = await screen.findByRole('textbox', { name: 'Group name' })
+    fireEvent.change(again, { target: { value: 'Reviews' } })
+    fireEvent.keyDown(again, { key: 'Enter' })
+    expect(readRailLayout().groups.find(g => g.id === 'group-2')?.title).toBe('Reviews')
+  })
+
+  it('offers no Rename group on the base flat list', async () => {
+    renderRail()
+    fireEvent.contextMenu(screen.getByText('Sessions'))
+    await screen.findByRole('menuitem', { name: /Remove from sidebar/ })
+    expect(screen.queryByRole('menuitem', { name: /Rename group/ })).toBeNull()
   })
 
   it('opens the in-place layout editor from the menu, and Escape leaves it', async () => {
