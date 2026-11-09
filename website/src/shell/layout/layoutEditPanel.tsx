@@ -14,11 +14,12 @@
  * portaled to the body so it floats over the page area only.
  */
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { createPortal } from 'react-dom'
 import { useQuery } from '@tanstack/react-query'
 import { ArrowLeftRight, Bell, CircleUserRound, GripVertical, Lightbulb, Lock, MessageSquare, PanelLeft, Search, Smartphone, SquareTerminal, X } from 'lucide-react'
 
 import CrewAvatar from '../../components/CrewAvatar'
+import SimpleSelect from '../../components/SimpleSelect'
+import { OverlayPortal } from '../../components/overlayRoot'
 import { Btn } from '../../components/ui'
 import { membersRosterQuery } from '../../api/membersQuery'
 import { isAppNavId } from '../../appNotificationBadges'
@@ -165,7 +166,10 @@ export function LayoutEditPanel({ groups, hidden, meta, isApp, setAppPinned }: {
       : i18nT('nav.layout_moved', { item: label, place: zoneLabel(to) }))
   }
 
-  return createPortal(
+  // The pane's own overlay root, so the panel hides with this Crew when a
+  // remote Crew is in front.
+  return (
+    <OverlayPortal>
     <aside
       ref={panelRef}
       tabIndex={-1}
@@ -239,35 +243,34 @@ export function LayoutEditPanel({ groups, hidden, meta, isApp, setAppPinned }: {
                 <span className="block truncate text-[13px] text-text" title={x.meta.label}>{x.meta.label}</span>
                 <span className="block text-[11px] text-muted">{categoryLabel(x.category)}</span>
               </span>
-              <label className="sr-only" htmlFor={`layout-place-${x.id}`}>{i18nT('nav.layout_show_in', { item: x.meta.label })}</label>
-              <select
-                id={`layout-place-${x.id}`}
+              {/* The app's own dropdown (themed), kept out of the row's drag. */}
+              <SimpleSelect
+                options={placesFor(x.id)}
+                optionLabels={placesFor(x.id).map(placeLabel)}
                 value={at}
-                onChange={e => place(x.id, e.target.value as ShellZone | 'none', x.meta.label)}
-                onPointerDown={e => e.stopPropagation()}
-                className={`shrink-0 max-w-[110px] px-1.5 py-0.5 rounded border text-[11px] bg-bg cursor-pointer ${at === 'none' ? 'border-border text-muted' : 'border-accent/50 text-text'}`}
-              >
-                {placesFor(x.id).map(p => <option key={p} value={p}>{placeLabel(p)}</option>)}
-              </select>
+                onChange={v => place(x.id, v as ShellZone | 'none', x.meta.label)}
+                aria-label={i18nT('nav.layout_show_in', { item: x.meta.label })}
+                className={`!w-auto shrink-0 max-w-[120px] h-6 px-1.5 py-0 text-[11px] ${at === 'none' ? 'text-muted' : 'border-accent/50 text-text'}`}
+                contentClassName="min-w-[120px]"
+              />
               </div>
               {/* Search only: draw it as the full field or the icon alone. */}
               {x.id === SEARCH_ITEM && (
                 <div className="flex items-center gap-2 pl-[49px] pb-0.5">
                   <label htmlFor="layout-search-style" className="flex-1 text-[11px] text-muted">{i18nT('nav.layout_show_as')}</label>
-                  <select
+                  <SimpleSelect
                     id="layout-search-style"
+                    options={['field', 'icon']}
+                    optionLabels={[i18nT('nav.layout_search_field'), i18nT('nav.layout_search_icon')]}
                     value={searchStyle}
-                    onChange={e => {
-                      const style = e.target.value as SearchStyle
+                    onChange={v => {
+                      const style = v as SearchStyle
                       setSearchStyle(style)
                       announceLayout(i18nT(style === 'icon' ? 'nav.layout_search_now_icon' : 'nav.layout_search_now_field'))
                     }}
-                    onPointerDown={e => e.stopPropagation()}
-                    className="shrink-0 max-w-[110px] px-1.5 py-0.5 rounded border border-border text-[11px] bg-bg text-text cursor-pointer"
-                  >
-                    <option value="field">{i18nT('nav.layout_search_field')}</option>
-                    <option value="icon">{i18nT('nav.layout_search_icon')}</option>
-                  </select>
+                    className="!w-auto shrink-0 max-w-[120px] h-6 px-1.5 py-0 text-[11px] text-text"
+                    contentClassName="min-w-[120px]"
+                  />
                 </div>
               )}
             </li>
@@ -306,7 +309,7 @@ export function LayoutEditPanel({ groups, hidden, meta, isApp, setAppPinned }: {
 
       {/* Moves, read out to screen readers. */}
       <div role="status" aria-live="polite" className="sr-only">{announcement}</div>
-    </aside>,
-    document.body,
+    </aside>
+    </OverlayPortal>
   )
 }
