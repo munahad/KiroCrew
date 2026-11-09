@@ -16,12 +16,12 @@ import { toggleBottomTerminal } from '../../hooks/useBottomTerminal'
 import { i18nT } from '../../i18n/t'
 import { RAIL_PIN_MIME } from '../../lib/railLayout'
 import {
-  FEEDBACK_ITEM, PHONE_ITEM, SHELL_ITEM_MIME, TERMINAL_ITEM, announceLayout, isWindowToggle, moveItem, useLayoutEditing, useShellPlacement,
+  FEEDBACK_ITEM, PHONE_ITEM, SHELL_ITEM_MIME, TERMINAL_ITEM, announceLayout, isWindowToggle, moveItem, readChromeDrag, setChromeDrag, useLayoutEditing, useShellPlacement,
   type BarZone,
 } from '../../lib/shellLayout'
 import { focusPopout as focusTerminalPopout } from '../../utils/terminalPopout'
 import type { AppShell } from '../appShell'
-import { shellItemMeta } from './shellItems'
+import { shellItemMeta, zonesFor } from './shellItems'
 
 export const zoneLabel = (z: BarZone | 'sidebar') =>
   i18nT(z === 'top' ? 'nav.layout_zone_top' : z === 'bottom' ? 'nav.layout_zone_bottom' : 'nav.layout_zone_sidebar')
@@ -31,6 +31,17 @@ export function startItemDrag(e: DragEvent, id: string) {
   e.dataTransfer.setData(SHELL_ITEM_MIME, id)
   if (!isWindowToggle(id)) e.dataTransfer.setData(RAIL_PIN_MIME, id)
   e.dataTransfer.effectAllowed = 'move'
+  // Tell the zone outlines what is moving (a native dragover cannot read the
+  // data), so places that cannot take it show as unavailable. Cleared on drop
+  // or drag end; both, since a moved source can unmount before its dragend.
+  setChromeDrag({ id, over: null, lineX: null })
+  const clear = () => {
+    setChromeDrag(null)
+    window.removeEventListener('dragend', clear, true)
+    window.removeEventListener('drop', clear, true)
+  }
+  window.addEventListener('dragend', clear, true)
+  window.addEventListener('drop', clear, true)
 }
 
 export function BarItems({ zone, shell }: { zone: BarZone; shell: Pick<AppShell, 'terminalEnabled' | 'terminalPoppedOut' | 'bottomTerminalOpen' | 'activeSlotProject' | 'hasRenderableMobileConnect' | 'mobileConnectOpen' | 'setMobileConnectOpen' | 'requestFeature'> }) {
@@ -53,7 +64,12 @@ export function BarItems({ zone, shell }: { zone: BarZone; shell: Pick<AppShell,
     const i = els.findIndex(el => { const r = el.getBoundingClientRect(); return r.left + r.width / 2 > x })
     return i < 0 ? els.length : i
   }
-  const accepts = (e: DragEvent) => e.dataTransfer.types.includes(SHELL_ITEM_MIME)
+  // Only an item that may sit in this bar (an app, Mate or session may not).
+  const accepts = (e: DragEvent) => {
+    if (!e.dataTransfer.types.includes(SHELL_ITEM_MIME)) return false
+    const id = readChromeDrag().id
+    return !id || zonesFor(id).includes(zone)
+  }
   const dropHandlers = editing ? {
     onDragOver: (e: DragEvent) => { if (!accepts(e)) return; e.preventDefault(); e.dataTransfer.dropEffect = 'move'; setOver(true) },
     onDragLeave: (e: DragEvent) => { if (!e.currentTarget.contains(e.relatedTarget as Node | null)) setOver(false) },

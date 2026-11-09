@@ -3,24 +3,35 @@
  *
  * While editing, each chrome area of the canvas gets a dashed outline that
  * spans the WHOLE area: the top bar edge to edge, the sidebar top to bottom,
- * the bottom bar edge to edge. Each outline carries its name, so the canvas
- * reads as three places you can put things.
+ * the bottom bar edge to edge.
  *
- * The outlines sit in the shell grid's own areas (`topbar`, `nav`, `status`),
- * over the real chrome. They let clicks through. During a native drag the top
- * and bottom outlines take pointer events, so a drop ANYWHERE along the bar
- * lands in it (the index comes from where the bar's existing items sit). The
- * sidebar outline never takes pointer events: drops reach the rail itself,
- * which pins at the drop point.
+ * While an item is dragged (a native drag from the panel or a bar, or a
+ * dnd-kit drag of a sidebar row, which the rail reports through
+ * `setChromeDrag`), each zone shows its name, and:
+ *  - a zone that can take the item is outlined in the accent colour; the one
+ *    under the pointer lights up and draws a drop line in the gap where the
+ *    item will land (it snaps to the nearest gap between items);
+ *  - a zone that cannot take it (an app, Mate or session over a bar; search
+ *    over the bottom bar; a window toggle over the sidebar) is greyed, with a
+ *    "no" mark on its name, and refuses the drop, so the item goes back.
+ *
+ * The top and bottom outlines take pointer events during a native drag, so a
+ * drop anywhere along the bar lands in it. The sidebar outline never does:
+ * drops reach the rail itself, which pins at the drop point.
  */
-import { useEffect, useState, type DragEvent } from 'react'
+import { useEffect, useRef, useState, type DragEvent } from 'react'
+import { Ban } from 'lucide-react'
 
 import { i18nT } from '../../i18n/t'
-import { isTwoPlaceItem, SHELL_ITEM_MIME, announceLayout, moveItem, useChromeDrag, useLayoutEditing, type BarZone, type ShellZone } from '../../lib/shellLayout'
-import { shellItemMeta } from './shellItems'
+import {
+  SHELL_ITEM_MIME, announceLayout, barDropAt, moveItem, readChromeDrag, setChromeDrag, useChromeDrag, useLayoutEditing,
+  type BarZone, type ShellZone,
+} from '../../lib/shellLayout'
+import { shellItemMeta, zonesFor } from './shellItems'
 import { zoneLabel } from './barItems'
 
-/** True while any native drag is in flight on the page. */
+/** True while any native drag is in flight on the page (including drags from
+ *  outside the layout, such as a Mate from the Mates page). */
 function useNativeDragging(): boolean {
   const [on, setOn] = useState(false)
   useEffect(() => {
@@ -38,50 +49,68 @@ function useNativeDragging(): boolean {
   return on
 }
 
-/** Drop index along a bar: before the first placed item whose middle is right of x. */
-function barIndexAt(zone: BarZone, x: number): number {
-  const els = [...document.querySelectorAll<HTMLElement>(`[data-layout-zone="${zone}"] [data-bar-item]`)]
-  const i = els.findIndex(el => { const r = el.getBoundingClientRect(); return r.left + r.width / 2 > x })
-  return i < 0 ? els.length : i
-}
+function ZoneOutline({ zone, area, dragging, nativeDrag, allowed, over, lineX }: {
+  zone: ShellZone
+  area: string
+  /** Some item is being dragged: show names and availability. */
+  dragging: boolean
+  /** A native drag is in flight: the bar outlines take pointer events. */
+  nativeDrag: boolean
+  allowed: boolean
+  over: boolean
+  lineX: number | null
+}) {
+  const ref = useRef<HTMLDivElement>(null)
+  const bar = zone === 'sidebar' ? null : (zone as BarZone)
+  const catches = !!bar && nativeDrag
 
-function ZoneOutline({ zone, area, dragging, sidebarOver }: { zone: ShellZone; area: string; dragging: boolean; sidebarOver: boolean }) {
-  const [nativeOver, setOver] = useState(false)
-  // Highlighted by a native drag over it, or by a sidebar drag (reported by the rail).
-  const over = nativeOver || sidebarOver
-  const droppable = zone !== 'sidebar' && dragging
-  const accepts = (e: DragEvent) => e.dataTransfer.types.includes(SHELL_ITEM_MIME)
-  useEffect(() => { if (!dragging) setOver(false) }, [dragging])
+  const onDragOver = (e: DragEvent) => {
+    // A refused drop: no preventDefault, so the browser shows "not allowed".
+    if (!bar || !allowed || !e.dataTransfer.types.includes(SHELL_ITEM_MIME)) return
+    e.preventDefault()
+    e.dataTransfer.dropEffect = 'move'
+    setChromeDrag({ over: bar, lineX: barDropAt(bar, e.clientX, readChromeDrag().id).lineX })
+  }
+  const onDragLeave = (e: DragEvent) => {
+    if (e.currentTarget.contains(e.relatedTarget as Node | null)) return
+    if (readChromeDrag().over === bar) setChromeDrag({ over: null, lineX: null })
+  }
+  const onDrop = (e: DragEvent) => {
+    if (!bar || !allowed || !e.dataTransfer.types.includes(SHELL_ITEM_MIME)) return
+    e.preventDefault()
+    const id = e.dataTransfer.getData(SHELL_ITEM_MIME)
+    if (!id) return
+    moveItem(id, bar, barDropAt(bar, e.clientX, id).index)
+    announceLayout(i18nT('nav.layout_moved', { item: shellItemMeta(id)?.label ?? id, place: zoneLabel(bar) }))
+  }
+
+  const unavailable = dragging && !allowed
+  const box = ref.current?.getBoundingClientRect()
   return (
     <div
+      ref={ref}
       aria-hidden="true"
       data-layout-outline={zone}
-      style={{ gridArea: area, zIndex: 70, pointerEvents: droppable ? 'auto' : 'none' }}
+      style={{ gridArea: area, zIndex: 70, pointerEvents: catches ? 'auto' : 'none' }}
       className={`relative rounded-lg border-2 border-dashed transition-colors ${
         zone === 'sidebar' ? 'mx-1 mb-1' : zone === 'top' ? 'mx-1 my-0.5' : 'mx-1'
-      } ${over ? 'border-accent bg-accent/10' : 'border-accent/50'}`}
-      onDragOver={droppable ? e => { if (!accepts(e)) return; e.preventDefault(); e.dataTransfer.dropEffect = 'move'; setOver(true) } : undefined}
-      onDragLeave={droppable ? () => setOver(false) : undefined}
-      onDrop={droppable ? e => {
-        setOver(false)
-        if (!accepts(e)) return
-        e.preventDefault()
-        const id = e.dataTransfer.getData(SHELL_ITEM_MIME)
-        if (!id) return
-        const bar = zone as BarZone
-        // Search and status live in the top bar or the sidebar only.
-        if (isTwoPlaceItem(id) && bar === 'bottom') return
-        moveItem(id, bar, barIndexAt(bar, e.clientX))
-        announceLayout(i18nT('nav.layout_moved', { item: shellItemMeta(id)?.label ?? id, place: zoneLabel(bar) }))
-      } : undefined}
+      } ${unavailable ? 'border-border bg-bg-hover/60' : over ? 'border-accent bg-accent/10' : 'border-accent/50'}`}
+      {...(catches ? { onDragOver, onDragLeave, onDrop } : {})}
     >
+      {/* Where the item will land: a line in the gap it snaps to. */}
+      {over && allowed && lineX != null && box && (
+        <span
+          className="absolute top-1 bottom-1 w-0.5 rounded-full bg-accent pointer-events-none"
+          style={{ left: lineX - box.left - 3 }}
+        />
+      )}
       <span
         // One rule for all three: the tag sits on the MIDDLE of the edge that
         // faces the page, away from the corners where two zones meet, so it can
-        // only belong to its own zone.
-        // Shown only while an item is being dragged, when "where can this go?"
-        // is the question; the rest of the time the outlines alone mark the zones.
-        className={`absolute whitespace-nowrap px-1.5 py-px rounded text-[10px] font-medium uppercase tracking-wide bg-accent text-accent-fg transition-opacity duration-150 motion-reduce:transition-none ${dragging ? 'opacity-100' : 'opacity-0'} ${
+        // only belong to its own zone. Shown only while an item is dragged.
+        className={`absolute inline-flex items-center gap-1 whitespace-nowrap px-1.5 py-px rounded text-[10px] font-medium uppercase tracking-wide pointer-events-none transition-opacity duration-150 motion-reduce:transition-none ${
+          unavailable ? 'bg-bg-elevated text-muted border border-border' : 'bg-accent text-accent-fg'
+        } ${dragging ? 'opacity-100' : 'opacity-0'} ${
           zone === 'sidebar'
             ? 'right-0 top-1/2 translate-x-1/2 -translate-y-1/2'
             : zone === 'top'
@@ -89,6 +118,7 @@ function ZoneOutline({ zone, area, dragging, sidebarOver }: { zone: ShellZone; a
               : 'left-1/2 top-0 -translate-x-1/2 -translate-y-1/2'
         }`}
       >
+        {unavailable && <Ban size={10} aria-hidden="true" />}
         {zoneLabel(zone)}
       </span>
     </div>
@@ -99,16 +129,25 @@ function ZoneOutline({ zone, area, dragging, sidebarOver }: { zone: ShellZone; a
 export function LayoutZoneOutlines() {
   const editing = useLayoutEditing()
   const native = useNativeDragging()
-  // A sidebar row being dragged (dnd-kit, not a native drag) counts too, so
-  // the zone names show and the bar under the pointer lights up.
-  const sidebar = useChromeDrag()
-  const dragging = native || sidebar.active
+  const drag = useChromeDrag()
   if (!editing) return null
+  const dragging = native || drag.id !== null
+  // A native drag with no layout item (a Mate or session from another page)
+  // can only be pinned to the sidebar.
+  const allowed = (z: ShellZone) => (drag.id ? zonesFor(drag.id).includes(z) : z === 'sidebar')
+  const props = (zone: ShellZone) => ({
+    zone,
+    dragging,
+    nativeDrag: native,
+    allowed: allowed(zone),
+    over: zone !== 'sidebar' && drag.over === zone,
+    lineX: drag.over === zone ? drag.lineX : null,
+  })
   return (
     <>
-      <ZoneOutline zone="top" area="topbar" dragging={dragging} sidebarOver={sidebar.over === 'top'} />
-      <ZoneOutline zone="sidebar" area="nav" dragging={dragging} sidebarOver={false} />
-      <ZoneOutline zone="bottom" area="status" dragging={dragging} sidebarOver={sidebar.over === 'bottom'} />
+      <ZoneOutline area="topbar" {...props('top')} />
+      <ZoneOutline area="nav" {...props('sidebar')} />
+      <ZoneOutline area="status" {...props('bottom')} />
     </>
   )
 }

@@ -9,7 +9,8 @@ import { Compass, LayoutGrid, Lightbulb, Smartphone, SquareTerminal } from 'luci
 
 import { i18nT } from '../../i18n/t'
 import { getBuiltinSurface, surfaceLabel } from '../../surfaces/registry'
-import { FEEDBACK_ITEM, PHONE_ITEM, TERMINAL_ITEM } from '../../lib/shellLayout'
+import { FEEDBACK_ITEM, PHONE_ITEM, TERMINAL_ITEM, isTwoPlaceItem, isWindowToggle, type ShellZone } from '../../lib/shellLayout'
+import { isEntityPin } from '../../lib/railLayout'
 
 export interface ShellItemMeta { label: string; icon: ReactNode; path?: string }
 
@@ -26,4 +27,13 @@ export function shellItemMeta(id: string, size = 16): ShellItemMeta | null {
 /** Whether an item may sit in a bar in this prototype (pages and window toggles only). */
 export function canSitInBar(id: string): boolean {
   return shellItemMeta(id) !== null
+}
+
+/** Every place an item may go. Search and status: top bar or sidebar. Window
+ *  toggles: the bars only. Pages: anywhere. Apps, Mates and sessions: sidebar. */
+export function zonesFor(id: string): ShellZone[] {
+  if (isTwoPlaceItem(id)) return ['top', 'sidebar']
+  if (isWindowToggle(id)) return ['top', 'bottom']
+  if (isEntityPin(id)) return ['sidebar']
+  return canSitInBar(id) ? ['sidebar', 'top', 'bottom'] : ['sidebar']
 }

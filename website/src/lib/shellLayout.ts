@@ -255,14 +255,39 @@ export function useLayoutEditing(): boolean {
    native drop handlers never see it. The sidebar reports its drag here
    instead: whether one is in flight, and which bar the pointer is over. */
 
-export interface ChromeDrag { active: boolean; over: BarZone | null }
-let chromeDrag: ChromeDrag = { active: false, over: null }
+/** The item being dragged on the canvas (any drag system), the bar under the
+ *  pointer, and where in that bar it would land (a client-x for the drop line).
+ *  `id` is null while no layout item is being dragged. */
+export interface ChromeDrag { id: string | null; over: BarZone | null; lineX: number | null }
+const NO_DRAG: ChromeDrag = { id: null, over: null, lineX: null }
+let chromeDrag: ChromeDrag = NO_DRAG
 const CHROME_DRAG_EVENT = 'mc:chrome-drag-changed'
 
-export function setChromeDrag(next: ChromeDrag): void {
-  if (next.active === chromeDrag.active && next.over === chromeDrag.over) return
-  chromeDrag = next
+export function readChromeDrag(): ChromeDrag { return chromeDrag }
+
+export function setChromeDrag(next: Partial<ChromeDrag> | null): void {
+  const v = next === null ? NO_DRAG : { ...chromeDrag, ...next }
+  if (v.id === chromeDrag.id && v.over === chromeDrag.over && v.lineX === chromeDrag.lineX) return
+  chromeDrag = v
   window.dispatchEvent(new Event(CHROME_DRAG_EVENT))
+}
+
+/**
+ * Where a drop at client-x `x` lands in a bar: the index among the bar's
+ * placed items (the dragged item itself left out, since it moves), and the x
+ * of the gap to draw the drop line in. Items snap to the nearest gap.
+ */
+export function barDropAt(zone: BarZone, x: number, dragId: string | null): { index: number; lineX: number | null } {
+  const box = document.querySelector<HTMLElement>(`[data-layout-zone="${zone}"]`)
+  const els = [...(box?.querySelectorAll<HTMLElement>('[data-bar-item]') ?? [])].filter(el => el.dataset.barItem !== dragId)
+  const rects = els.map(el => el.getBoundingClientRect())
+  const i = rects.findIndex(r => r.left + r.width / 2 > x)
+  const index = i < 0 ? rects.length : i
+  let lineX: number | null = null
+  if (rects.length === 0) lineX = box ? box.getBoundingClientRect().left + 2 : null
+  else if (index < rects.length) lineX = rects[index].left - 2
+  else lineX = rects[rects.length - 1].right + 2
+  return { index, lineX }
 }
 
 export function useChromeDrag(): ChromeDrag {

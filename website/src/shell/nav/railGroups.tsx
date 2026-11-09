@@ -14,8 +14,11 @@ import {
 import { SortableAppNavRow } from './appRail'
 import { RailContextMenu, groupTitle, type RailItemMeta } from './railCustomize'
 import { LayoutEditPanel } from '../layout/layoutEditPanel'
-import { announceLayout, barZoneAt, moveItem, setChromeDrag, setLayoutEditing, useLayoutEditing } from '../../lib/shellLayout'
-import { canSitInBar, shellItemMeta } from '../layout/shellItems'
+import { announceLayout, barDropAt, barZoneAt, moveItem, setChromeDrag, setLayoutEditing, useLayoutEditing } from '../../lib/shellLayout'
+import { shellItemMeta, zonesFor } from '../layout/shellItems'
+
+/** Stand-in drag id for an installed app: matches no bar, so bars show as unavailable. */
+const APP_DRAG_ID = 'app:sidebar-only'
 import { zoneLabel } from '../layout/barItems'
 import { OPEN_RAIL_CUSTOMIZE_EVENT } from './railSettingsFlyout'
 import { RAIL_PIN_DROP_HOST_ID, useRailNativeDrop } from './railPinDrop'
@@ -191,28 +194,39 @@ export function RailGroups({ available, renderItem, collapsed, defaultGroup, met
     const p = a && 'touches' in a ? a.touches[0] : (a as PointerEvent | null)
     return p ? { x: p.clientX + e.delta.x, y: p.clientY + e.delta.y } : null
   }
+  /** The bar under the pointer (any item), whether this item may go there,
+   *  and where in it the item would land. */
   const barTarget = (e: DragMoveEvent | DragEndEvent) => {
     const id = String(e.active.id)
-    if (!editing || isApp(id) || isEntityPin(id) || !canSitInBar(id)) return null
-    const p = pointerAt(e)
-    return p ? barZoneAt(p.x, p.y) : null
+    const p = editing ? pointerAt(e) : null
+    const bar = p ? barZoneAt(p.x, p.y) : null
+    if (!bar || !p) return null
+    const allowed = !isApp(id) && zonesFor(id).includes(bar)
+    return { bar, allowed, ...barDropAt(bar, p.x, id) }
   }
   const onDragStart = useCallback((e: DragStartEvent) => {
     haptic('medium')
     setActiveId(String(e.active.id))
-    if (editing) setChromeDrag({ active: true, over: null })
-  }, [editing])
-  const onDragMove = (e: DragMoveEvent) => { if (editing) setChromeDrag({ active: true, over: barTarget(e) }) }
-  const onDragCancel = useCallback(() => { setActiveId(null); setChromeDrag({ active: false, over: null }) }, [])
+    // Apps are sidebar-only here even when a page of the same id could sit in a bar.
+    if (editing) setChromeDrag({ id: isApp(String(e.active.id)) ? APP_DRAG_ID : String(e.active.id), over: null, lineX: null })
+  }, [editing, isApp])
+  const onDragMove = (e: DragMoveEvent) => {
+    if (!editing) return
+    const t = barTarget(e)
+    setChromeDrag({ over: t?.bar ?? null, lineX: t?.allowed ? t.lineX : null })
+  }
+  const onDragCancel = useCallback(() => { setActiveId(null); setChromeDrag(null) }, [])
   const onDragEnd = useCallback((e: DragEndEvent) => {
     setActiveId(null)
-    setChromeDrag({ active: false, over: null })
-    const bar = barTarget(e)
-    if (bar) {
+    setChromeDrag(null)
+    const t = barTarget(e)
+    if (t) {
+      // Over a bar that cannot take it: no move, and the item slides back.
+      if (!t.allowed) return
       const id = String(e.active.id)
       haptic('light')
-      moveItem(id, bar)
-      announceLayout(i18nT('nav.layout_moved', { item: shellItemMeta(id)?.label ?? id, place: zoneLabel(bar) }))
+      moveItem(id, t.bar, t.index)
+      announceLayout(i18nT('nav.layout_moved', { item: shellItemMeta(id)?.label ?? id, place: zoneLabel(t.bar) }))
       return
     }
     const { active, over } = e
