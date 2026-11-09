@@ -250,6 +250,41 @@ export function useLayoutEditing(): boolean {
   return on
 }
 
+/* ── Sidebar drags (dnd-kit) reaching the bars ──
+   The sidebar reorders with dnd-kit, a pointer-based drag, so the bars'
+   native drop handlers never see it. The sidebar reports its drag here
+   instead: whether one is in flight, and which bar the pointer is over. */
+
+export interface ChromeDrag { active: boolean; over: BarZone | null }
+let chromeDrag: ChromeDrag = { active: false, over: null }
+const CHROME_DRAG_EVENT = 'mc:chrome-drag-changed'
+
+export function setChromeDrag(next: ChromeDrag): void {
+  if (next.active === chromeDrag.active && next.over === chromeDrag.over) return
+  chromeDrag = next
+  window.dispatchEvent(new Event(CHROME_DRAG_EVENT))
+}
+
+export function useChromeDrag(): ChromeDrag {
+  const [d, setD] = useState(chromeDrag)
+  useEffect(() => {
+    const sync = () => setD(chromeDrag)
+    window.addEventListener(CHROME_DRAG_EVENT, sync)
+    return () => window.removeEventListener(CHROME_DRAG_EVENT, sync)
+  }, [])
+  return d
+}
+
+/** Which bar outline (top or bottom) contains a screen point, if any. */
+export function barZoneAt(x: number, y: number): BarZone | null {
+  for (const zone of ['top', 'bottom'] as const) {
+    const el = document.querySelector<HTMLElement>(`[data-layout-outline="${zone}"]`)
+    const r = el?.getBoundingClientRect()
+    if (r && r.width > 0 && r.height > 0 && x >= r.left && x <= r.right && y >= r.top && y <= r.bottom) return zone
+  }
+  return null
+}
+
 /* ── Screen-reader announcements for moves (WCAG 4.1.3) ── */
 
 const ANNOUNCE_EVENT = 'mc:layout-announce'

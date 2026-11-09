@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
-import { DndContext, closestCenter, DragOverlay, type DragEndEvent, type DragStartEvent } from '@dnd-kit/core'
+import { DndContext, closestCenter, DragOverlay, type DragEndEvent, type DragMoveEvent, type DragStartEvent } from '@dnd-kit/core'
 import { SortableContext, arrayMove, useSortable, verticalListSortingStrategy } from '@dnd-kit/sortable'
 
 import { GripVertical } from 'lucide-react'
@@ -14,7 +14,9 @@ import {
 import { SortableAppNavRow } from './appRail'
 import { RailContextMenu, groupTitle, type RailItemMeta } from './railCustomize'
 import { LayoutEditPanel } from '../layout/layoutEditPanel'
-import { setLayoutEditing, useLayoutEditing } from '../../lib/shellLayout'
+import { announceLayout, barZoneAt, moveItem, setChromeDrag, setLayoutEditing, useLayoutEditing } from '../../lib/shellLayout'
+import { canSitInBar, shellItemMeta } from '../layout/shellItems'
+import { zoneLabel } from '../layout/barItems'
 import { OPEN_RAIL_CUSTOMIZE_EVENT } from './railSettingsFlyout'
 import { RAIL_PIN_DROP_HOST_ID, useRailNativeDrop } from './railPinDrop'
 import { RailRenameInput } from './railRename'
@@ -180,10 +182,39 @@ export function RailGroups({ available, renderItem, collapsed, defaultGroup, met
   // Stable: the modal memoizes on it, and its rows show rail-only names.
   const modalMeta = useCallback((id: string) => { const m = meta(id); const l = labelOf(id); return m && l ? { ...m, label: l } : m }, [meta, labelOf])
 
-  const onDragStart = useCallback((e: DragStartEvent) => { haptic('medium'); setActiveId(String(e.active.id)) }, [])
-  const onDragCancel = useCallback(() => setActiveId(null), [])
+  // Design exploration: while editing the layout, a sidebar row can be dragged
+  // out onto the top or bottom bar. dnd-kit drags are pointer-based, so the
+  // bars' native drop handlers never see them; the rail works out which bar
+  // the pointer is over and tells the zone outlines (names and highlight).
+  const pointerAt = (e: DragMoveEvent | DragEndEvent) => {
+    const a = e.activatorEvent as PointerEvent | MouseEvent | TouchEvent | null
+    const p = a && 'touches' in a ? a.touches[0] : (a as PointerEvent | null)
+    return p ? { x: p.clientX + e.delta.x, y: p.clientY + e.delta.y } : null
+  }
+  const barTarget = (e: DragMoveEvent | DragEndEvent) => {
+    const id = String(e.active.id)
+    if (!editing || isApp(id) || isEntityPin(id) || !canSitInBar(id)) return null
+    const p = pointerAt(e)
+    return p ? barZoneAt(p.x, p.y) : null
+  }
+  const onDragStart = useCallback((e: DragStartEvent) => {
+    haptic('medium')
+    setActiveId(String(e.active.id))
+    if (editing) setChromeDrag({ active: true, over: null })
+  }, [editing])
+  const onDragMove = (e: DragMoveEvent) => { if (editing) setChromeDrag({ active: true, over: barTarget(e) }) }
+  const onDragCancel = useCallback(() => { setActiveId(null); setChromeDrag({ active: false, over: null }) }, [])
   const onDragEnd = useCallback((e: DragEndEvent) => {
     setActiveId(null)
+    setChromeDrag({ active: false, over: null })
+    const bar = barTarget(e)
+    if (bar) {
+      const id = String(e.active.id)
+      haptic('light')
+      moveItem(id, bar)
+      announceLayout(i18nT('nav.layout_moved', { item: shellItemMeta(id)?.label ?? id, place: zoneLabel(bar) }))
+      return
+    }
     const { active, over } = e
     if (!over || active.id === over.id) return
     const from = flat.indexOf(String(active.id))
@@ -196,7 +227,8 @@ export function RailGroups({ available, renderItem, collapsed, defaultGroup, met
     const next = regroupFlat(arrayMove(flat, from, to), groups)
     // Merge into a fresh read: another tab may have written since this render.
     writeRailLayout(applyVisibleOrder(readRailLayout(), next))
-  }, [flat, groups])
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [flat, groups, editing, isApp])
 
   return (<>
     <RailContextMenu
@@ -213,7 +245,7 @@ export function RailGroups({ available, renderItem, collapsed, defaultGroup, met
         sidebar portals in here; Mates drag natively and drop on this element. */}
     <div id={RAIL_PIN_DROP_HOST_ID} data-layout-zone="sidebar" className="relative pb-6" {...nativeDrop.handlers}>
     {nativeDrop.over && <div aria-hidden="true" className="absolute inset-0 pointer-events-none rounded-lg border-2 border-dashed border-accent bg-accent/10 z-10" />}
-    <DndContext sensors={sensors} collisionDetection={closestCenter} onDragStart={onDragStart} onDragEnd={onDragEnd} onDragCancel={onDragCancel}>
+    <DndContext sensors={sensors} collisionDetection={closestCenter} onDragStart={onDragStart} onDragMove={onDragMove} onDragEnd={onDragEnd} onDragCancel={onDragCancel}>
       <SortableContext items={flat} strategy={verticalListSortingStrategy}>
         {groups.map((g, gi) => (
           <div key={g.id} role="group" aria-label={groupTitle(g)} className="flex flex-col gap-0.5" data-rail-group={g.id}>

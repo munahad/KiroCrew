@@ -16,7 +16,7 @@
 import { useEffect, useState, type DragEvent } from 'react'
 
 import { i18nT } from '../../i18n/t'
-import { isTwoPlaceItem, SHELL_ITEM_MIME, announceLayout, moveItem, useLayoutEditing, type BarZone, type ShellZone } from '../../lib/shellLayout'
+import { isTwoPlaceItem, SHELL_ITEM_MIME, announceLayout, moveItem, useChromeDrag, useLayoutEditing, type BarZone, type ShellZone } from '../../lib/shellLayout'
 import { shellItemMeta } from './shellItems'
 import { zoneLabel } from './barItems'
 
@@ -45,14 +45,17 @@ function barIndexAt(zone: BarZone, x: number): number {
   return i < 0 ? els.length : i
 }
 
-function ZoneOutline({ zone, area, dragging }: { zone: ShellZone; area: string; dragging: boolean }) {
-  const [over, setOver] = useState(false)
+function ZoneOutline({ zone, area, dragging, sidebarOver }: { zone: ShellZone; area: string; dragging: boolean; sidebarOver: boolean }) {
+  const [nativeOver, setOver] = useState(false)
+  // Highlighted by a native drag over it, or by a sidebar drag (reported by the rail).
+  const over = nativeOver || sidebarOver
   const droppable = zone !== 'sidebar' && dragging
   const accepts = (e: DragEvent) => e.dataTransfer.types.includes(SHELL_ITEM_MIME)
   useEffect(() => { if (!dragging) setOver(false) }, [dragging])
   return (
     <div
       aria-hidden="true"
+      data-layout-outline={zone}
       style={{ gridArea: area, zIndex: 70, pointerEvents: droppable ? 'auto' : 'none' }}
       className={`relative rounded-lg border-2 border-dashed transition-colors ${
         zone === 'sidebar' ? 'mx-1 mb-1' : zone === 'top' ? 'mx-1 my-0.5' : 'mx-1'
@@ -95,13 +98,17 @@ function ZoneOutline({ zone, area, dragging }: { zone: ShellZone; area: string; 
 /** The three outlines, drawn only while editing. Place inside the desktop shell grid. */
 export function LayoutZoneOutlines() {
   const editing = useLayoutEditing()
-  const dragging = useNativeDragging()
+  const native = useNativeDragging()
+  // A sidebar row being dragged (dnd-kit, not a native drag) counts too, so
+  // the zone names show and the bar under the pointer lights up.
+  const sidebar = useChromeDrag()
+  const dragging = native || sidebar.active
   if (!editing) return null
   return (
     <>
-      <ZoneOutline zone="top" area="topbar" dragging={dragging} />
-      <ZoneOutline zone="sidebar" area="nav" dragging={dragging} />
-      <ZoneOutline zone="bottom" area="status" dragging={dragging} />
+      <ZoneOutline zone="top" area="topbar" dragging={dragging} sidebarOver={sidebar.over === 'top'} />
+      <ZoneOutline zone="sidebar" area="nav" dragging={dragging} sidebarOver={false} />
+      <ZoneOutline zone="bottom" area="status" dragging={dragging} sidebarOver={sidebar.over === 'bottom'} />
     </>
   )
 }
