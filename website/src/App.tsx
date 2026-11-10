@@ -337,8 +337,10 @@ export default function App() {
   // chrome you can edit (the raised bars and sidebar) and the Edit layout
   // panel floating over the page read as the editor, not as the page.
   const pageEditStyle: React.CSSProperties = editRoom
-    // Washed out and softly blurred, as in Gary's Customize rail window.
-    ? { opacity: 0.25, filter: 'blur(3px) grayscale(0.6)', transition: 'opacity 150ms ease, filter 150ms ease' }
+    // Washed out far enough to read as background, like the blurred page behind
+    // Gary's Customize rail window, but without a blur: blurring a long chat
+    // page every frame is slow, so the fade does that job alone.
+    ? { opacity: 0.12, filter: 'grayscale(1)', transition: 'opacity 150ms ease, filter 150ms ease' }
     : { transition: 'opacity 150ms ease, filter 150ms ease' }
   // "Run in terminal" from a code block outside every chat, on any route.
   const runInTerminal = useRunInTerminalShellBridge(activeSlotProject, !isPopout && !isEmbed)
