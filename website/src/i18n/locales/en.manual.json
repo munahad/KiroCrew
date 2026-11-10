@@ -4670,7 +4670,7 @@
     "rail_drag_group": "Drag to move this group",
     "rail_palette_search": "Search pages, apps, mates and sessions",
     "rail_palette_no_results": "Nothing matches “{{query}}”",
-    "layout_hint": "Drag items onto the top bar, sidebar or bottom bar, or pick a place from each item's menu.",
+    "layout_hint": "Drag items into place, or use each item's menu",
     "layout_zone_top": "Top bar",
     "layout_zone_bottom": "Bottom bar",
     "layout_zone_sidebar": "Sidebar",
@@ -4734,7 +4734,8 @@
     "layout_move_down": "Move {{item}} down",
     "layout_moved_up": "{{item}} moved up",
     "layout_moved_down": "{{item}} moved down",
-    "layout_fixed_spot": "Fixed spot: use the menu to move it to another place"
+    "layout_fixed_spot": "Fixed spot: use the menu to move it to another place",
+    "layout_fixed_short": "Fixed"
   },
   "pages": {
     "aidlc": {

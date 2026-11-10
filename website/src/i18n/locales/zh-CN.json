@@ -10458,7 +10458,7 @@
     "rail_rename_group": "重命名分组",
     "rail_palette_search": "搜索页面、应用、队友和会话",
     "rail_palette_no_results": "没有匹配“{{query}}”的结果",
-    "layout_hint": "将项目拖到顶栏、侧边栏或底栏，或从各项目的菜单中选择位置。",
+    "layout_hint": "拖动项目，或使用每个项目的菜单",
     "layout_zone_top": "顶栏",
     "layout_zone_bottom": "底栏",
     "layout_zone_sidebar": "侧边栏",
@@ -10508,7 +10508,8 @@
     "layout_move_down": "将{{item}}下移",
     "layout_moved_up": "已将{{item}}上移",
     "layout_moved_down": "已将{{item}}下移",
-    "layout_fixed_spot": "固定位置：使用菜单将其移到其他位置"
+    "layout_fixed_spot": "固定位置：使用菜单将其移到其他位置",
+    "layout_fixed_short": "固定"
   },
   "pages": {
     "agentsPage": {

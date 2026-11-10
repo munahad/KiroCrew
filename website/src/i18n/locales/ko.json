@@ -10458,7 +10458,7 @@
     "rail_rename_group": "그룹 이름 바꾸기",
     "rail_palette_search": "페이지·앱·크루메이트·세션 검색",
     "rail_palette_no_results": "‘{{query}}’와(과) 일치하는 항목이 없습니다",
-    "layout_hint": "항목을 상단 바, 사이드바 또는 하단 바로 끌어 놓거나, 각 항목의 메뉴에서 위치를 고르세요.",
+    "layout_hint": "항목을 끌어 놓거나 각 항목의 메뉴를 사용하세요",
     "layout_zone_top": "상단 바",
     "layout_zone_bottom": "하단 바",
     "layout_zone_sidebar": "사이드바",
@@ -10508,7 +10508,8 @@
     "layout_move_down": "{{item}} 아래로 이동",
     "layout_moved_up": "{{item}}을(를) 위로 이동했습니다",
     "layout_moved_down": "{{item}}을(를) 아래로 이동했습니다",
-    "layout_fixed_spot": "고정 위치: 다른 곳으로 옮기려면 메뉴를 사용하세요"
+    "layout_fixed_spot": "고정 위치: 다른 곳으로 옮기려면 메뉴를 사용하세요",
+    "layout_fixed_short": "고정"
   },
   "pages": {
     "agentsPage": {

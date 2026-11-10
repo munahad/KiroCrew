@@ -22,16 +22,24 @@ import { SidebarStatus } from './sidebarStatus'
 import { RemoteCrewSwitcher } from './remoteCrews'
 
 /** A widget's wrapper: names it for drop indexing and lets it drag while editing. */
-export function WidgetSlot({ id, children, className = '' }: { id: WidgetItem; children: ReactNode; className?: string }) {
+export function WidgetSlot({ id, children, className = '', gutter = false }: {
+  id: WidgetItem
+  children: ReactNode
+  className?: string
+  /** In the sidebar: the grip sits in the sidebar's left gutter, outside the
+   *  control, so the control keeps its full width (like the rows below it).
+   *  In a bar there is no gutter, so the control makes room for the grip. */
+  gutter?: boolean
+}) {
   const editing = useLayoutEditing()
   return (
     <div
       data-bar-item={id}
       draggable={editing}
       onDragStart={editing ? e => startItemDrag(e, id) : undefined}
-      className={`relative flex items-center min-w-0 ${editing ? 'group/edit rounded-md cursor-grab active:cursor-grabbing hover:bg-bg-hover [&_*]:cursor-grab pl-3' : ''} ${className}`}
+      className={`relative flex items-center min-w-0 ${editing ? `group/edit rounded-md cursor-grab active:cursor-grabbing [&_*]:cursor-grab ${gutter ? '' : 'pl-3 hover:bg-bg-hover'}` : ''} ${className}`}
     >
-      {editing && <GripVertical size={12} aria-hidden="true" className="absolute left-0 top-1/2 -translate-y-1/2 text-muted opacity-0 group-hover/edit:opacity-100" />}
+      {editing && <GripVertical size={12} aria-hidden="true" className={`absolute top-1/2 -translate-y-1/2 text-muted opacity-0 group-hover/edit:opacity-100 ${gutter ? '-left-2.5' : 'left-0'}`} />}
       {children}
     </div>
   )
@@ -61,13 +69,13 @@ export function ShellWidget({ id, zone, shell, collapsed = false }: {
     case REMOTE_ITEM:
       // Always shown, even with no remote yet (then it offers to add one).
       return (
-        <WidgetSlot id={REMOTE_ITEM} className={zone === 'sidebar' && !collapsed ? 'w-full' : ''}>
+        <WidgetSlot id={REMOTE_ITEM} gutter={zone === 'sidebar'} className={zone === 'sidebar' && !collapsed ? 'w-full' : ''}>
           <RemoteCrewSwitcher shape={zone === 'sidebar' && collapsed ? 'icon' : 'chip'} fill={zone === 'sidebar' && !collapsed} />
         </WidgetSlot>
       )
     case HISTORY_ITEM:
       return <WidgetSlot id={HISTORY_ITEM}><NavHistoryArrows vertical={collapsed} /></WidgetSlot>
     case PROFILE_ITEM:
-      return <WidgetSlot id={PROFILE_ITEM} className={bar ? '' : 'w-full'}><ShellProfileMenu shell={shell} collapsed={collapsed} compact={bar} /></WidgetSlot>
+      return <WidgetSlot id={PROFILE_ITEM} gutter={!bar} className={bar ? '' : 'w-full'}><ShellProfileMenu shell={shell} collapsed={collapsed} compact={bar} /></WidgetSlot>
   }
 }

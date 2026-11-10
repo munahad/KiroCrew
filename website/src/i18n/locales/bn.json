@@ -10605,7 +10605,7 @@
     "rail_rename_group": "গ্রুপের নাম বদলাও",
     "rail_palette_search": "পেজ, অ্যাপ, ক্রুমেট ও সেশন খোঁজো",
     "rail_palette_no_results": "“{{query}}” এর সঙ্গে কিছুই মেলেনি",
-    "layout_hint": "আইটেমগুলো টেনে উপরের বার, সাইডবার বা নিচের বারে রাখো, অথবা প্রতিটি আইটেমের মেনু থেকে জায়গা বেছে নাও।",
+    "layout_hint": "আইটেম টেনে জায়গায় রাখো, বা প্রতিটির মেনু ব্যবহার করো",
     "layout_zone_top": "উপরের বার",
     "layout_zone_bottom": "নিচের বার",
     "layout_zone_sidebar": "সাইডবার",
@@ -10655,7 +10655,8 @@
     "layout_move_down": "{{item}} নিচে সরাও",
     "layout_moved_up": "{{item}} উপরে সরানো হয়েছে",
     "layout_moved_down": "{{item}} নিচে সরানো হয়েছে",
-    "layout_fixed_spot": "নির্দিষ্ট জায়গা: অন্য জায়গায় সরাতে মেনু ব্যবহার করো"
+    "layout_fixed_spot": "নির্দিষ্ট জায়গা: অন্য জায়গায় সরাতে মেনু ব্যবহার করো",
+    "layout_fixed_short": "নির্দিষ্ট"
   },
   "pages": {
     "agentsPage": {

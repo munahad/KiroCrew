@@ -10605,7 +10605,7 @@
     "rail_rename_group": "Gruppe umbenennen",
     "rail_palette_search": "Seiten, Apps, Crewmates und Sitzungen suchen",
     "rail_palette_no_results": "Nichts passt zu „{{query}}“",
-    "layout_hint": "Ziehe Elemente in die obere Leiste, die Seitenleiste oder die untere Leiste, oder wähle im Menü des jeweiligen Elements einen Platz.",
+    "layout_hint": "Elemente an ihren Platz ziehen oder das Menü nutzen",
     "layout_zone_top": "Obere Leiste",
     "layout_zone_bottom": "Untere Leiste",
     "layout_zone_sidebar": "Seitenleiste",
@@ -10655,7 +10655,8 @@
     "layout_move_down": "{{item}} nach unten verschieben",
     "layout_moved_up": "{{item}} nach oben verschoben",
     "layout_moved_down": "{{item}} nach unten verschoben",
-    "layout_fixed_spot": "Fester Platz: Über das Menü an einen anderen Ort verschieben"
+    "layout_fixed_spot": "Fester Platz: Über das Menü an einen anderen Ort verschieben",
+    "layout_fixed_short": "Fest"
   },
   "pages": {
     "agentsPage": {

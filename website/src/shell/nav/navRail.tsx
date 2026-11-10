@@ -172,7 +172,7 @@ export function ShellNavRail({ shell }: { shell: AppShell }) {
                   icon now has its own reserved room (railChrome). A divider
                   here cost the wordmark its space. */}
               {historyPlace === 'sidebar' && (
-                <WidgetSlot id={HISTORY_ITEM}>
+                <WidgetSlot id={HISTORY_ITEM} gutter>
                   <NavHistoryArrows vertical={effectiveCollapsed} />
                 </WidgetSlot>
               )}
@@ -284,7 +284,7 @@ export function ShellNavRail({ shell }: { shell: AppShell }) {
               {/* The profile row starts the account area: a divider above it. */}
               {profilePlace === 'sidebar' && (<>
                 <div aria-hidden="true" className="h-px bg-border mx-1 my-1" />
-                <WidgetSlot id={PROFILE_ITEM} className="w-full [&>div]:w-full">
+                <WidgetSlot id={PROFILE_ITEM} gutter className="w-full [&>div]:w-full">
                   <RailSettingsFlyout
                     settings={{ path: s.path, label: surfaceLabel(s), icon: s.icon }}
                     customize={{ path: cap.path, label: surfaceLabel(cap), icon: cap.icon }}

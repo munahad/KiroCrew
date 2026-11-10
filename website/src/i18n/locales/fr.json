@@ -10752,7 +10752,7 @@
     "rail_rename_group": "Renommer le groupe",
     "rail_palette_search": "Rechercher des pages, applications, coéquipiers et sessions",
     "rail_palette_no_results": "Aucun résultat pour « {{query}} »",
-    "layout_hint": "Fais glisser les éléments vers la barre supérieure, la barre latérale ou la barre inférieure, ou choisis un emplacement dans le menu de chaque élément.",
+    "layout_hint": "Fais glisser les éléments ou utilise leur menu",
     "layout_zone_top": "Barre supérieure",
     "layout_zone_bottom": "Barre inférieure",
     "layout_zone_sidebar": "Barre latérale",
@@ -10802,7 +10802,8 @@
     "layout_move_down": "Déplacer {{item}} vers le bas",
     "layout_moved_up": "Déplacé vers le haut : {{item}}",
     "layout_moved_down": "Déplacé vers le bas : {{item}}",
-    "layout_fixed_spot": "Emplacement fixe : utilise le menu pour le déplacer ailleurs"
+    "layout_fixed_spot": "Emplacement fixe : utilise le menu pour le déplacer ailleurs",
+    "layout_fixed_short": "Fixe"
   },
   "pages": {
     "agentsPage": {

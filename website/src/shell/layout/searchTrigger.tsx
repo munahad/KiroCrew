@@ -139,7 +139,9 @@ export function SearchTrigger({ onOpen, launcherOwned, variant, collapsed = fals
         variant === 'top' ? 'w-[240px] max-w-full' : 'w-full mb-1.5'
       } ${editCls}`}
     >
-      {editing && <GripVertical size={12} aria-hidden="true" className="absolute left-0.5 top-1/2 -translate-y-1/2 text-muted opacity-0 group-hover/edit:opacity-100" />}
+      {/* In the sidebar the grip sits in the gutter, outside the field, so the
+          field keeps the same width as the rest of the sidebar while editing. */}
+      {editing && <GripVertical size={12} aria-hidden="true" className={`absolute top-1/2 -translate-y-1/2 text-muted opacity-0 group-hover/edit:opacity-100 ${variant === 'sidebar' ? '-left-2.5' : 'left-0.5'}`} />}
       <Search size={14} className="shrink-0" aria-hidden="true" />
       <span className="flex-1 min-w-0 truncate text-left text-[13px]">{placeholder}</span>
       <kbd className="shrink-0 px-1.5 py-px rounded border border-border bg-bg-elevated text-[10px] font-medium text-muted font-sans">{chord}</kbd>

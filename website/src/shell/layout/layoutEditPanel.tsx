@@ -17,7 +17,7 @@
  */
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
-import { ArrowLeftRight, Bell, ChevronDown, ChevronUp, CircleUserRound, EyeOff, GripVertical, PanelBottom, PanelTop, Pin, RectangleHorizontal, Lightbulb, Lock, MessageSquare, MonitorSmartphone, PanelLeft, Search, Smartphone, SquareTerminal, X } from 'lucide-react'
+import { ArrowLeftRight, Bell, ChevronDown, ChevronUp, CircleUserRound, EyeOff, GripVertical, PanelBottom, PanelTop, RectangleHorizontal, Lightbulb, Lock, MessageSquare, MonitorSmartphone, PanelLeft, Search, Smartphone, SquareTerminal, X } from 'lucide-react'
 
 import CrewAvatar from '../../components/CrewAvatar'
 import {
@@ -275,7 +275,9 @@ export function LayoutEditPanel({ groups, hidden, meta }: {
       <header className="flex items-start gap-2 px-4 pt-3 pb-2 border-b border-border">
         <div className="flex-1 min-w-0">
           <h2 className="m-0 text-[15px] font-semibold text-text">{i18nT('nav.rail_customize_title')}</h2>
-          <p className="mt-1 mb-0 text-[12px] text-muted">{i18nT('nav.layout_hint')}</p>
+          {/* One line: a longer translation shortens with "…" and the full
+              hint stays in the tooltip. */}
+          <p className="mt-1 mb-0 text-[12px] text-muted truncate" title={i18nT('nav.layout_hint')}>{i18nT('nav.layout_hint')}</p>
         </div>
         <button
           type="button"
@@ -288,8 +290,32 @@ export function LayoutEditPanel({ groups, hidden, meta }: {
         </button>
       </header>
 
-      <div className="px-4 pt-3 flex flex-col gap-2">
-        <label className="flex items-center gap-2 px-3 py-1.5 rounded-lg border border-border bg-bg focus-within:border-accent">
+      {/* One row: the category filter as a compact dropdown, then search. The
+          chips it replaces wrapped onto a second line and cost height. */}
+      <div className="px-4 pt-3 flex items-center gap-2">
+        <DropdownMenu modal={false}>
+          <DropdownMenuTrigger asChild>
+            <button
+              type="button"
+              aria-label={`${i18nT('nav.layout_categories')}: ${categoryLabel(category)}`}
+              className="shrink-0 h-[34px] flex items-center gap-1 pl-2.5 pr-1.5 rounded-lg border border-border bg-bg text-[13px] text-text hover:bg-bg-hover cursor-pointer data-[state=open]:bg-bg-hover"
+            >
+              {categoryLabel(category)}
+              <ChevronDown size={13} aria-hidden="true" className="text-muted" />
+            </button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="start" className="min-w-[160px]">
+            <DropdownMenuRadioGroup value={category} onValueChange={v => setCategory(v as Category)}>
+              {CATEGORIES.filter(c => c === 'all' || counts[c] > 0).map(c => (
+                <DropdownMenuRadioItem key={c} value={c}>
+                  <span className="flex-1">{categoryLabel(c)}</span>
+                  <span className="ml-3 text-muted">{counts[c]}</span>
+                </DropdownMenuRadioItem>
+              ))}
+            </DropdownMenuRadioGroup>
+          </DropdownMenuContent>
+        </DropdownMenu>
+        <label className="flex-1 min-w-0 flex items-center gap-2 px-3 py-1.5 rounded-lg border border-border bg-bg focus-within:border-accent">
           <Search size={14} className="text-muted shrink-0" aria-hidden="true" />
           <input
             value={query}
@@ -299,20 +325,6 @@ export function LayoutEditPanel({ groups, hidden, meta }: {
             className="flex-1 min-w-0 bg-transparent border-none outline-none text-[13px] text-text placeholder:text-muted"
           />
         </label>
-        <div role="tablist" aria-label={i18nT('nav.layout_categories')} className="flex flex-wrap gap-1">
-          {CATEGORIES.filter(c => c === 'all' || counts[c] > 0).map(c => (
-            <button
-              key={c}
-              type="button"
-              role="tab"
-              aria-selected={category === c}
-              onClick={() => setCategory(c)}
-              className={`px-2 py-0.5 rounded-full text-[11px] border cursor-pointer ${category === c ? 'bg-accent text-accent-fg border-accent' : 'bg-transparent text-muted border-border hover:text-text'}`}
-            >
-              {categoryLabel(c)} <span className="opacity-70">{counts[c]}</span>
-            </button>
-          ))}
-        </div>
       </div>
 
       <ul className="m-0 mt-2 px-2 pb-2 list-none flex-1 min-h-0 overflow-y-auto">
@@ -355,6 +367,8 @@ export function LayoutEditPanel({ groups, hidden, meta }: {
                 <span className="block truncate text-[13px] text-text" title={x.meta.label}>{x.meta.label}</span>
                 <span className="block text-[11px] text-muted">
                   {categoryLabel(x.category)}{x.detail && repeated.has(x.meta.label) ? ` · ${x.detail}` : ''}
+                  {/* Why this row has no Move up / Move down, said in words. */}
+                  {at !== 'none' && isTwoPlaceItem(x.id) && <span title={i18nT('nav.layout_fixed_spot')}>{' · '}{i18nT('nav.layout_fixed_short')}</span>}
                 </span>
               </span>
               {/* Search only: field or icon, as a two-icon toggle on the row
@@ -385,17 +399,9 @@ export function LayoutEditPanel({ groups, hidden, meta }: {
                   on hidden items (no order) or on fixed-slot items (search,
                   remote Crews, Back/Forward, "You", status), which move between
                   places with the menu but keep their own spot within one. */}
-              {/* Fixed-spot items: a pin where the arrows would be, saying why
-                  they do not reorder (they still move between places). */}
-              {at !== 'none' && isTwoPlaceItem(x.id) && (
-                <span
-                  className="shrink-0 w-12 h-6 flex items-center justify-center text-muted"
-                  title={i18nT('nav.layout_fixed_spot')}
-                >
-                  <Pin size={12} aria-hidden="true" />
-                  <span className="sr-only">{i18nT('nav.layout_fixed_spot')}</span>
-                </span>
-              )}
+              {/* Fixed-spot items: an empty slot where the arrows would be, so
+                  every row's menu button lines up. */}
+              {at !== 'none' && isTwoPlaceItem(x.id) && <span className="shrink-0 w-12" aria-hidden="true" />}
               {at !== 'none' && !isTwoPlaceItem(x.id) && (
                 <span className="shrink-0 flex items-center">
                   {([-1, 1] as const).map(d => (

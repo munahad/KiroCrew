@@ -923,6 +923,7 @@
     "crewEditorNext.band_remove_stale": "Error in the mate abilities view when Remove is refused because the displayed revision changed; nothing was removed, the list refreshes, and the user must check it and press the Remove button again.",
     "nav.layout_cat_all": "Edit layout panel: the first filter chip, showing every item that can be placed. \"All items\" sense, not \"everyone\".",
     "nav.profile_menu_name": "The label on the user's own profile button at the bottom of the sidebar, which opens the profile menu. Refers to the person using the app (\"me\"), shown beside their avatar.",
-    "nav.profile_ok": "Button that closes a small prototype notice in the profile menu. Acknowledge sense (\"Got it\"), not approve."
+    "nav.profile_ok": "Button that closes a small prototype notice in the profile menu. Acknowledge sense (\"Got it\"), not approve.",
+    "nav.layout_fixed_short": "Edit layout panel: a short tag on the second line of a row whose item keeps a fixed spot within its place (it can move between places with the menu, but not up or down). Adjective, \"fixed in position\"; not \"repaired\"."
   }
 }

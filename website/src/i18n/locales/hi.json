@@ -10605,7 +10605,7 @@
     "rail_rename_group": "समूह का नाम बदलो",
     "rail_palette_search": "पेज, ऐप्स, साथी और सत्र खोजो",
     "rail_palette_no_results": "“{{query}}” से कुछ मेल नहीं खाता",
-    "layout_hint": "आइटम को ऊपरी बार, साइडबार या निचले बार पर खींचो, या हर आइटम के मेनू से जगह चुनो।",
+    "layout_hint": "आइटम खींचकर रखो, या हर आइटम का मेनू इस्तेमाल करो",
     "layout_zone_top": "ऊपरी बार",
     "layout_zone_bottom": "निचला बार",
     "layout_zone_sidebar": "साइडबार",
@@ -10655,7 +10655,8 @@
     "layout_move_down": "{{item}} को नीचे ले जाओ",
     "layout_moved_up": "{{item}} ऊपर ले जाया गया",
     "layout_moved_down": "{{item}} नीचे ले जाया गया",
-    "layout_fixed_spot": "तय जगह: इसे दूसरी जगह ले जाने के लिए मेनू इस्तेमाल करो"
+    "layout_fixed_spot": "तय जगह: इसे दूसरी जगह ले जाने के लिए मेनू इस्तेमाल करो",
+    "layout_fixed_short": "तय"
   },
   "pages": {
     "agentsPage": {
