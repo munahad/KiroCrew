@@ -10654,7 +10654,8 @@
     "layout_move_up": "{{item}} উপরে সরাও",
     "layout_move_down": "{{item}} নিচে সরাও",
     "layout_moved_up": "{{item}} উপরে সরানো হয়েছে",
-    "layout_moved_down": "{{item}} নিচে সরানো হয়েছে"
+    "layout_moved_down": "{{item}} নিচে সরানো হয়েছে",
+    "layout_fixed_spot": "নির্দিষ্ট জায়গা: অন্য জায়গায় সরাতে মেনু ব্যবহার করো"
   },
   "pages": {
     "agentsPage": {

@@ -10507,7 +10507,8 @@
     "layout_move_up": "将{{item}}上移",
     "layout_move_down": "将{{item}}下移",
     "layout_moved_up": "已将{{item}}上移",
-    "layout_moved_down": "已将{{item}}下移"
+    "layout_moved_down": "已将{{item}}下移",
+    "layout_fixed_spot": "固定位置：使用菜单将其移到其他位置"
   },
   "pages": {
     "agentsPage": {

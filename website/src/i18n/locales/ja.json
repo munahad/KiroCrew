@@ -10507,7 +10507,8 @@
     "layout_move_up": "{{item}}を上に移動",
     "layout_move_down": "{{item}}を下に移動",
     "layout_moved_up": "{{item}}を上に移動しました",
-    "layout_moved_down": "{{item}}を下に移動しました"
+    "layout_moved_down": "{{item}}を下に移動しました",
+    "layout_fixed_spot": "固定の位置：別の場所に移動するにはメニューを使います"
   },
   "pages": {
     "agentsPage": {

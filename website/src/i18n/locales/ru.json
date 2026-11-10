@@ -10948,7 +10948,8 @@
     "layout_move_up": "Переместить {{item}} вверх",
     "layout_move_down": "Переместить {{item}} вниз",
     "layout_moved_up": "{{item}}: перемещено вверх",
-    "layout_moved_down": "{{item}}: перемещено вниз"
+    "layout_moved_down": "{{item}}: перемещено вниз",
+    "layout_fixed_spot": "Фиксированное место: чтобы переместить в другое место, используйте меню"
   },
   "pages": {
     "agentsPage": {

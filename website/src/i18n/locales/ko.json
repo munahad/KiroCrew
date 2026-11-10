@@ -10507,7 +10507,8 @@
     "layout_move_up": "{{item}} 위로 이동",
     "layout_move_down": "{{item}} 아래로 이동",
     "layout_moved_up": "{{item}}을(를) 위로 이동했습니다",
-    "layout_moved_down": "{{item}}을(를) 아래로 이동했습니다"
+    "layout_moved_down": "{{item}}을(를) 아래로 이동했습니다",
+    "layout_fixed_spot": "고정 위치: 다른 곳으로 옮기려면 메뉴를 사용하세요"
   },
   "pages": {
     "agentsPage": {

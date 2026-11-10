@@ -4733,7 +4733,8 @@
     "layout_move_up": "Move {{item}} up",
     "layout_move_down": "Move {{item}} down",
     "layout_moved_up": "{{item}} moved up",
-    "layout_moved_down": "{{item}} moved down"
+    "layout_moved_down": "{{item}} moved down",
+    "layout_fixed_spot": "Fixed spot: use the menu to move it to another place"
   },
   "pages": {
     "aidlc": {

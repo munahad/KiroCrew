@@ -10801,7 +10801,8 @@
     "layout_move_up": "Déplacer {{item}} vers le haut",
     "layout_move_down": "Déplacer {{item}} vers le bas",
     "layout_moved_up": "Déplacé vers le haut : {{item}}",
-    "layout_moved_down": "Déplacé vers le bas : {{item}}"
+    "layout_moved_down": "Déplacé vers le bas : {{item}}",
+    "layout_fixed_spot": "Emplacement fixe : utilise le menu pour le déplacer ailleurs"
   },
   "pages": {
     "agentsPage": {

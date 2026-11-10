@@ -17,10 +17,12 @@
  */
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
-import { ArrowLeftRight, Bell, ChevronDown, ChevronUp, CircleUserRound, GripVertical, Lightbulb, Lock, MessageSquare, MonitorSmartphone, PanelLeft, Search, Smartphone, SquareTerminal, X } from 'lucide-react'
+import { ArrowLeftRight, Bell, ChevronDown, ChevronUp, CircleUserRound, EyeOff, GripVertical, PanelBottom, PanelTop, Pin, RectangleHorizontal, Lightbulb, Lock, MessageSquare, MonitorSmartphone, PanelLeft, Search, Smartphone, SquareTerminal, X } from 'lucide-react'
 
 import CrewAvatar from '../../components/CrewAvatar'
-import SimpleSelect from '../../components/SimpleSelect'
+import {
+  DropdownMenu, DropdownMenuContent, DropdownMenuRadioGroup, DropdownMenuRadioItem, DropdownMenuTrigger,
+} from '../../components/ui/dropdown-menu'
 import { OverlayPortal } from '../../components/overlayRoot'
 import { Btn } from '../../components/ui'
 import { membersRosterQuery } from '../../api/membersQuery'
@@ -33,7 +35,7 @@ import {
 } from '../../lib/railLayout'
 import {
   FEEDBACK_ITEM, HISTORY_ITEM, PHONE_ITEM, PROFILE_ITEM, REMOTE_ITEM, SEARCH_ITEM, removeFromBars, STATUS_ITEM, TERMINAL_ITEM, isTwoPlaceItem, announceLayout, isWindowToggle, moveItem, resetShellLayout, setLayoutEditing,
-  moveWithinBar, setSearchStyle, useLayoutAnnouncement, useSearchStyle, useShellPlacement, zoneOf, type SearchStyle, type ShellZone,
+  moveWithinBar, setSearchStyle, useLayoutAnnouncement, useSearchStyle, useShellPlacement, zoneOf, type ShellZone,
 } from '../../lib/shellLayout'
 import { useTerminalEnabled } from '../../utils/terminalRegistry'
 import { useRailWidth } from '../../hooks/useRailWidth'
@@ -87,6 +89,11 @@ function placesFor(_id: string, phone = false): (ShellZone | 'none')[] {
  *  bar, then everything not shown. Locked items follow under "Always here". */
 const SECTIONS: (ShellZone | 'none')[] = ['top', 'sidebar', 'bottom', 'none']
 const PHONE_SECTIONS: (ShellZone | 'none')[] = ['sidebar', 'none']
+/** Icon for a place: the sidebar, top bar, bottom bar, or not shown. */
+function PlaceIcon({ place }: { place: ShellZone | 'none' }) {
+  const Icon = place === 'top' ? PanelTop : place === 'bottom' ? PanelBottom : place === 'sidebar' ? PanelLeft : EyeOff
+  return <Icon size={13} aria-hidden="true" />
+}
 const placeLabel = (p: ShellZone | 'none') => (p === 'none' ? i18nT('nav.layout_zone_none') : zoneLabel(p))
 
 export function LayoutEditPanel({ groups, hidden, meta }: {
@@ -326,19 +333,23 @@ export function LayoutEditPanel({ groups, hidden, meta }: {
               {placeLabel(section)} <span className="opacity-70 normal-case">{rows.length}</span>
             </h3>
             <ul aria-labelledby={headingId} className="m-0 p-0 list-none">
-        {rows.map(x => {
+        {rows.map((x, i) => {
           const at = where(x.id)
+          // A hairline between fixed-spot rows and the rows you can reorder,
+          // so a first movable row does not look like it should move up.
+          const breakAbove = i > 0 && isTwoPlaceItem(x.id) !== isTwoPlaceItem(rows[i - 1].id)
           return (
             <li
               key={x.id}
               draggable
               onDragStart={e => startItemDrag(e, x.id)}
-              className="group/row relative flex flex-col gap-1 pl-3 pr-1.5 py-1.5 rounded-lg hover:bg-bg-hover cursor-grab active:cursor-grabbing"
+              className={`${breakAbove ? 'mt-1 before:content-[""] before:absolute before:-top-0.5 before:left-2 before:right-2 before:h-px before:bg-border' : ''} group/row relative flex flex-col gap-1 pl-3 pr-1.5 py-1.5 rounded-lg hover:bg-bg-hover cursor-grab active:cursor-grabbing`}
             >
+              <div className="relative flex items-center gap-2">
               {/* The grip overlays the row's left padding on hover instead of
-                  taking a column of its own, so the name gets that room. */}
-              <GripVertical size={12} className="absolute left-0.5 top-[13px] text-muted opacity-0 group-hover/row:opacity-100" aria-hidden="true" />
-              <div className="flex items-center gap-2">
+                  taking a column of its own, so the name gets that room.
+                  Centred on the row's first line. */}
+              <GripVertical size={12} className="absolute -left-2.5 top-1/2 -translate-y-1/2 text-muted opacity-0 group-hover/row:opacity-100" aria-hidden="true" />
               <span className="w-5 h-5 flex items-center justify-center shrink-0 text-muted">{x.meta.icon}</span>
               <span className="flex-1 min-w-0">
                 <span className="block truncate text-[13px] text-text" title={x.meta.label}>{x.meta.label}</span>
@@ -346,10 +357,45 @@ export function LayoutEditPanel({ groups, hidden, meta }: {
                   {categoryLabel(x.category)}{x.detail && repeated.has(x.meta.label) ? ` · ${x.detail}` : ''}
                 </span>
               </span>
+              {/* Search only: field or icon, as a two-icon toggle on the row
+                  itself (no second line). Each half names itself for screen
+                  readers and on hover; the pressed one is the current style. */}
+              {x.id === SEARCH_ITEM && (
+                <span role="group" aria-label={i18nT('nav.layout_show_as')} className="shrink-0 flex items-center p-0.5 rounded-md border border-border">
+                  {(['field', 'icon'] as const).map(style => (
+                    <button
+                      key={style}
+                      type="button"
+                      aria-pressed={searchStyle === style}
+                      aria-label={i18nT(style === 'icon' ? 'nav.layout_search_icon' : 'nav.layout_search_field')}
+                      title={i18nT(style === 'icon' ? 'nav.layout_search_icon' : 'nav.layout_search_field')}
+                      onClick={() => {
+                        if (searchStyle === style) return
+                        setSearchStyle(style)
+                        announceLayout(i18nT(style === 'icon' ? 'nav.layout_search_now_icon' : 'nav.layout_search_now_field'))
+                      }}
+                      className={`w-6 h-5 flex items-center justify-center rounded border-none cursor-pointer ${searchStyle === style ? 'bg-bg-hover text-text' : 'bg-transparent text-muted hover:text-text'}`}
+                    >
+                      {style === 'icon' ? <Search size={12} /> : <RectangleHorizontal size={13} />}
+                    </button>
+                  ))}
+                </span>
+              )}
               {/* Move up / Move down: reorder without dragging (WCAG 2.5.7). Not
                   on hidden items (no order) or on fixed-slot items (search,
                   remote Crews, Back/Forward, "You", status), which move between
                   places with the menu but keep their own spot within one. */}
+              {/* Fixed-spot items: a pin where the arrows would be, saying why
+                  they do not reorder (they still move between places). */}
+              {at !== 'none' && isTwoPlaceItem(x.id) && (
+                <span
+                  className="shrink-0 w-12 h-6 flex items-center justify-center text-muted"
+                  title={i18nT('nav.layout_fixed_spot')}
+                >
+                  <Pin size={12} aria-hidden="true" />
+                  <span className="sr-only">{i18nT('nav.layout_fixed_spot')}</span>
+                </span>
+              )}
               {at !== 'none' && !isTwoPlaceItem(x.id) && (
                 <span className="shrink-0 flex items-center">
                   {([-1, 1] as const).map(d => (
@@ -367,36 +413,34 @@ export function LayoutEditPanel({ groups, hidden, meta }: {
                   ))}
                 </span>
               )}
-              {/* The app's own dropdown (themed), kept out of the row's drag. */}
-              <SimpleSelect
-                options={placesFor(x.id, phone)}
-                optionLabels={placesFor(x.id, phone).map(placeLabel)}
-                value={at}
-                onChange={v => place(x.id, v as ShellZone | 'none', x.meta.label)}
-                aria-label={i18nT('nav.layout_show_in', { item: x.meta.label })}
-                className={`!w-auto shrink-0 max-w-[120px] h-6 px-1.5 py-0 text-[11px] ${at === 'none' ? 'text-muted' : 'border-accent/50 text-text'}`}
-                contentClassName="min-w-[120px]"
-              />
+              {/* Where it goes: a compact menu button, not a dropdown showing the
+                  current place, because the section heading already says that.
+                  The menu ticks the current place. */}
+              <DropdownMenu modal={false}>
+                <DropdownMenuTrigger asChild>
+                  <button
+                    type="button"
+                    aria-label={i18nT('nav.layout_show_in', { item: x.meta.label })}
+                    title={i18nT('nav.layout_show_in', { item: x.meta.label })}
+                    className="shrink-0 h-6 pl-1 pr-0.5 flex items-center gap-0.5 rounded-md border border-border bg-bg text-muted hover:text-text hover:bg-bg-hover cursor-pointer data-[state=open]:bg-bg-hover data-[state=open]:text-text"
+                  >
+                    {/* The current place as an icon, so the button shows what is
+                        selected without repeating the section's name in words. */}
+                    <PlaceIcon place={at} />
+                    <ChevronDown size={11} aria-hidden="true" />
+                  </button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" className="min-w-[140px]">
+                  <DropdownMenuRadioGroup value={at} onValueChange={v => place(x.id, v as ShellZone | 'none', x.meta.label)}>
+                    {placesFor(x.id, phone).map(p => (
+                      <DropdownMenuRadioItem key={p} value={p}>
+                        <span className="inline-flex items-center gap-2"><PlaceIcon place={p} />{placeLabel(p)}</span>
+                      </DropdownMenuRadioItem>
+                    ))}
+                  </DropdownMenuRadioGroup>
+                </DropdownMenuContent>
+              </DropdownMenu>
               </div>
-              {/* Search only: draw it as the full field or the icon alone. */}
-              {x.id === SEARCH_ITEM && (
-                <div className="flex items-center gap-2 pl-7 pb-0.5">
-                  <label htmlFor="layout-search-style" className="flex-1 text-[11px] text-muted">{i18nT('nav.layout_show_as')}</label>
-                  <SimpleSelect
-                    id="layout-search-style"
-                    options={['field', 'icon']}
-                    optionLabels={[i18nT('nav.layout_search_field'), i18nT('nav.layout_search_icon')]}
-                    value={searchStyle}
-                    onChange={v => {
-                      const style = v as SearchStyle
-                      setSearchStyle(style)
-                      announceLayout(i18nT(style === 'icon' ? 'nav.layout_search_now_icon' : 'nav.layout_search_now_field'))
-                    }}
-                    className="!w-auto shrink-0 max-w-[120px] h-6 px-1.5 py-0 text-[11px] text-text"
-                    contentClassName="min-w-[120px]"
-                  />
-                </div>
-              )}
             </li>
           )
         })}

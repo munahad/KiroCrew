@@ -10654,7 +10654,8 @@
     "layout_move_up": "{{item}} nach oben verschieben",
     "layout_move_down": "{{item}} nach unten verschieben",
     "layout_moved_up": "{{item}} nach oben verschoben",
-    "layout_moved_down": "{{item}} nach unten verschoben"
+    "layout_moved_down": "{{item}} nach unten verschoben",
+    "layout_fixed_spot": "Fester Platz: Über das Menü an einen anderen Ort verschieben"
   },
   "pages": {
     "agentsPage": {
