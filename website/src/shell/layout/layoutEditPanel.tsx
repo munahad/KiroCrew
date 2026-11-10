@@ -338,10 +338,11 @@ export function LayoutEditPanel({ groups, hidden, meta }: {
                   {categoryLabel(x.category)}{x.detail && repeated.has(x.meta.label) ? ` · ${x.detail}` : ''}
                 </span>
               </span>
-              {/* Move up / Move down: reorder without dragging (WCAG 2.5.7). Not
-                  for hidden items, which have no order, or widgets, which keep
-                  fixed slots. */}
-              {at !== 'none' && !isTwoPlaceItem(x.id) && (
+              {/* Move up / Move down: reorder without dragging (WCAG 2.5.7). On
+                  every placed row, so the control is always findable; greyed
+                  where the row cannot move (a widget's fixed slot, or the end of
+                  its group or bar). Not shown items have no order, so none. */}
+              {at !== 'none' && (
                 <span className="shrink-0 flex items-center">
                   {([-1, 1] as const).map(d => (
                     <button
