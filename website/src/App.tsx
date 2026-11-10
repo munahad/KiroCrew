@@ -89,7 +89,6 @@ import { ShellHeader } from './shell/topbar/shellHeader'
 import { ShellStatusBar } from './shell/statusbar/shellStatusBar'
 import { useLayoutEditing, useShellPlacement, useTopBarHasContent } from './lib/shellLayout'
 import { LayoutZoneOutlines } from './shell/layout/layoutZones'
-import { LAYOUT_PANEL_ROOM } from './shell/layout/layoutEditPanel'
 import { ShellNavRail } from './shell/nav/navRail'
 import { NavItem, NavBadge } from './shell/nav/navRow'
 
@@ -334,10 +333,12 @@ export default function App() {
   // the top of the window, so there is one bar, not two.
   const topBarHasContent = useTopBarHasContent()
   const hideTopBar = !isMobile && !focusActive && !layoutEditing && !topBarHasContent && !updateAvailable
-  // The page steps back while editing: half opacity, slightly greyed. The
-  // chrome you can edit (outlined bars, the panel) stays at full strength.
+  // The page steps back while editing: dimmed well down and greyed, so the
+  // chrome you can edit (the raised bars and sidebar) and the Edit layout
+  // panel floating over the page read as the editor, not as the page.
   const pageEditStyle: React.CSSProperties = editRoom
-    ? { opacity: 0.5, filter: 'grayscale(0.6)', transition: 'opacity 150ms ease, filter 150ms ease' }
+    // Washed out and softly blurred, as in Gary's Customize rail window.
+    ? { opacity: 0.25, filter: 'blur(3px) grayscale(0.6)', transition: 'opacity 150ms ease, filter 150ms ease' }
     : { transition: 'opacity 150ms ease, filter 150ms ease' }
   // "Run in terminal" from a code block outside every chat, on any route.
   const runInTerminal = useRunInTerminalShellBridge(activeSlotProject, !isPopout && !isEmbed)
@@ -669,7 +670,7 @@ export default function App() {
           Activity panel here on desktop so it spans the window top-to-bottom
           instead of sitting below the header row. Empty (0 width) when the
           panel is closed or on non-chat routes. */}
-      {!isMobile && <div id="activity-bar-slot" className="h-full min-h-0 min-w-0" style={{ gridArea: 'actbar', ...(editRoom ? { marginRight: LAYOUT_PANEL_ROOM } : {}), ...pageEditStyle }} {...(editRoom ? { inert: '' } : {})} />}
+      {!isMobile && <div id="activity-bar-slot" className="h-full min-h-0 min-w-0" style={{ gridArea: 'actbar', ...pageEditStyle }} {...(editRoom ? { inert: '' } : {})} />}
 
       {/* Skip to content — visible only on focus for keyboard users */}
       <a href="#main-content" className="sr-only focus:not-sr-only focus:fixed focus:top-2 focus:left-2 focus:z-[9999] focus:px-4 focus:py-2 focus:rounded-lg focus:bg-accent focus:text-accent-fg focus:text-sm focus:font-medium">{i18nT('app.skip_to_content')}</a>
@@ -804,7 +805,7 @@ export default function App() {
             paddingLeft: FOCUS_INSET,
             transition: 'padding-left 150ms cubic-bezier(0.2, 0, 0, 1)',
           }
-          : { gridArea: 'content', ...(editRoom && bottomDock ? { marginRight: LAYOUT_PANEL_ROOM } : {}), ...pageEditStyle }}
+          : { gridArea: 'content', ...pageEditStyle }}
         // Design exploration: while editing the layout the page is background,
         // so it is skipped by clicks, the keyboard and screen readers (`inert`).
         {...(editRoom ? { inert: '' } : {})}

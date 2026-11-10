@@ -1,9 +1,11 @@
 /**
  * "Edit layout" in place (design exploration).
  *
- * The real canvas becomes editable: the top bar, the sidebar and the bottom
- * bar show dashed drop outlines, and this panel docks on the right WITHOUT
- * dimming anything, so every change shows live at real size. It lists
+ * The real canvas becomes editable: the page dims, the top bar, the sidebar
+ * and the bottom bar are raised above it as drop zones, and this panel floats
+ * in the middle of the page area (feedback: docked on the right between the
+ * bars, it read as part of the layout being edited). Every change still shows
+ * live, at real size, in the raised chrome. It lists
  * everything that can go on the canvas (pages, apps, mates, sessions, the
  * terminal and phone toggles). Each item can be dragged onto a bar, or placed
  * with its "Show in" menu, which is the keyboard and screen-reader path for
@@ -34,12 +36,11 @@ import {
   setSearchStyle, useLayoutAnnouncement, useSearchStyle, useShellPlacement, zoneOf, type SearchStyle, type ShellZone,
 } from '../../lib/shellLayout'
 import { useTerminalEnabled } from '../../utils/terminalRegistry'
+import { useRailWidth } from '../../hooks/useRailWidth'
 import type { RailItemMeta } from '../nav/railCustomize'
 import { canSitInBar } from './shellItems'
 import { startItemDrag, zoneLabel } from './barItems'
 
-/** Room the middle row gives up while editing: panel width plus its 12px inset and a 12px gap. */
-export const LAYOUT_PANEL_ROOM = 344
 
 /** Items that never move, listed so their place reads as deliberate. */
 const LOCKED: { key: string; icon: JSX.Element; zone: 'sidebar' | 'top' }[] = [
@@ -94,6 +95,7 @@ export function LayoutEditPanel({ groups, hidden, meta, isApp, setAppPinned }: {
   const [query, setQuery] = useState('')
   const [category, setCategory] = useState<Category>('all')
   const placement = useShellPlacement()
+  const railWidth = useRailWidth()
   const searchStyle = useSearchStyle()
   const announcement = useLayoutAnnouncement()
   const terminalEnabled = useTerminalEnabled()
@@ -170,14 +172,20 @@ export function LayoutEditPanel({ groups, hidden, meta, isApp, setAppPinned }: {
   // remote Crew is in front.
   return (
     <OverlayPortal>
+    {/* Floats in the middle of the page area (right of the sidebar), over the
+        dimmed page, so it reads as a tool laid over the layout rather than as
+        one more part of it. The frame lets clicks through to the bars; only the
+        panel itself takes them. */}
+    <div
+      className="fixed inset-y-0 right-0 z-[60] flex items-center justify-center p-16 pointer-events-none"
+      style={{ left: railWidth }}
+    >
     <aside
       ref={panelRef}
       tabIndex={-1}
       role="region"
       aria-label={i18nT('nav.rail_customize_title')}
-      // Docked over the page area only: below the top bar, above the bottom bar,
-      // so both stay visible while you edit them. No backdrop, nothing dims.
-      className="fixed right-safe mr-3 top-safe-offset-[50px] bottom-safe-offset-[34px] z-[60] w-[320px] flex flex-col rounded-xl border border-border bg-bg-elevated text-text shadow-xl outline-none"
+      className="pointer-events-auto w-[360px] max-w-full h-[min(560px,100%)] flex flex-col rounded-2xl border border-border bg-bg-elevated text-text shadow-2xl outline-none"
       data-testid="layout-edit-panel"
     >
       <header className="flex items-start gap-2 px-4 pt-3 pb-2 border-b border-border">
@@ -310,6 +318,7 @@ export function LayoutEditPanel({ groups, hidden, meta, isApp, setAppPinned }: {
       {/* Moves, read out to screen readers. */}
       <div role="status" aria-live="polite" className="sr-only">{announcement}</div>
     </aside>
+    </div>
     </OverlayPortal>
   )
 }

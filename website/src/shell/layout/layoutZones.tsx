@@ -5,6 +5,9 @@
  * spans the WHOLE area: the top bar edge to edge, the sidebar top to bottom,
  * the bottom bar edge to edge.
  *
+ * The page under them is dimmed (App.tsx), and each zone casts a lifted
+ * shadow, so the zones read as raised above it.
+ *
  * While an item is dragged (a native drag from the panel or a bar, or a
  * dnd-kit drag of a sidebar row, which the rail reports through
  * `setChromeDrag`), each zone shows its name, and:
@@ -92,9 +95,15 @@ function ZoneOutline({ zone, area, dragging, nativeDrag, allowed, over, lineX }:
       aria-hidden="true"
       data-layout-outline={zone}
       style={{ gridArea: area, zIndex: 70, pointerEvents: catches ? 'auto' : 'none' }}
-      className={`relative rounded-lg border-2 border-dashed transition-colors ${
+      // Raised above the dimmed page (a lifted shadow and a full-strength
+      // outline), so the three places you can edit stand out as the editor.
+      className={`relative rounded-lg border-2 border-dashed transition-[border-color,background-color,box-shadow] ${
         zone === 'sidebar' ? 'mx-1 mb-1' : zone === 'top' ? 'mx-1 my-0.5' : 'mx-1'
-      } ${unavailable ? 'border-border bg-bg-hover/60' : over ? 'border-accent bg-accent/10' : 'border-accent/50'}`}
+      } ${unavailable
+        ? 'border-border bg-bg-hover/60 shadow-none'
+        : over
+          ? 'border-accent bg-accent/10 shadow-[0_10px_28px_-6px_rgba(0,0,0,0.45)]'
+          : 'border-accent/80 shadow-[0_8px_22px_-8px_rgba(0,0,0,0.4)]'}`}
       {...(catches ? { onDragOver, onDragLeave, onDrop } : {})}
     >
       {/* Where the item will land: a line in the gap it snaps to. */}
