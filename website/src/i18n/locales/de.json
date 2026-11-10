@@ -10650,7 +10650,11 @@
     "profile_ok": "OK",
     "session_terminal_open": "Terminal für diese Sitzung öffnen",
     "session_terminal_close": "Terminal schließen",
-    "session_terminal_focus": "Terminalfenster anzeigen"
+    "session_terminal_focus": "Terminalfenster anzeigen",
+    "layout_move_up": "{{item}} nach oben verschieben",
+    "layout_move_down": "{{item}} nach unten verschieben",
+    "layout_moved_up": "{{item}} nach oben verschoben",
+    "layout_moved_down": "{{item}} nach unten verschoben"
   },
   "pages": {
     "agentsPage": {

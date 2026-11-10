@@ -10797,7 +10797,11 @@
     "profile_ok": "OK",
     "session_terminal_open": "Abrir terminal desta sessão",
     "session_terminal_close": "Fechar terminal",
-    "session_terminal_focus": "Mostrar a janela do terminal"
+    "session_terminal_focus": "Mostrar a janela do terminal",
+    "layout_move_up": "Mover {{item}} para cima",
+    "layout_move_down": "Mover {{item}} para baixo",
+    "layout_moved_up": "Movido para cima: {{item}}",
+    "layout_moved_down": "Movido para baixo: {{item}}"
   },
   "pages": {
     "agentsPage": {

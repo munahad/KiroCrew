@@ -10650,7 +10650,11 @@
     "profile_ok": "ठीक है",
     "session_terminal_open": "इस सत्र का टर्मिनल खोलो",
     "session_terminal_close": "टर्मिनल बंद करो",
-    "session_terminal_focus": "टर्मिनल विंडो दिखाओ"
+    "session_terminal_focus": "टर्मिनल विंडो दिखाओ",
+    "layout_move_up": "{{item}} को ऊपर ले जाओ",
+    "layout_move_down": "{{item}} को नीचे ले जाओ",
+    "layout_moved_up": "{{item}} ऊपर ले जाया गया",
+    "layout_moved_down": "{{item}} नीचे ले जाया गया"
   },
   "pages": {
     "agentsPage": {

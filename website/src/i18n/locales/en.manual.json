@@ -4729,7 +4729,11 @@
     "settings": "Settings",
     "task_runner": "Task Runner",
     "webhooks": "Webhooks",
-    "crew_members": "Mates"
+    "crew_members": "Mates",
+    "layout_move_up": "Move {{item}} up",
+    "layout_move_down": "Move {{item}} down",
+    "layout_moved_up": "{{item}} moved up",
+    "layout_moved_down": "{{item}} moved down"
   },
   "pages": {
     "aidlc": {

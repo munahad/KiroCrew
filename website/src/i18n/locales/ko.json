@@ -10503,7 +10503,11 @@
     "profile_ok": "확인",
     "session_terminal_open": "이 세션의 터미널 열기",
     "session_terminal_close": "터미널 닫기",
-    "session_terminal_focus": "터미널 창 보기"
+    "session_terminal_focus": "터미널 창 보기",
+    "layout_move_up": "{{item}} 위로 이동",
+    "layout_move_down": "{{item}} 아래로 이동",
+    "layout_moved_up": "{{item}}을(를) 위로 이동했습니다",
+    "layout_moved_down": "{{item}}을(를) 아래로 이동했습니다"
   },
   "pages": {
     "agentsPage": {

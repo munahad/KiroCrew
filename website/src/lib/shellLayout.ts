@@ -226,6 +226,28 @@ export function zoneOf(id: string, placement: ShellPlacement, onSidebar: boolean
   return onSidebar ? 'sidebar' : null
 }
 
+/**
+ * Move an item one step earlier (-1) or later (+1) within the bar list it is
+ * in (top bar, bottom bar, or the sidebar's tool rows). The keyboard path for
+ * reordering (WCAG 2.5.7): the Edit layout panel's Move up and Move down.
+ * Returns whether it moved. Sidebar group rows reorder in the panel itself,
+ * against the visible groups.
+ */
+export function moveWithinBar(id: string, delta: -1 | 1): boolean {
+  const p = readShellPlacement()
+  for (const key of ['top', 'bottom', 'side'] as const) {
+    const i = p[key].indexOf(id)
+    if (i < 0) continue
+    const j = i + delta
+    if (j < 0 || j >= p[key].length) return false
+    const next = [...p[key]]
+    ;[next[i], next[j]] = [next[j], next[i]]
+    writeShellPlacement({ ...p, [key]: next })
+    return true
+  }
+  return false
+}
+
 /** Take `id` out of both bars. Returns whether it was in one. */
 export function removeFromBars(id: string): boolean {
   const p = readShellPlacement()

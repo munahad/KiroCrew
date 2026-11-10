@@ -17,7 +17,7 @@
  */
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
-import { ArrowLeftRight, Bell, CircleUserRound, GripVertical, Lightbulb, Lock, MessageSquare, MonitorSmartphone, PanelLeft, Search, Smartphone, SquareTerminal, X } from 'lucide-react'
+import { ArrowLeftRight, Bell, ChevronDown, ChevronUp, CircleUserRound, GripVertical, Lightbulb, Lock, MessageSquare, MonitorSmartphone, PanelLeft, Search, Smartphone, SquareTerminal, X } from 'lucide-react'
 
 import CrewAvatar from '../../components/CrewAvatar'
 import SimpleSelect from '../../components/SimpleSelect'
@@ -28,12 +28,12 @@ import { isAppNavId } from '../../appNotificationBadges'
 import { i18nT } from '../../i18n/t'
 import { useAppSelector } from '../../store'
 import {
-  MATE_PIN_PREFIX, SESSION_PIN_PREFIX, insertPin, isEntityPin, matePinId, removePin, sessionPinId, updateRail,
-  type RailGroup,
+  MATE_PIN_PREFIX, SESSION_PIN_PREFIX, applyVisibleOrder, insertPin, isEntityPin, matePinId, readRailLayout, removePin, sessionPinId,
+  updateRail, writeRailLayout, type RailGroup,
 } from '../../lib/railLayout'
 import {
   FEEDBACK_ITEM, HISTORY_ITEM, PHONE_ITEM, PROFILE_ITEM, REMOTE_ITEM, SEARCH_ITEM, removeFromBars, STATUS_ITEM, TERMINAL_ITEM, isTwoPlaceItem, announceLayout, isWindowToggle, moveItem, resetShellLayout, setLayoutEditing,
-  setSearchStyle, useLayoutAnnouncement, useSearchStyle, useShellPlacement, zoneOf, type SearchStyle, type ShellZone,
+  moveWithinBar, setSearchStyle, useLayoutAnnouncement, useSearchStyle, useShellPlacement, zoneOf, type SearchStyle, type ShellZone,
 } from '../../lib/shellLayout'
 import { useTerminalEnabled } from '../../utils/terminalRegistry'
 import { useRailWidth } from '../../hooks/useRailWidth'
@@ -171,6 +171,45 @@ export function LayoutEditPanel({ groups, hidden, meta }: {
     return new Set([...n].filter(([, c]) => c > 1).map(([l]) => l))
   }, [candidates])
 
+  /** Where a row sits in its place, so each section lists items in the order
+   *  the canvas shows them (widgets, which have fixed slots, come first). */
+  const flat = useMemo(() => groups.flatMap(g => g.items), [groups])
+  const orderOf = (id: string, section: ShellZone | 'none'): number => {
+    if (isTwoPlaceItem(id)) return -1
+    if (section === 'top') return placement.top.indexOf(id)
+    if (section === 'bottom') return placement.bottom.indexOf(id)
+    if (section === 'sidebar') return placement.side.includes(id) ? 10_000 + placement.side.indexOf(id) : flat.indexOf(id)
+    return 0
+  }
+  /** Can this row move one step? Widgets keep fixed slots; sidebar rows move
+   *  within their own group; bar items within their bar. */
+  const canStep = (id: string, delta: -1 | 1): boolean => {
+    if (isTwoPlaceItem(id)) return false
+    for (const list of [placement.top, placement.bottom, placement.side]) {
+      const i = list.indexOf(id)
+      if (i >= 0) return i + delta >= 0 && i + delta < list.length
+    }
+    const g = groups.find(x => x.items.includes(id))
+    if (!g) return false
+    const i = g.items.indexOf(id)
+    return i + delta >= 0 && i + delta < g.items.length
+  }
+  const step = (id: string, delta: -1 | 1, label: string) => {
+    let moved = moveWithinBar(id, delta)
+    if (!moved) {
+      const g = groups.find(x => x.items.includes(id))
+      const i = g ? g.items.indexOf(id) : -1
+      if (g && i + delta >= 0 && i + delta < g.items.length) {
+        const items = [...g.items]
+        ;[items[i], items[i + delta]] = [items[i + delta], items[i]]
+        // Same write the sidebar's own drag-reorder uses.
+        writeRailLayout(applyVisibleOrder(readRailLayout(), groups.map(x => (x === g ? { ...x, items } : x))))
+        moved = true
+      }
+    }
+    if (moved) announceLayout(i18nT(delta < 0 ? 'nav.layout_moved_up' : 'nav.layout_moved_down', { item: label }))
+  }
+
   const where = (id: string): ShellZone | 'none' => {
     const z = zoneOf(id, placement, onSidebar.has(id)) ?? 'none'
     // On the phone an item a desktop window put in a bar is simply not shown.
@@ -272,7 +311,7 @@ export function LayoutEditPanel({ groups, hidden, meta }: {
             leaving what looks like a copy behind. Each section is a labelled
             list, so screen readers hear the place before its items. */}
         {(phone ? PHONE_SECTIONS : SECTIONS).map(section => {
-          const rows = shown.filter(x => where(x.id) === section)
+          const rows = shown.filter(x => where(x.id) === section).sort((a, b) => orderOf(a.id, section) - orderOf(b.id, section))
           if (rows.length === 0) return null
           const headingId = `layout-section-${section}`
           return (
@@ -299,6 +338,26 @@ export function LayoutEditPanel({ groups, hidden, meta }: {
                   {categoryLabel(x.category)}{x.detail && repeated.has(x.meta.label) ? ` · ${x.detail}` : ''}
                 </span>
               </span>
+              {/* Move up / Move down: reorder without dragging (WCAG 2.5.7). Not
+                  for hidden items, which have no order, or widgets, which keep
+                  fixed slots. */}
+              {at !== 'none' && !isTwoPlaceItem(x.id) && (
+                <span className="shrink-0 flex items-center">
+                  {([-1, 1] as const).map(d => (
+                    <button
+                      key={d}
+                      type="button"
+                      disabled={!canStep(x.id, d)}
+                      onClick={() => step(x.id, d, x.meta.label)}
+                      aria-label={i18nT(d < 0 ? 'nav.layout_move_up' : 'nav.layout_move_down', { item: x.meta.label })}
+                      title={i18nT(d < 0 ? 'nav.layout_move_up' : 'nav.layout_move_down', { item: x.meta.label })}
+                      className="w-6 h-6 flex items-center justify-center rounded-md bg-transparent border-none text-muted hover:text-text hover:bg-bg-hover cursor-pointer disabled:opacity-30 disabled:pointer-events-none"
+                    >
+                      {d < 0 ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
+                    </button>
+                  ))}
+                </span>
+              )}
               {/* The app's own dropdown (themed), kept out of the row's drag. */}
               <SimpleSelect
                 options={placesFor(x.id, phone)}

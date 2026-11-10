@@ -10503,7 +10503,11 @@
     "profile_ok": "OK",
     "session_terminal_open": "このセッションのターミナルを開く",
     "session_terminal_close": "ターミナルを閉じる",
-    "session_terminal_focus": "ターミナルウィンドウを表示"
+    "session_terminal_focus": "ターミナルウィンドウを表示",
+    "layout_move_up": "{{item}}を上に移動",
+    "layout_move_down": "{{item}}を下に移動",
+    "layout_moved_up": "{{item}}を上に移動しました",
+    "layout_moved_down": "{{item}}を下に移動しました"
   },
   "pages": {
     "agentsPage": {

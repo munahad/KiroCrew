@@ -10503,7 +10503,11 @@
     "profile_ok": "确定",
     "session_terminal_open": "打开此会话的终端",
     "session_terminal_close": "关闭终端",
-    "session_terminal_focus": "显示终端窗口"
+    "session_terminal_focus": "显示终端窗口",
+    "layout_move_up": "将{{item}}上移",
+    "layout_move_down": "将{{item}}下移",
+    "layout_moved_up": "已将{{item}}上移",
+    "layout_moved_down": "已将{{item}}下移"
   },
   "pages": {
     "agentsPage": {

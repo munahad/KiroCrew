@@ -10944,7 +10944,11 @@
     "profile_ok": "ОК",
     "session_terminal_open": "Открыть терминал для этой сессии",
     "session_terminal_close": "Закрыть терминал",
-    "session_terminal_focus": "Показать окно терминала"
+    "session_terminal_focus": "Показать окно терминала",
+    "layout_move_up": "Переместить {{item}} вверх",
+    "layout_move_down": "Переместить {{item}} вниз",
+    "layout_moved_up": "{{item}}: перемещено вверх",
+    "layout_moved_down": "{{item}}: перемещено вниз"
   },
   "pages": {
     "agentsPage": {

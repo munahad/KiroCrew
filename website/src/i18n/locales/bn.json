@@ -10650,7 +10650,11 @@
     "profile_ok": "ঠিক আছে",
     "session_terminal_open": "এই সেশনের টার্মিনাল খোলো",
     "session_terminal_close": "টার্মিনাল বন্ধ করো",
-    "session_terminal_focus": "টার্মিনাল উইন্ডো দেখাও"
+    "session_terminal_focus": "টার্মিনাল উইন্ডো দেখাও",
+    "layout_move_up": "{{item}} উপরে সরাও",
+    "layout_move_down": "{{item}} নিচে সরাও",
+    "layout_moved_up": "{{item}} উপরে সরানো হয়েছে",
+    "layout_moved_down": "{{item}} নিচে সরানো হয়েছে"
   },
   "pages": {
     "agentsPage": {
