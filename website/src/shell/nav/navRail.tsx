@@ -168,10 +168,11 @@ export function ShellNavRail({ shell }: { shell: AppShell }) {
               <div className="flex-1 min-w-0 w-full [&>div]:mb-0">
                 <RailBrandToggle effectiveCollapsed={effectiveCollapsed} toggleNav={toggleNav} avatar={avatar} branding={branding} botName={botName} />
               </div>
-              {/* A hairline and a little room set Back/Forward apart from the
-                  logo row's collapse control, so the row reads as two groups. */}
+              {/* Back/Forward sit right after the logo row, whose collapse
+                  icon now has its own reserved room (railChrome). A divider
+                  here cost the wordmark its space. */}
               {historyPlace === 'sidebar' && (
-                <WidgetSlot id={HISTORY_ITEM} className={effectiveCollapsed ? '' : 'ml-1 pl-1.5 border-l border-border h-7'}>
+                <WidgetSlot id={HISTORY_ITEM}>
                   <NavHistoryArrows vertical={effectiveCollapsed} />
                 </WidgetSlot>
               )}

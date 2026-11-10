@@ -189,8 +189,13 @@ export function LayoutEditPanel({ groups, hidden, meta }: {
         dimmed page, so it reads as a tool laid over the layout rather than as
         one more part of it. The frame lets clicks through to the bars; only the
         panel itself takes them. */}
+    {/* Sizing for every window (WCAG 1.4.10 Reflow, 1.4.4 Resize text): the
+        margin around the panel shrinks with the window (64px at most, 12px at
+        least), the panel is at most 360px wide and 560px tall and otherwise
+        fills what is left, and only its list scrolls, so the header, search and
+        Done always stay on screen, at 200% zoom too. */}
     <div
-      className="fixed inset-y-0 right-0 z-[60] flex items-center justify-center p-16 pointer-events-none"
+      className="fixed inset-y-0 right-0 z-[60] flex items-center justify-center pointer-events-none px-[clamp(12px,5vw,64px)] py-[clamp(12px,6vh,64px)]"
       style={{ left: railWidth }}
     >
     <aside
@@ -198,7 +203,7 @@ export function LayoutEditPanel({ groups, hidden, meta }: {
       tabIndex={-1}
       role="region"
       aria-label={i18nT('nav.rail_customize_title')}
-      className="pointer-events-auto w-[360px] max-w-full h-[min(560px,100%)] flex flex-col rounded-2xl border border-border bg-bg-elevated text-text shadow-2xl outline-none"
+      className="pointer-events-auto w-[360px] max-w-full h-[min(560px,100%)] min-h-0 flex flex-col rounded-2xl border border-border bg-bg-elevated text-text shadow-2xl outline-none overflow-hidden"
       data-testid="layout-edit-panel"
     >
       <header className="flex items-start gap-2 px-4 pt-3 pb-2 border-b border-border">

@@ -92,7 +92,9 @@ export function RailBrandToggle({ effectiveCollapsed, toggleNav, avatar, brandin
           brand block makes the row taller. */}
       <button
         type="button"
-        className={`group relative flex items-center gap-2 w-full p-0 bg-transparent border-none cursor-pointer text-left ${effectiveCollapsed ? 'justify-center' : ''}`}
+        // Expanded: right padding reserves the collapse icon's own room, so a
+        // tight row truncates the wordmark instead of drawing the icon over it.
+        className={`group relative flex items-center gap-2 w-full p-0 bg-transparent border-none cursor-pointer text-left ${effectiveCollapsed ? 'justify-center' : 'pr-5'}`}
         onClick={() => { dismissTip(); toggleNav() }}
         {...pointerProps}
         onMouseEnter={showTip}
