@@ -83,6 +83,9 @@ function placesFor(id: string): (ShellZone | 'none')[] {
   if (canSitInBar(id)) return ['sidebar', 'top', 'bottom', 'none']
   return ['sidebar', 'none']
 }
+/** Panel sections, in the order the canvas reads: top bar, sidebar, bottom
+ *  bar, then everything not shown. Locked items follow under "Always here". */
+const SECTIONS: (ShellZone | 'none')[] = ['top', 'sidebar', 'bottom', 'none']
 const placeLabel = (p: ShellZone | 'none') => (p === 'none' ? i18nT('nav.layout_zone_none') : zoneLabel(p))
 
 export function LayoutEditPanel({ groups, hidden, meta, isApp, setAppPinned }: {
@@ -235,7 +238,21 @@ export function LayoutEditPanel({ groups, hidden, meta, isApp, setAppPinned }: {
         {shown.length === 0 && (
           <li className="px-2 py-8 text-center text-[13px] text-muted">{i18nT('nav.rail_palette_no_results', { query: query.trim() })}</li>
         )}
-        {shown.map(x => {
+        {/* Grouped by where each item lives now, so the panel is a map of the
+            layout: moving an item moves its row to another section instead of
+            leaving what looks like a copy behind. Each section is a labelled
+            list, so screen readers hear the place before its items. */}
+        {SECTIONS.map(section => {
+          const rows = shown.filter(x => where(x.id) === section)
+          if (rows.length === 0) return null
+          const headingId = `layout-section-${section}`
+          return (
+          <li key={section} className="mt-1 first:mt-0">
+            <h3 id={headingId} className="m-0 mt-2 mb-1 mx-2 text-[11px] font-medium uppercase tracking-wide text-muted">
+              {placeLabel(section)} <span className="opacity-70 normal-case">{rows.length}</span>
+            </h3>
+            <ul aria-labelledby={headingId} className="m-0 p-0 list-none">
+        {rows.map(x => {
           const at = where(x.id)
           return (
             <li
@@ -282,6 +299,10 @@ export function LayoutEditPanel({ groups, hidden, meta, isApp, setAppPinned }: {
                 </div>
               )}
             </li>
+          )
+        })}
+            </ul>
+          </li>
           )
         })}
         {/* Always-here items, after everything you can move: their place and a
