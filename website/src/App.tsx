@@ -87,7 +87,7 @@ import { guideTarget } from './uiLocations/targetRegistry'
 import { useAppShell } from './shell/appShell'
 import { ShellHeader } from './shell/topbar/shellHeader'
 import { ShellStatusBar } from './shell/statusbar/shellStatusBar'
-import { useLayoutEditing, useShellPlacement, useTopBarHasContent } from './lib/shellLayout'
+import { useBarHasContent, useLayoutEditing, useTopBarHasContent } from './lib/shellLayout'
 import { LayoutZoneOutlines } from './shell/layout/layoutZones'
 import { ShellNavRail } from './shell/nav/navRail'
 import { NavItem, NavBadge } from './shell/nav/navRow'
@@ -306,9 +306,10 @@ export default function App() {
   const shell = useAppShell()
   // Design exploration: the bottom bar ships empty and is drawn only once the
   // user places something in it, or while "Edit layout" is on (a drop target).
-  const shellPlacement = useShellPlacement()
   const layoutEditing = useLayoutEditing()
-  const showBottomBar = shellPlacement.bottom.length > 0 || layoutEditing
+  // Drawn when anything is placed in it (items or widgets), or while editing.
+  const bottomBarHasContent = useBarHasContent('bottom')
+  const showBottomBar = bottomBarHasContent || layoutEditing
   const {
     isEmbed, isPopout, initialPopoutPath, updateAvailable, terminalEnabled, terminalPoppedOut,
     bottomTerminalOpen, mobileConnect, activeSlotProject, terminalPosition, navigate, mayLeaveForNavigation,

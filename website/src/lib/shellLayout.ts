@@ -11,8 +11,8 @@
  * something into it is how a user turns it on (the shell review's decision).
  * While editing, the bar is drawn anyway as a drop target.
  *
- * Prototype scope: the bars take built-in pages and the two window toggles
- * (terminal, phone). Mates, sessions and installed apps stay sidebar-only.
+ * Every item can go anywhere (top bar, sidebar, bottom bar) or nowhere,
+ * except the logo and sidebar toggle, which stay at the head of the sidebar.
  */
 import { useEffect, useState } from 'react'
 
@@ -22,7 +22,10 @@ import { insertPin, defaultGroupOf, readRailLayout, updateRail, resetRailLayout 
 export type ShellZone = 'sidebar' | 'top' | 'bottom'
 export type BarZone = Exclude<ShellZone, 'sidebar'>
 
-export interface ShellPlacement { top: string[]; bottom: string[] }
+/** `side`: window toggles (terminal, phone, feedback) placed in the sidebar.
+ *  They are actions, not pages, so they sit in their own row at the foot of
+ *  the sidebar instead of in its groups. */
+export interface ShellPlacement { top: string[]; bottom: string[]; side: string[] }
 
 /** Window toggles: not sidebar destinations, so they live in a bar or nowhere. */
 export const TERMINAL_ITEM = 'shell:terminal'
@@ -32,37 +35,62 @@ export const PHONE_ITEM = 'shell:phone'
 export const FEEDBACK_ITEM = 'shell:feedback'
 export const isWindowToggle = (id: string) => id === TERMINAL_ITEM || id === PHONE_ITEM || id === FEEDBACK_ITEM
 
-/** Items that live in exactly one of two places, the top bar or the sidebar,
- *  and are never hidden: search, and the status cluster (connection, usage,
- *  notifications). Both default to the SIDEBAR, so the shipped top bar is
- *  empty and hidden (an empty bar disappears, like the bottom bar); dragging
- *  either into the top bar brings it back. Stored on their own keys. */
+/** Shell widgets: controls with their own rendering in each place, rather
+ *  than a page link. Each lives in exactly one place (top bar, sidebar, bottom
+ *  bar) or nowhere, stored on its own key:
+ *  - search, the status cluster (connection, usage, notifications) and the
+ *    remote Crews switcher;
+ *  - Back/Forward and the profile menu ("You").
+ *  All default to the SIDEBAR, so the shipped top bar is empty and hidden (an
+ *  empty bar disappears, like the bottom bar). The logo and sidebar toggle are
+ *  the only fixed items. */
 export const SEARCH_ITEM = 'shell:search'
 export const STATUS_ITEM = 'shell:status'
-export type SearchPlace = 'top' | 'sidebar'
-export type TwoPlaceItem = typeof SEARCH_ITEM | typeof STATUS_ITEM
-export const isTwoPlaceItem = (id: string): id is TwoPlaceItem => id === SEARCH_ITEM || id === STATUS_ITEM
-const PLACE_KEY: Record<TwoPlaceItem, string> = { [SEARCH_ITEM]: 'mc-search-place', [STATUS_ITEM]: 'mc-status-place' }
+export const REMOTE_ITEM = 'shell:remote'
+export const HISTORY_ITEM = 'shell:history'
+export const PROFILE_ITEM = 'shell:profile'
+export type SearchPlace = ShellZone | 'none'
+export type WidgetPlace = SearchPlace
+export type WidgetItem = typeof SEARCH_ITEM | typeof STATUS_ITEM | typeof REMOTE_ITEM | typeof HISTORY_ITEM | typeof PROFILE_ITEM
+export type TwoPlaceItem = WidgetItem
+export const WIDGET_ITEMS: readonly WidgetItem[] = [SEARCH_ITEM, STATUS_ITEM, REMOTE_ITEM, HISTORY_ITEM, PROFILE_ITEM]
+export const isWidgetItem = (id: string): id is WidgetItem => (WIDGET_ITEMS as readonly string[]).includes(id)
+/** Older name, kept for existing call sites: now covers every widget. */
+export const isTwoPlaceItem = isWidgetItem
+const PLACE_KEY: Record<WidgetItem, string> = {
+  [SEARCH_ITEM]: 'mc-search-place',
+  [STATUS_ITEM]: 'mc-status-place',
+  [REMOTE_ITEM]: 'mc-remote-place',
+  [HISTORY_ITEM]: 'mc-history-place',
+  [PROFILE_ITEM]: 'mc-profile-place',
+}
 const PLACE_EVENT = 'mc:two-place-changed'
 
-/** Where search and status start. The prototype ships them in the SIDEBAR
- *  (top bar empty and hidden). Under the test runner the default stays the
- *  TOP BAR, so the existing shell tests, written against the shipped top bar,
- *  keep exercising it. The prototype's own default is checked by hand in the pod. */
-const DEFAULT_PLACE: SearchPlace = import.meta.env?.MODE === 'test' ? 'top' : 'sidebar'
+/** Where widgets start: the SIDEBAR (top bar empty and hidden). Under the test
+ *  runner, search, status and the remote switcher default to the TOP BAR, so the
+ *  existing shell tests, written against the shipped top bar, keep exercising
+ *  it. The prototype's own default is checked by hand in the pod. */
+const IN_TEST = import.meta.env?.MODE === 'test'
+const DEFAULT_PLACE: Record<WidgetItem, WidgetPlace> = {
+  [SEARCH_ITEM]: IN_TEST ? 'top' : 'sidebar',
+  [STATUS_ITEM]: IN_TEST ? 'top' : 'sidebar',
+  [REMOTE_ITEM]: IN_TEST ? 'top' : 'sidebar',
+  [HISTORY_ITEM]: 'sidebar',
+  [PROFILE_ITEM]: 'sidebar',
+}
 
-export function readPlace(id: TwoPlaceItem): SearchPlace {
+export function readPlace(id: WidgetItem): WidgetPlace {
   const v = safeGetItem(PLACE_KEY[id])
-  return v === 'top' || v === 'sidebar' ? v : DEFAULT_PLACE
+  return v === 'top' || v === 'sidebar' || v === 'bottom' || v === 'none' ? v : DEFAULT_PLACE[id]
 }
 export const readSearchPlace = () => readPlace(SEARCH_ITEM)
 
-function writePlace(id: TwoPlaceItem, place: SearchPlace): void {
+function writePlace(id: WidgetItem, place: WidgetPlace): void {
   safeSetItem(PLACE_KEY[id], place)
   window.dispatchEvent(new Event(PLACE_EVENT))
 }
 
-export function usePlace(id: TwoPlaceItem): SearchPlace {
+export function usePlace(id: WidgetItem): WidgetPlace {
   const [p, setP] = useState(() => readPlace(id))
   useEffect(() => {
     const sync = () => setP(readPlace(id))
@@ -77,6 +105,9 @@ export function usePlace(id: TwoPlaceItem): SearchPlace {
 }
 export const useSearchPlace = () => usePlace(SEARCH_ITEM)
 export const useStatusPlace = () => usePlace(STATUS_ITEM)
+export const useRemotePlace = () => usePlace(REMOTE_ITEM)
+export const useHistoryPlace = () => usePlace(HISTORY_ITEM)
+export const useProfilePlace = () => usePlace(PROFILE_ITEM)
 
 /** How search is drawn: the full field (default) or only its magnifier icon.
  *  Set from the search row in Edit layout; applies wherever search lives. In
@@ -111,10 +142,35 @@ export function useSearchStyle(): SearchStyle {
 
 /** Whether the desktop top bar has anything in it. Empty, it is not drawn. */
 export function useTopBarHasContent(): boolean {
+  return useBarHasContent('top')
+}
+
+/** Whether a bar has anything in it: placed items or any widget. */
+export function useBarHasContent(zone: BarZone): boolean {
   const placement = useShellPlacement()
-  const search = usePlace(SEARCH_ITEM)
-  const status = usePlace(STATUS_ITEM)
-  return search === 'top' || status === 'top' || placement.top.length > 0
+  return useWidgetsIn(zone).length > 0 || placement[zone].length > 0
+}
+
+/** Every widget's place, kept current. */
+function useWidgetPlaces(): Record<WidgetItem, WidgetPlace> {
+  const read = () => Object.fromEntries(WIDGET_ITEMS.map(id => [id, readPlace(id)])) as Record<WidgetItem, WidgetPlace>
+  const [p, setP] = useState(read)
+  useEffect(() => {
+    const sync = () => setP(read())
+    window.addEventListener(PLACE_EVENT, sync)
+    window.addEventListener('storage', sync)
+    return () => {
+      window.removeEventListener(PLACE_EVENT, sync)
+      window.removeEventListener('storage', sync)
+    }
+  }, [])
+  return p
+}
+
+/** The widgets placed in a zone, in their fixed order. */
+export function useWidgetsIn(zone: ShellZone): WidgetItem[] {
+  const places = useWidgetPlaces()
+  return WIDGET_ITEMS.filter(id => places[id] === zone)
 }
 
 /** Window event the profile menu raises to start a feedback request. */
@@ -128,7 +184,7 @@ const PLACEMENT_KEY = 'mc-shell-placement'
 const PLACEMENT_EVENT = 'mc:shell-placement-changed'
 const EDITING_EVENT = 'mc:layout-editing-changed'
 
-const EMPTY: ShellPlacement = { top: [], bottom: [] }
+const EMPTY: ShellPlacement = { top: [], bottom: [], side: [] }
 
 export function readShellPlacement(): ShellPlacement {
   try {
@@ -136,7 +192,7 @@ export function readShellPlacement(): ShellPlacement {
     if (!raw) return EMPTY
     const v = JSON.parse(raw) as Partial<ShellPlacement>
     const ids = (x: unknown) => (Array.isArray(x) ? x.filter((s): s is string => typeof s === 'string') : [])
-    return { top: ids(v.top), bottom: ids(v.bottom) }
+    return { top: ids(v.top), bottom: ids(v.bottom), side: ids(v.side) }
   } catch {
     return EMPTY
   }
@@ -163,17 +219,18 @@ export function useShellPlacement(): ShellPlacement {
 
 /** Where an item lives now. `null`: nowhere (a hidden page, an unplaced toggle). */
 export function zoneOf(id: string, placement: ShellPlacement, onSidebar: boolean): ShellZone | null {
-  if (isTwoPlaceItem(id)) return readPlace(id)
+  if (isWidgetItem(id)) { const p = readPlace(id); return p === 'none' ? null : p }
   if (placement.top.includes(id)) return 'top'
   if (placement.bottom.includes(id)) return 'bottom'
+  if (placement.side.includes(id)) return 'sidebar'
   return onSidebar ? 'sidebar' : null
 }
 
 /** Take `id` out of both bars. Returns whether it was in one. */
 export function removeFromBars(id: string): boolean {
   const p = readShellPlacement()
-  if (!p.top.includes(id) && !p.bottom.includes(id)) return false
-  writeShellPlacement({ top: p.top.filter(x => x !== id), bottom: p.bottom.filter(x => x !== id) })
+  if (!p.top.includes(id) && !p.bottom.includes(id) && !p.side.includes(id)) return false
+  writeShellPlacement({ top: p.top.filter(x => x !== id), bottom: p.bottom.filter(x => x !== id), side: p.side.filter(x => x !== id) })
   return true
 }
 
@@ -191,21 +248,23 @@ function hideInSidebar(id: string): void {
  * within a bar; omitted, it goes at the end.
  */
 export function moveItem(id: string, zone: ShellZone | null, index?: number): void {
-  if (isTwoPlaceItem(id)) {
-    // Search and status go only to the top bar or the sidebar.
-    if (zone === 'top' || zone === 'sidebar') writePlace(id, zone)
+  if (isWidgetItem(id)) {
+    writePlace(id, zone ?? 'none')
     return
   }
   const p = readShellPlacement()
   const top = p.top.filter(x => x !== id)
   const bottom = p.bottom.filter(x => x !== id)
-  if (zone === 'top' || zone === 'bottom') {
-    const list = zone === 'top' ? top : bottom
+  const side = p.side.filter(x => x !== id)
+  const toggleInSidebar = isWindowToggle(id) && zone === 'sidebar'
+  if (zone === 'top' || zone === 'bottom' || toggleInSidebar) {
+    const list = zone === 'top' ? top : zone === 'bottom' ? bottom : side
     const at = index == null || index < 0 || index > list.length ? list.length : index
     list.splice(at, 0, id)
   }
-  writeShellPlacement({ top, bottom })
+  writeShellPlacement({ top, bottom, side })
   if (isWindowToggle(id)) return
+  setSidebarMembership(id, zone === 'sidebar')
   if (zone === 'sidebar') {
     const layout = readRailLayout()
     const group = layout.groups.some(g => g.id === defaultGroupOf(id)) ? defaultGroupOf(id) : layout.groups[0]?.id ?? ''
@@ -215,11 +274,21 @@ export function moveItem(id: string, zone: ShellZone | null, index?: number): vo
   }
 }
 
+/* ── Sidebar membership ──
+   Installed apps keep their "pinned to the sidebar" state in the Library, which
+   this module cannot reach. Every move tells the sidebar (RailGroups, which owns
+   the Library setter) whether the item is now in the sidebar, so an app moved
+   into a bar leaves the sidebar, and one moved back returns. */
+export const SIDEBAR_MEMBERSHIP_EVENT = 'mc:sidebar-membership'
+export interface SidebarMembership { id: string; inSidebar: boolean }
+export function setSidebarMembership(id: string, inSidebar: boolean): void {
+  window.dispatchEvent(new CustomEvent<SidebarMembership>(SIDEBAR_MEMBERSHIP_EVENT, { detail: { id, inSidebar } }))
+}
+
 /** Every customization back to the shipped canvas: default sidebar, empty bars. */
 export function resetShellLayout(): void {
   safeRemoveItem(PLACEMENT_KEY)
-  safeRemoveItem(PLACE_KEY[SEARCH_ITEM])
-  safeRemoveItem(PLACE_KEY[STATUS_ITEM])
+  for (const id of WIDGET_ITEMS) safeRemoveItem(PLACE_KEY[id])
   safeRemoveItem(SEARCH_STYLE_KEY)
   window.dispatchEvent(new Event(PLACE_EVENT))
   window.dispatchEvent(new Event(SEARCH_STYLE_EVENT))

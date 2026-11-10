@@ -15,7 +15,12 @@ import { NavHistoryArrows } from '../../components/NavHistoryArrows'
 import { PinnedRailGroups } from './railPins'
 import { forwardRailContextMenu, pinAtPoint } from './railPinDrop'
 import { RAIL_PIN_MIME } from '../../lib/railLayout'
-import { isTwoPlaceItem, moveItem, removeFromBars, useSearchPlace, useSearchStyle, useStatusPlace } from '../../lib/shellLayout'
+import {
+  HISTORY_ITEM, PROFILE_ITEM, REMOTE_ITEM, isTwoPlaceItem, isWindowToggle, moveItem, removeFromBars, setSidebarMembership,
+  useHistoryPlace, useProfilePlace, useRemotePlace, useSearchPlace, useSearchStyle, useShellPlacement, useStatusPlace,
+} from '../../lib/shellLayout'
+import { ShellWidget, WidgetSlot } from '../layout/shellWidgets'
+import { SidebarTools } from '../layout/sidebarTools'
 import { SidebarStatus } from '../layout/sidebarStatus'
 import { SearchTrigger } from '../layout/searchTrigger'
 
@@ -27,8 +32,8 @@ const railWideDropProps = {
     if (e.defaultPrevented || !e.dataTransfer.types.includes(RAIL_PIN_MIME)) return
     e.preventDefault()
     const id = e.dataTransfer.getData(RAIL_PIN_MIME)
-    if (isTwoPlaceItem(id)) { moveItem(id, 'sidebar'); return }
-    if (id && pinAtPoint(id, e.clientY)) removeFromBars(id)
+    if (isTwoPlaceItem(id) || isWindowToggle(id)) { moveItem(id, 'sidebar'); return }
+    if (id && pinAtPoint(id, e.clientY)) { removeFromBars(id); setSidebarMembership(id, true) }
   },
 }
 import { RailSettingsFlyout } from './railSettingsFlyout'
@@ -64,6 +69,10 @@ export function ShellNavRail({ shell }: { shell: AppShell }) {
   const searchPlace = useSearchPlace()
   const searchStyle = useSearchStyle()
   const statusPlace = useStatusPlace()
+  const remotePlace = useRemotePlace()
+  const historyPlace = useHistoryPlace()
+  const profilePlace = useProfilePlace()
+  const placement = useShellPlacement()
   const searchInHeader = !isMobile && searchPlace === 'sidebar' && searchStyle === 'icon' && !effectiveCollapsed
 
   // Render one standard nav row (used by the top-fixed mains, the Apps list,
@@ -159,7 +168,7 @@ export function ShellNavRail({ shell }: { shell: AppShell }) {
               <div className="flex-1 min-w-0 w-full [&>div]:mb-0">
                 <RailBrandToggle effectiveCollapsed={effectiveCollapsed} toggleNav={toggleNav} avatar={avatar} branding={branding} botName={botName} />
               </div>
-              <NavHistoryArrows vertical={effectiveCollapsed} />
+              {historyPlace === 'sidebar' && <WidgetSlot id={HISTORY_ITEM}><NavHistoryArrows vertical={effectiveCollapsed} /></WidgetSlot>}
               {/* "Show as icon": search joins the header row (expanded only;
                   the collapsed strip keeps its own icon row below). */}
               {searchInHeader && (
@@ -168,6 +177,12 @@ export function ShellNavRail({ shell }: { shell: AppShell }) {
             </div>
           )}
           {/* Design exploration: search can live here instead of the top bar. */}
+          {/* Design exploration: the remote Crews switcher (Local and each
+              connected remote) under the header. Renders nothing until a
+              remote Crew exists. */}
+          {!isMobile && remotePlace === 'sidebar' && !effectiveCollapsed && (
+            <div className="mb-1.5"><ShellWidget id={REMOTE_ITEM} zone="sidebar" shell={shell} /></div>
+          )}
           {!isMobile && searchPlace === 'sidebar' && !searchInHeader && (
             <SearchTrigger variant="sidebar" collapsed={effectiveCollapsed} onOpen={commandPalette.openPalette} launcherOwned={!!slotOwners['quick-search']} />
           )}
@@ -256,19 +271,26 @@ export function ShellNavRail({ shell }: { shell: AppShell }) {
             <div className="shrink-0 grid gap-0.5 px-2 pt-1 pb-2">
               {/* Design exploration: connection, credits and notifications live
                   here by default, so the top bar can be empty and hidden. */}
+              {/* Design exploration: terminal, phone and feedback when Edit
+                  layout puts them in the sidebar. */}
+              {placement.side.length > 0 && <SidebarTools shell={shell} collapsed={effectiveCollapsed} />}
               {statusPlace === 'sidebar' && <SidebarStatus shell={shell} collapsed={effectiveCollapsed} />}
               {/* The profile row starts the account area: a divider above it. */}
-              <div aria-hidden="true" className="h-px bg-border mx-1 my-1" />
-              <RailSettingsFlyout
-                settings={{ path: s.path, label: surfaceLabel(s), icon: s.icon }}
-                customize={{ path: cap.path, label: surfaceLabel(cap), icon: cap.icon }}
-                collapsed={effectiveCollapsed}
-                activePath={activePath}
-                badge={updateBadge}
-                phone={hasRenderableMobileConnect ? { open: () => setMobileConnectOpen(true) } : undefined}
-                onNavigate={closeMobileNav}
-                reportProblem={() => setReportProblemOpen(true)}
-              />
+              {profilePlace === 'sidebar' && (<>
+                <div aria-hidden="true" className="h-px bg-border mx-1 my-1" />
+                <WidgetSlot id={PROFILE_ITEM} className="w-full [&>div]:w-full">
+                  <RailSettingsFlyout
+                    settings={{ path: s.path, label: surfaceLabel(s), icon: s.icon }}
+                    customize={{ path: cap.path, label: surfaceLabel(cap), icon: cap.icon }}
+                    collapsed={effectiveCollapsed}
+                    activePath={activePath}
+                    badge={updateBadge}
+                    phone={hasRenderableMobileConnect ? { open: () => setMobileConnectOpen(true) } : undefined}
+                    onNavigate={closeMobileNav}
+                    reportProblem={() => setReportProblemOpen(true)}
+                  />
+                </WidgetSlot>
+              </>)}
               {/* Design exploration: Star us, Report issue and Discord moved into
                   the profile menu's Help and community group. */}
             </div>

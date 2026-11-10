@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { fireEvent, render, screen } from '@testing-library/react'
-import { MemoryRouter } from 'react-router-dom'
+import { fireEvent, screen } from '@testing-library/react'
+
+import { renderWithProviders } from '../../test/helpers'
 
 import { ShellStatusBar } from './shellStatusBar'
 import type { AppShell } from '../appShell'
@@ -12,12 +13,13 @@ vi.mock('../../hooks/useBottomTerminal', () => ({ toggleBottomTerminal: toggle }
 function shellWith(over: Partial<AppShell>): AppShell {
   return {
     terminalEnabled: true, terminalPoppedOut: false, bottomTerminalOpen: false, activeSlotProject: '/proj',
-    hasRenderableMobileConnect: true, mobileConnectOpen: false, setMobileConnectOpen: vi.fn(),
+    hasRenderableMobileConnect: true, mobileConnectOpen: false, setMobileConnectOpen: vi.fn(), allAppGroup: [],
     ...over,
   } as unknown as AppShell
 }
 
-const renderBar = (shell: AppShell) => render(<MemoryRouter><ShellStatusBar shell={shell} /></MemoryRouter>)
+// Providers: the bar resolves mates and sessions from the store and queries.
+const renderBar = (shell: AppShell) => renderWithProviders(<ShellStatusBar shell={shell} />)
 
 describe('ShellStatusBar', () => {
   beforeEach(() => resetShellLayout())

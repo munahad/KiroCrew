@@ -3,7 +3,7 @@ import { BarItems } from '../layout/barItems'
 import type { AppShell } from '../appShell'
 
 /** Grid row height of the status bar, in px. App.tsx sizes the shell's last track with it. */
-export const STATUS_BAR_HEIGHT = 26
+export const STATUS_BAR_HEIGHT = 32
 
 /**
  * Desktop bottom bar (design exploration). It ships EMPTY and is drawn only

@@ -1,13 +1,16 @@
 import { useRef, useState, type ReactNode } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { ArrowLeftRight, Bug, ChevronRight, CircleUserRound, ExternalLink, Lightbulb, Lock, LogOut, Settings2, Smartphone } from 'lucide-react'
+import { ArrowLeftRight, Bug, ChevronRight, CircleUserRound, ExternalLink, Lightbulb, LogOut, Settings2, Smartphone } from 'lucide-react'
 import { DiscordIcon, GithubIcon } from '../../components/BrandIcon'
 
 import Modal from '../../components/Modal'
 import { Btn } from '../../components/ui'
 import { Popover, PopoverAnchor, PopoverContent } from '../../components/ui/popover'
 import { i18nT } from '../../i18n/t'
-import { sendFeedback, useLayoutEditing } from '../../lib/shellLayout'
+import { sendFeedback } from '../../lib/shellLayout'
+import { surfaceLabel } from '../../surfaces/registry'
+import { NAV_ITEMS } from './navItems'
+import type { AppShell } from '../appShell'
 import { NavItem } from './navRow'
 
 /** Window event that opens the rail customize modal from outside the rail groups. */
@@ -90,7 +93,7 @@ function FlyoutLink({ icon, label, href, title }: { icon: ReactNode; label: stri
   )
 }
 
-export function RailSettingsFlyout({ settings, customize, collapsed, activePath, badge, phone, onNavigate, reportProblem }: {
+export function RailSettingsFlyout({ settings, customize, collapsed, activePath, badge, phone, onNavigate, reportProblem, compact }: {
   settings: FlyoutRoute
   customize: FlyoutRoute
   collapsed: boolean
@@ -101,13 +104,14 @@ export function RailSettingsFlyout({ settings, customize, collapsed, activePath,
   onNavigate?: () => void
   /** Opens the Report a problem flow (diagnostics, then a pre-filled issue). */
   reportProblem?: () => void
+  /** Placed in a bar by Edit layout: an avatar button, with the menu opening
+   *  below it (top bar) or above it (bottom bar) instead of to the side. */
+  compact?: 'top' | 'bottom'
 }) {
   const navigate = useNavigate()
   const [open, setOpen] = useState(false)
   const [mock, setMock] = useState<'sign-out' | 'remote' | null>(null)
   const anchor = useRef<HTMLDivElement>(null)
-  // While editing the layout, "You" shows it is locked in place.
-  const editing = useLayoutEditing()
 
   const isOn = (path: string) => activePath === path || activePath.startsWith(path + '/')
   const go = (path: string) => { setOpen(false); onNavigate?.(); navigate(path) }
@@ -117,6 +121,20 @@ export function RailSettingsFlyout({ settings, customize, collapsed, activePath,
     <Popover open={open} onOpenChange={setOpen} modal={false}>
       <PopoverAnchor asChild>
         <div ref={anchor}>
+          {compact ? (
+            <button
+              type="button"
+              onClick={() => setOpen(o => !o)}
+              aria-label={i18nT('nav.profile_menu_label')}
+              aria-haspopup="menu"
+              aria-expanded={open}
+              title={i18nT('nav.profile_menu_name')}
+              className="relative flex items-center justify-center w-7 h-7 rounded-full bg-transparent border-none cursor-pointer hover:bg-bg-hover"
+            >
+              <ProfileAvatar size={20} />
+              {badge}
+            </button>
+          ) : (
           <NavItem
             path={settings.path}
             label={i18nT('nav.profile_menu_name')}
@@ -125,16 +143,15 @@ export function RailSettingsFlyout({ settings, customize, collapsed, activePath,
             collapsed={collapsed}
             // Clicking the avatar opens the menu.
             onClickOverride={() => setOpen(o => !o)}
-            badge={editing
-              ? <span className="inline-flex items-center justify-center w-4 h-4 rounded-full bg-bg border border-border text-muted" title={i18nT('nav.layout_locked_title')} aria-label={i18nT('nav.layout_locked_title')}><Lock size={9} /></span>
-              // A chevron says this row opens a menu to the side, not a page.
-              // Collapsed, the strip has no room, so only the row's badge shows.
-              : collapsed ? badge : <span className="inline-flex items-center gap-1">{badge}<ChevronRight size={14} aria-hidden="true" className={`text-muted transition-transform ${open ? 'translate-x-0.5' : ''}`} /></span>}
+            // A chevron says this row opens a menu to the side, not a page.
+            // Collapsed, the strip has no room, so only the row's badge shows.
+            badge={collapsed ? badge : <span className="inline-flex items-center gap-1">{badge}<ChevronRight size={14} aria-hidden="true" className={`text-muted transition-transform ${open ? 'translate-x-0.5' : ''}`} /></span>}
           />
+          )}
         </div>
       </PopoverAnchor>
       <PopoverContent
-        side="right"
+        side={compact === 'top' ? 'bottom' : compact === 'bottom' ? 'top' : 'right'}
         align="end"
         sideOffset={10}
         variant="list"
@@ -186,4 +203,35 @@ export function RailSettingsFlyout({ settings, customize, collapsed, activePath,
       onClose={() => setMock(null)}
     />
   </>)
+}
+
+/**
+ * The profile menu wherever Edit layout puts it: a row in the sidebar, or an
+ * avatar button in the top or bottom bar. Reads its routes and actions from
+ * the shell, so every placement opens the same menu.
+ */
+export function ShellProfileMenu({ shell, collapsed = false, compact }: {
+  shell: Pick<AppShell, 'activePath' | 'updateAvailable' | 'hasRenderableMobileConnect' | 'setMobileConnectOpen' | 'closeMobileNav' | 'setReportProblemOpen'>
+  collapsed?: boolean
+  compact?: 'top' | 'bottom'
+}) {
+  const s = NAV_ITEMS.find(n => n.id === 'settings')!
+  const cap = NAV_ITEMS.find(n => n.id === 'capabilities')!
+  const dot = compact ? 'absolute top-0.5 right-0.5 w-2 h-2 bg-accent rounded-full' : collapsed ? 'absolute top-1 right-1 w-2 h-2 bg-accent rounded-full z-10' : 'absolute top-1/2 -translate-y-1/2 right-2 w-2 h-2 bg-accent rounded-full z-10'
+  const badge = shell.updateAvailable
+    ? <span title={i18nT('app.update_available')} role="status" aria-label={i18nT('app.update_available_2')} className={dot} />
+    : undefined
+  return (
+    <RailSettingsFlyout
+      settings={{ path: s.path, label: surfaceLabel(s), icon: s.icon }}
+      customize={{ path: cap.path, label: surfaceLabel(cap), icon: cap.icon }}
+      collapsed={collapsed}
+      activePath={shell.activePath}
+      badge={badge}
+      phone={shell.hasRenderableMobileConnect ? { open: () => shell.setMobileConnectOpen(true) } : undefined}
+      onNavigate={shell.closeMobileNav}
+      reportProblem={() => shell.setReportProblemOpen(true)}
+      compact={compact}
+    />
+  )
 }

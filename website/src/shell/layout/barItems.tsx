@@ -13,23 +13,31 @@ import { GripVertical } from 'lucide-react'
 import { useLocation, useNavigate } from 'react-router-dom'
 
 import { toggleBottomTerminal } from '../../hooks/useBottomTerminal'
+import { useAppDispatch } from '../../store'
+import { switchSlot } from '../../store/chatSlice'
 import { i18nT } from '../../i18n/t'
 import { RAIL_PIN_MIME } from '../../lib/railLayout'
 import {
-  FEEDBACK_ITEM, PHONE_ITEM, SHELL_ITEM_MIME, TERMINAL_ITEM, announceLayout, isWindowToggle, moveItem, readChromeDrag, setChromeDrag, useLayoutEditing, useShellPlacement,
-  type BarZone,
+  FEEDBACK_ITEM, HISTORY_ITEM, PHONE_ITEM, REMOTE_ITEM, SEARCH_ITEM, SHELL_ITEM_MIME, STATUS_ITEM, TERMINAL_ITEM, announceLayout, isWindowToggle, moveItem,
+  readChromeDrag, setChromeDrag, useLayoutEditing, useShellPlacement, useWidgetsIn, type BarZone,
 } from '../../lib/shellLayout'
 import { focusPopout as focusTerminalPopout } from '../../utils/terminalPopout'
 import type { AppShell } from '../appShell'
-import { shellItemMeta, zonesFor } from './shellItems'
+import { useBarItemMeta, zonesFor } from './shellItems'
+import { ShellWidget } from './shellWidgets'
+
+/** Widgets the top bar draws in its own slots (search centre, status capsule,
+ *  remote switcher and Back/Forward on the left); BarItems draws the rest. */
+const TOP_NATIVE = new Set<string>([SEARCH_ITEM, STATUS_ITEM, REMOTE_ITEM, HISTORY_ITEM])
 
 export const zoneLabel = (z: BarZone | 'sidebar') =>
   i18nT(z === 'top' ? 'nav.layout_zone_top' : z === 'bottom' ? 'nav.layout_zone_bottom' : 'nav.layout_zone_sidebar')
 
-/** Start dragging an item: bars read SHELL_ITEM_MIME, the sidebar reads RAIL_PIN_MIME. */
+/** Start dragging an item: bars read SHELL_ITEM_MIME, the sidebar reads RAIL_PIN_MIME
+ *  (and sends widgets and window toggles to their own sidebar slots, not the groups). */
 export function startItemDrag(e: DragEvent, id: string) {
   e.dataTransfer.setData(SHELL_ITEM_MIME, id)
-  if (!isWindowToggle(id)) e.dataTransfer.setData(RAIL_PIN_MIME, id)
+  e.dataTransfer.setData(RAIL_PIN_MIME, id)
   e.dataTransfer.effectAllowed = 'move'
   // Tell the zone outlines what is moving (a native dragover cannot read the
   // data), so places that cannot take it show as unavailable. Cleared on drop
@@ -44,8 +52,11 @@ export function startItemDrag(e: DragEvent, id: string) {
   window.addEventListener('drop', clear, true)
 }
 
-export function BarItems({ zone, shell }: { zone: BarZone; shell: Pick<AppShell, 'terminalEnabled' | 'terminalPoppedOut' | 'bottomTerminalOpen' | 'activeSlotProject' | 'hasRenderableMobileConnect' | 'mobileConnectOpen' | 'setMobileConnectOpen' | 'requestFeature'> }) {
+export function BarItems({ zone, shell }: { zone: BarZone; shell: AppShell }) {
   const placement = useShellPlacement()
+  const dispatch = useAppDispatch()
+  const shellItemMeta = useBarItemMeta(shell.allAppGroup)
+  const widgets = useWidgetsIn(zone).filter(id => zone === 'bottom' || !TOP_NATIVE.has(id))
   const editing = useLayoutEditing()
   const navigate = useNavigate()
   const location = useLocation()
@@ -84,14 +95,16 @@ export function BarItems({ zone, shell }: { zone: BarZone; shell: Pick<AppShell,
     },
   } : {}
 
-  if (!editing && ids.length === 0) return null
+  if (!editing && ids.length === 0 && widgets.length === 0) return null
 
   const act = (id: string) => {
     if (id === TERMINAL_ITEM) { if (shell.terminalPoppedOut) focusTerminalPopout(); else toggleBottomTerminal(shell.activeSlotProject); return }
     if (id === PHONE_ITEM) { shell.setMobileConnectOpen(true); return }
     if (id === FEEDBACK_ITEM) { void shell.requestFeature(); return }
-    const path = shellItemMeta(id)?.path
-    if (path) navigate(path)
+    const m = shellItemMeta(id)
+    // A pinned session: switch the chat to it (navigate alone does not while /chat is open).
+    if (m?.sessionKey) { dispatch(switchSlot({ key: m.sessionKey, announceOnMissing: true, gesture: true })); navigate('/chat'); return }
+    if (m?.path) navigate(m.path)
   }
   const pressed = (id: string) => {
     if (id === TERMINAL_ITEM) return shell.bottomTerminalOpen || shell.terminalPoppedOut
@@ -109,6 +122,7 @@ export function BarItems({ zone, shell }: { zone: BarZone; shell: Pick<AppShell,
       className={`flex items-center gap-1 min-w-0 rounded-md transition-colors ${over ? 'bg-accent/10' : ''} ${zone === 'top' ? 'h-8' : 'h-[22px]'}`}
       {...dropHandlers}
     >
+      {widgets.map(id => <ShellWidget key={id} id={id} zone={zone} shell={shell} />)}
       {ids.map(id => {
         const m = shellItemMeta(id, 14)!
         const on = pressed(id)

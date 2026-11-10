@@ -14,11 +14,12 @@ import {
 import { SortableAppNavRow } from './appRail'
 import { RailContextMenu, groupTitle, type RailItemMeta } from './railCustomize'
 import { LayoutEditPanel } from '../layout/layoutEditPanel'
-import { announceLayout, barDropAt, barZoneAt, moveItem, setChromeDrag, setLayoutEditing, useLayoutEditing } from '../../lib/shellLayout'
+import {
+  SIDEBAR_MEMBERSHIP_EVENT, announceLayout, barDropAt, barZoneAt, moveItem, setChromeDrag, setLayoutEditing, useLayoutEditing,
+  type SidebarMembership,
+} from '../../lib/shellLayout'
 import { shellItemMeta, zonesFor } from '../layout/shellItems'
 
-/** Stand-in drag id for an installed app: matches no bar, so bars show as unavailable. */
-const APP_DRAG_ID = 'app:sidebar-only'
 import { zoneLabel } from '../layout/barItems'
 import { OPEN_RAIL_CUSTOMIZE_EVENT } from './railSettingsFlyout'
 import { RAIL_PIN_DROP_HOST_ID, useRailNativeDrop } from './railPinDrop'
@@ -182,6 +183,17 @@ export function RailGroups({ available, renderItem, collapsed, defaultGroup, met
     updateRail(l => setRailLabel(l, id, name))
   }, [])
   const nativeDrop = useRailNativeDrop()
+  // Design exploration: an installed app's sidebar pin lives in the Library.
+  // When Edit layout moves an app into a bar (or hides it), unpin it there;
+  // when it comes back to the sidebar, pin it again.
+  useEffect(() => {
+    const on = (e: Event) => {
+      const { id, inSidebar } = (e as CustomEvent<SidebarMembership>).detail
+      if (isApp(id)) setAppPinned?.(id, inSidebar)
+    }
+    window.addEventListener(SIDEBAR_MEMBERSHIP_EVENT, on)
+    return () => window.removeEventListener(SIDEBAR_MEMBERSHIP_EVENT, on)
+  }, [isApp, setAppPinned])
   // Stable: the modal memoizes on it, and its rows show rail-only names.
   const modalMeta = useCallback((id: string) => { const m = meta(id); const l = labelOf(id); return m && l ? { ...m, label: l } : m }, [meta, labelOf])
 
@@ -201,15 +213,15 @@ export function RailGroups({ available, renderItem, collapsed, defaultGroup, met
     const p = editing ? pointerAt(e) : null
     const bar = p ? barZoneAt(p.x, p.y) : null
     if (!bar || !p) return null
-    const allowed = !isApp(id) && zonesFor(id).includes(bar)
+    const allowed = zonesFor(id).includes(bar)
     return { bar, allowed, ...barDropAt(bar, p.x, id) }
   }
   const onDragStart = useCallback((e: DragStartEvent) => {
     haptic('medium')
     setActiveId(String(e.active.id))
     // Apps are sidebar-only here even when a page of the same id could sit in a bar.
-    if (editing) setChromeDrag({ id: isApp(String(e.active.id)) ? APP_DRAG_ID : String(e.active.id), over: null, lineX: null })
-  }, [editing, isApp])
+    if (editing) setChromeDrag({ id: String(e.active.id), over: null, lineX: null })
+  }, [editing])
   const onDragMove = (e: DragMoveEvent) => {
     if (!editing) return
     const t = barTarget(e)

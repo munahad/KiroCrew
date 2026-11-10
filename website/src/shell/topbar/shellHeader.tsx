@@ -23,7 +23,9 @@ import type { AppShell } from '../appShell'
 import { hiddenChromeProps } from '../focus/focusChrome'
 import { setAgentSwitchNotice } from '../../store/chatSlice'
 import { BarItems } from '../layout/barItems'
-import { SEND_FEEDBACK_EVENT, useSearchPlace, useStatusPlace } from '../../lib/shellLayout'
+import { HISTORY_ITEM, REMOTE_ITEM, SEND_FEEDBACK_EVENT, useHistoryPlace, useRemotePlace, useSearchPlace, useStatusPlace } from '../../lib/shellLayout'
+import { NavHistoryArrows } from '../../components/NavHistoryArrows'
+import { WidgetSlot } from '../layout/shellWidgets'
 import { SearchTrigger } from '../layout/searchTrigger'
 
 // Lazy, like App.tsx's update-found popup: the pill renders nothing without an update,
@@ -164,6 +166,8 @@ export function ShellHeader({ shell }: { shell: AppShell }) {
   // Design exploration: the status cluster (connection, usage, bell) lives in
   // the sidebar by default; the capsule and bell draw here only when moved back.
   const statusTop = useStatusPlace() === 'top'
+  const remotePlace = useRemotePlace()
+  const historyPlace = useHistoryPlace()
   return (
     <>
       {/* Topbar */}
@@ -279,7 +283,13 @@ export function ShellHeader({ shell }: { shell: AppShell }) {
               <MobileNavGlyph avatar={avatar} />
             </button>
           )}
-          <InstanceTabBar variant="inline" />
+          {/* Design exploration: Back/Forward and the remote Crews switcher sit
+              here only when Edit layout puts them in the top bar (both start
+              in the sidebar). The phone keeps its switcher here. */}
+          {!isMobile && historyPlace === 'top' && <WidgetSlot id={HISTORY_ITEM}><NavHistoryArrows /></WidgetSlot>}
+          {isMobile
+            ? <InstanceTabBar variant="inline" />
+            : remotePlace === 'top' && <WidgetSlot id={REMOTE_ITEM} className="h-full"><InstanceTabBar variant="inline" /></WidgetSlot>}
           </div>
         </div>
         )}

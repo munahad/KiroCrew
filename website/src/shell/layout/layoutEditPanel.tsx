@@ -17,7 +17,7 @@
  */
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
-import { ArrowLeftRight, Bell, CircleUserRound, GripVertical, Lightbulb, Lock, MessageSquare, PanelLeft, Search, Smartphone, SquareTerminal, X } from 'lucide-react'
+import { ArrowLeftRight, Bell, CircleUserRound, GripVertical, Lightbulb, Lock, MessageSquare, MonitorSmartphone, PanelLeft, Search, Smartphone, SquareTerminal, X } from 'lucide-react'
 
 import CrewAvatar from '../../components/CrewAvatar'
 import SimpleSelect from '../../components/SimpleSelect'
@@ -32,21 +32,18 @@ import {
   type RailGroup,
 } from '../../lib/railLayout'
 import {
-  FEEDBACK_ITEM, PHONE_ITEM, SEARCH_ITEM, STATUS_ITEM, TERMINAL_ITEM, isTwoPlaceItem, announceLayout, isWindowToggle, moveItem, resetShellLayout, setLayoutEditing,
+  FEEDBACK_ITEM, HISTORY_ITEM, PHONE_ITEM, PROFILE_ITEM, REMOTE_ITEM, SEARCH_ITEM, removeFromBars, STATUS_ITEM, TERMINAL_ITEM, isTwoPlaceItem, announceLayout, isWindowToggle, moveItem, resetShellLayout, setLayoutEditing,
   setSearchStyle, useLayoutAnnouncement, useSearchStyle, useShellPlacement, zoneOf, type SearchStyle, type ShellZone,
 } from '../../lib/shellLayout'
 import { useTerminalEnabled } from '../../utils/terminalRegistry'
 import { useRailWidth } from '../../hooks/useRailWidth'
 import type { RailItemMeta } from '../nav/railCustomize'
-import { canSitInBar } from './shellItems'
 import { startItemDrag, zoneLabel } from './barItems'
 
 
 /** Items that never move, listed so their place reads as deliberate. */
 const LOCKED: { key: string; icon: JSX.Element; zone: 'sidebar' | 'top' }[] = [
   { key: 'nav.layout_locked_brand', icon: <PanelLeft size={16} />, zone: 'sidebar' },
-  { key: 'nav.layout_locked_back_forward', icon: <ArrowLeftRight size={16} />, zone: 'sidebar' },
-  { key: 'nav.profile_menu_name', icon: <CircleUserRound size={16} />, zone: 'sidebar' },
 ]
 
 /** Built-in surfaces that read as apps (the App Store rows and Task Runner). */
@@ -77,18 +74,17 @@ const CATEGORY_KEY: Record<Category, string> = {
 const categoryLabel = (c: Category) => i18nT(CATEGORY_KEY[c])
 
 /** The places an item may go, in the order the menu lists them. */
-function placesFor(id: string): (ShellZone | 'none')[] {
-  if (isTwoPlaceItem(id)) return ['top', 'sidebar']
-  if (isWindowToggle(id)) return ['top', 'bottom', 'none']
-  if (canSitInBar(id)) return ['sidebar', 'top', 'bottom', 'none']
-  return ['sidebar', 'none']
+function placesFor(_id: string): (ShellZone | 'none')[] {
+  // Every movable item can go anywhere, or nowhere. Only the logo and sidebar
+  // toggle are fixed, and they are listed under "Always here" instead.
+  return ['sidebar', 'top', 'bottom', 'none']
 }
 /** Panel sections, in the order the canvas reads: top bar, sidebar, bottom
  *  bar, then everything not shown. Locked items follow under "Always here". */
 const SECTIONS: (ShellZone | 'none')[] = ['top', 'sidebar', 'bottom', 'none']
 const placeLabel = (p: ShellZone | 'none') => (p === 'none' ? i18nT('nav.layout_zone_none') : zoneLabel(p))
 
-export function LayoutEditPanel({ groups, hidden, meta, isApp, setAppPinned }: {
+export function LayoutEditPanel({ groups, hidden, meta }: {
   groups: readonly RailGroup[]
   hidden: readonly string[]
   meta: (id: string) => RailItemMeta | null
@@ -126,6 +122,9 @@ export function LayoutEditPanel({ groups, hidden, meta, isApp, setAppPinned }: {
       out.push({ id, category: categoryOf(id), meta: m })
     }
     add(SEARCH_ITEM, { label: i18nT('nav.layout_locked_search'), icon: <Search size={16} /> })
+    add(REMOTE_ITEM, { label: i18nT('components.instanceTabBar.instances'), icon: <MonitorSmartphone size={16} /> })
+    add(HISTORY_ITEM, { label: i18nT('nav.layout_locked_back_forward'), icon: <ArrowLeftRight size={16} /> })
+    add(PROFILE_ITEM, { label: i18nT('nav.profile_menu_name'), icon: <CircleUserRound size={16} /> })
     add(STATUS_ITEM, { label: i18nT('nav.layout_status_item'), icon: <Bell size={16} /> })
     if (terminalEnabled) add(TERMINAL_ITEM, { label: i18nT('app.terminal'), icon: <SquareTerminal size={16} /> })
     add(PHONE_ITEM, { label: i18nT('app.connect_your_phone'), icon: <Smartphone size={16} /> })
@@ -157,12 +156,14 @@ export function LayoutEditPanel({ groups, hidden, meta, isApp, setAppPinned }: {
 
   const place = (id: string, to: ShellZone | 'none', label: string) => {
     if (to === where(id)) return
-    if (isApp(id)) {
-      // Installed apps: the Library owns their pin state; sidebar-only here.
-      setAppPinned?.(id, to === 'sidebar')
-    } else if (isEntityPin(id)) {
-      if (to === 'sidebar') updateRail(l => insertPin(l, id, groups[0]?.id ?? '', null))
-      else updateRail(l => removePin(l, id))
+    // One path for every item. An installed app's Library pin follows through
+    // the sidebar-membership event that moveItem raises (RailGroups listens).
+    if (isEntityPin(id) && to === 'sidebar') {
+      removeFromBars(id)
+      updateRail(l => insertPin(l, id, groups[0]?.id ?? '', null))
+    } else if (isEntityPin(id) && to === 'none') {
+      removeFromBars(id)
+      updateRail(l => removePin(l, id))
     } else {
       moveItem(id, to === 'none' ? null : to)
     }
