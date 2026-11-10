@@ -37,6 +37,7 @@ import {
 } from '../../lib/shellLayout'
 import { useTerminalEnabled } from '../../utils/terminalRegistry'
 import { useRailWidth } from '../../hooks/useRailWidth'
+import { useIsMobile } from '../../hooks/useIsMobile'
 import type { RailItemMeta } from '../nav/railCustomize'
 import { startItemDrag, zoneLabel } from './barItems'
 
@@ -76,14 +77,16 @@ const CATEGORY_KEY: Record<Category, string> = {
 const categoryLabel = (c: Category) => i18nT(CATEGORY_KEY[c])
 
 /** The places an item may go, in the order the menu lists them. */
-function placesFor(_id: string): (ShellZone | 'none')[] {
+function placesFor(_id: string, phone = false): (ShellZone | 'none')[] {
   // Every movable item can go anywhere, or nowhere. Only the logo and sidebar
   // toggle are fixed, and they are listed under "Always here" instead.
-  return ['sidebar', 'top', 'bottom', 'none']
+  // The phone has no top or bottom bar: there it is the sidebar or nothing.
+  return phone ? ['sidebar', 'none'] : ['sidebar', 'top', 'bottom', 'none']
 }
 /** Panel sections, in the order the canvas reads: top bar, sidebar, bottom
  *  bar, then everything not shown. Locked items follow under "Always here". */
 const SECTIONS: (ShellZone | 'none')[] = ['top', 'sidebar', 'bottom', 'none']
+const PHONE_SECTIONS: (ShellZone | 'none')[] = ['sidebar', 'none']
 const placeLabel = (p: ShellZone | 'none') => (p === 'none' ? i18nT('nav.layout_zone_none') : zoneLabel(p))
 
 export function LayoutEditPanel({ groups, hidden, meta }: {
@@ -97,6 +100,11 @@ export function LayoutEditPanel({ groups, hidden, meta }: {
   const [category, setCategory] = useState<Category>('all')
   const placement = useShellPlacement()
   const railWidth = useRailWidth()
+  // Phone layout: Edit layout edits the sidebar (the drawer) only. Its shell
+  // has no top or bottom bar, and its header, search and account controls are
+  // fixed, so only pages, apps, mates and sessions are listed, each with
+  // Sidebar or Not shown. The panel is a full-screen sheet.
+  const phone = useIsMobile()
   const searchStyle = useSearchStyle()
   const announcement = useLayoutAnnouncement()
   const terminalEnabled = useTerminalEnabled()
@@ -123,21 +131,23 @@ export function LayoutEditPanel({ groups, hidden, meta }: {
       seen.add(id)
       out.push({ id, category: categoryOf(id), meta: m, detail })
     }
-    add(SEARCH_ITEM, { label: i18nT('nav.layout_locked_search'), icon: <Search size={16} /> })
-    add(REMOTE_ITEM, { label: i18nT('components.instanceTabBar.instances'), icon: <MonitorSmartphone size={16} /> })
-    add(HISTORY_ITEM, { label: i18nT('nav.layout_locked_back_forward'), icon: <ArrowLeftRight size={16} /> })
-    add(PROFILE_ITEM, { label: i18nT('nav.profile_menu_name'), icon: <CircleUserRound size={16} /> })
-    add(STATUS_ITEM, { label: i18nT('nav.layout_status_item'), icon: <Bell size={16} /> })
-    if (terminalEnabled) add(TERMINAL_ITEM, { label: i18nT('app.terminal'), icon: <SquareTerminal size={16} /> })
-    add(PHONE_ITEM, { label: i18nT('app.connect_your_phone'), icon: <Smartphone size={16} /> })
-    add(FEEDBACK_ITEM, { label: i18nT('nav.send_feedback'), icon: <Lightbulb size={16} /> })
+    if (!phone) {
+      add(SEARCH_ITEM, { label: i18nT('nav.layout_locked_search'), icon: <Search size={16} /> })
+      add(REMOTE_ITEM, { label: i18nT('components.instanceTabBar.instances'), icon: <MonitorSmartphone size={16} /> })
+      add(HISTORY_ITEM, { label: i18nT('nav.layout_locked_back_forward'), icon: <ArrowLeftRight size={16} /> })
+      add(PROFILE_ITEM, { label: i18nT('nav.profile_menu_name'), icon: <CircleUserRound size={16} /> })
+      add(STATUS_ITEM, { label: i18nT('nav.layout_status_item'), icon: <Bell size={16} /> })
+      if (terminalEnabled) add(TERMINAL_ITEM, { label: i18nT('app.terminal'), icon: <SquareTerminal size={16} /> })
+      add(PHONE_ITEM, { label: i18nT('app.connect_your_phone'), icon: <Smartphone size={16} /> })
+      add(FEEDBACK_ITEM, { label: i18nT('nav.send_feedback'), icon: <Lightbulb size={16} /> })
+    }
     for (const id of [...groups.flatMap(g => g.items), ...hidden, ...placement.top, ...placement.bottom]) {
       if (!isEntityPin(id) && !isWindowToggle(id)) add(id, meta(id))
     }
     for (const m of roster ?? []) add(matePinId(m.slug), { label: m.name, icon: <CrewAvatar seed={m.name} avatar={m.avatar} size={18} /> })
     for (const s of slots) add(sessionPinId(s.key), { label: s.title || s.key, icon: <MessageSquare size={16} /> }, s.key.slice(-6))
     return out
-  }, [groups, hidden, meta, placement.top, placement.bottom, roster, slots, terminalEnabled])
+  }, [groups, hidden, meta, placement.top, placement.bottom, roster, slots, terminalEnabled, phone])
 
   const q = query.trim().toLowerCase()
   const matches = (x: Candidate) => !q || x.meta.label.toLowerCase().includes(q)
@@ -161,7 +171,11 @@ export function LayoutEditPanel({ groups, hidden, meta }: {
     return new Set([...n].filter(([, c]) => c > 1).map(([l]) => l))
   }, [candidates])
 
-  const where = (id: string): ShellZone | 'none' => zoneOf(id, placement, onSidebar.has(id)) ?? 'none'
+  const where = (id: string): ShellZone | 'none' => {
+    const z = zoneOf(id, placement, onSidebar.has(id)) ?? 'none'
+    // On the phone an item a desktop window put in a bar is simply not shown.
+    return phone && (z === 'top' || z === 'bottom') ? 'none' : z
+  }
 
   const place = (id: string, to: ShellZone | 'none', label: string) => {
     if (to === where(id)) return
@@ -195,15 +209,15 @@ export function LayoutEditPanel({ groups, hidden, meta }: {
         fills what is left, and only its list scrolls, so the header, search and
         Done always stay on screen, at 200% zoom too. */}
     <div
-      className="fixed inset-y-0 right-0 z-[60] flex items-center justify-center pointer-events-none px-[clamp(12px,5vw,64px)] py-[clamp(12px,6vh,64px)]"
-      style={{ left: railWidth }}
+      className={`fixed inset-y-0 right-0 z-[60] flex items-center justify-center pointer-events-none ${phone ? 'p-safe' : 'px-[clamp(12px,5vw,64px)] py-[clamp(12px,6vh,64px)]'}`}
+      style={{ left: phone ? 0 : railWidth }}
     >
     <aside
       ref={panelRef}
       tabIndex={-1}
       role="region"
       aria-label={i18nT('nav.rail_customize_title')}
-      className="pointer-events-auto w-[360px] max-w-full h-[min(560px,100%)] min-h-0 flex flex-col rounded-2xl border border-border bg-bg-elevated text-text shadow-2xl outline-none overflow-hidden"
+      className={`pointer-events-auto min-h-0 flex flex-col bg-bg-elevated text-text outline-none overflow-hidden ${phone ? 'w-full h-full' : 'w-[360px] max-w-full h-[min(560px,100%)] rounded-2xl border border-border shadow-2xl'}`}
       data-testid="layout-edit-panel"
     >
       <header className="flex items-start gap-2 px-4 pt-3 pb-2 border-b border-border">
@@ -257,7 +271,7 @@ export function LayoutEditPanel({ groups, hidden, meta }: {
             layout: moving an item moves its row to another section instead of
             leaving what looks like a copy behind. Each section is a labelled
             list, so screen readers hear the place before its items. */}
-        {SECTIONS.map(section => {
+        {(phone ? PHONE_SECTIONS : SECTIONS).map(section => {
           const rows = shown.filter(x => where(x.id) === section)
           if (rows.length === 0) return null
           const headingId = `layout-section-${section}`
@@ -287,8 +301,8 @@ export function LayoutEditPanel({ groups, hidden, meta }: {
               </span>
               {/* The app's own dropdown (themed), kept out of the row's drag. */}
               <SimpleSelect
-                options={placesFor(x.id)}
-                optionLabels={placesFor(x.id).map(placeLabel)}
+                options={placesFor(x.id, phone)}
+                optionLabels={placesFor(x.id, phone).map(placeLabel)}
                 value={at}
                 onChange={v => place(x.id, v as ShellZone | 'none', x.meta.label)}
                 aria-label={i18nT('nav.layout_show_in', { item: x.meta.label })}

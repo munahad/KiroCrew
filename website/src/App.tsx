@@ -87,7 +87,7 @@ import { guideTarget } from './uiLocations/targetRegistry'
 import { useAppShell } from './shell/appShell'
 import { ShellHeader } from './shell/topbar/shellHeader'
 import { ShellStatusBar } from './shell/statusbar/shellStatusBar'
-import { setLayoutEditing, useBarHasContent, useLayoutEditing, useTopBarHasContent } from './lib/shellLayout'
+import { useBarHasContent, useLayoutEditing, useTopBarHasContent } from './lib/shellLayout'
 import { LayoutZoneOutlines } from './shell/layout/layoutZones'
 import { ShellNavRail } from './shell/nav/navRail'
 import { NavItem, NavBadge } from './shell/nav/navRow'
@@ -333,9 +333,6 @@ export default function App() {
   // as a drop target. Empty, its row collapses and each page's own header is
   // the top of the window, so there is one bar, not two.
   const topBarHasContent = useTopBarHasContent()
-  // Design exploration: Edit layout is desktop-only. A window narrowed into
-  // the phone layout mid-edit leaves edit mode instead of half-showing it.
-  useEffect(() => { if (isMobile && layoutEditing) setLayoutEditing(false) }, [isMobile, layoutEditing])
   const hideTopBar = !isMobile && !focusActive && !layoutEditing && !topBarHasContent && !updateAvailable
   // The page steps back while editing: dimmed well down and greyed, so the
   // chrome you can edit (the raised bars and sidebar) and the Edit layout

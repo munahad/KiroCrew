@@ -6,7 +6,6 @@ import {
   ContextMenuSub, ContextMenuSubContent, ContextMenuSubTrigger, ContextMenuTrigger,
 } from '../../components/ui/context-menu'
 import { i18nT } from '../../i18n/t'
-import { useIsMobile } from '../../hooks/useIsMobile'
 import { FALLBACK_GROUP_ID, addGroup, commitRail, moveToGroup, type RailGroup } from '../../lib/railLayout'
 
 /** What the menu and the modal need to draw a row they do not render themselves. */
@@ -52,7 +51,6 @@ export function RailContextMenu({ groups, onUnpin, onCustomize, onRename, onRese
   onGroupCreated?: (groupId: string) => void
   children: ReactNode
 }) {
-  const isMobile = useIsMobile()
   const [target, setTarget] = useState<string | null>(null)
   const [targetGroup, setTargetGroup] = useState<string | null>(null)
   // Rename opens a field that takes focus; the menu must not take it back on close.
@@ -109,9 +107,7 @@ export function RailContextMenu({ groups, onUnpin, onCustomize, onRename, onRese
           </>
         )}
         <ContextMenuSeparator />
-        {/* Design exploration: Edit layout is desktop-only. The phone has its
-            own shell (a drawer, no top or bottom bar to place things in). */}
-        {!isMobile && <ContextMenuItem onSelect={onCustomize}><Settings2 size={14} />{i18nT('nav.rail_customize')}</ContextMenuItem>}
+        <ContextMenuItem onSelect={onCustomize}><Settings2 size={14} />{i18nT('nav.rail_customize')}</ContextMenuItem>
       </ContextMenuContent>
     </ContextMenu>
   )
