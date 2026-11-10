@@ -174,7 +174,13 @@ export function LayoutEditPanel({ groups, hidden, meta }: {
   /** Where a row sits in its place, so each section lists items in the order
    *  the canvas shows them (widgets, which have fixed slots, come first). */
   const flat = useMemo(() => groups.flatMap(g => g.items), [groups])
+  // The sidebar's own order: header widgets, then its rows, then the tool rows,
+  // status and "You" at its foot, so the list reads top to bottom like it.
+  const SIDEBAR_SLOT: Record<string, number> = {
+    [HISTORY_ITEM]: -3, [REMOTE_ITEM]: -2, [SEARCH_ITEM]: -1, [STATUS_ITEM]: 20_000, [PROFILE_ITEM]: 20_001,
+  }
   const orderOf = (id: string, section: ShellZone | 'none'): number => {
+    if (section === 'sidebar' && id in SIDEBAR_SLOT) return SIDEBAR_SLOT[id]
     if (isTwoPlaceItem(id)) return -1
     if (section === 'top') return placement.top.indexOf(id)
     if (section === 'bottom') return placement.bottom.indexOf(id)
@@ -327,10 +333,12 @@ export function LayoutEditPanel({ groups, hidden, meta }: {
               key={x.id}
               draggable
               onDragStart={e => startItemDrag(e, x.id)}
-              className="group/row flex flex-col gap-1 px-2 py-1.5 rounded-lg hover:bg-bg-hover cursor-grab active:cursor-grabbing"
+              className="group/row relative flex flex-col gap-1 pl-3 pr-1.5 py-1.5 rounded-lg hover:bg-bg-hover cursor-grab active:cursor-grabbing"
             >
+              {/* The grip overlays the row's left padding on hover instead of
+                  taking a column of its own, so the name gets that room. */}
+              <GripVertical size={12} className="absolute left-0.5 top-[13px] text-muted opacity-0 group-hover/row:opacity-100" aria-hidden="true" />
               <div className="flex items-center gap-2">
-              <GripVertical size={13} className="text-muted opacity-0 group-hover/row:opacity-100 shrink-0" aria-hidden="true" />
               <span className="w-5 h-5 flex items-center justify-center shrink-0 text-muted">{x.meta.icon}</span>
               <span className="flex-1 min-w-0">
                 <span className="block truncate text-[13px] text-text" title={x.meta.label}>{x.meta.label}</span>
@@ -338,11 +346,11 @@ export function LayoutEditPanel({ groups, hidden, meta }: {
                   {categoryLabel(x.category)}{x.detail && repeated.has(x.meta.label) ? ` · ${x.detail}` : ''}
                 </span>
               </span>
-              {/* Move up / Move down: reorder without dragging (WCAG 2.5.7). On
-                  every placed row, so the control is always findable; greyed
-                  where the row cannot move (a widget's fixed slot, or the end of
-                  its group or bar). Not shown items have no order, so none. */}
-              {at !== 'none' && (
+              {/* Move up / Move down: reorder without dragging (WCAG 2.5.7). Not
+                  on hidden items (no order) or on fixed-slot items (search,
+                  remote Crews, Back/Forward, "You", status), which move between
+                  places with the menu but keep their own spot within one. */}
+              {at !== 'none' && !isTwoPlaceItem(x.id) && (
                 <span className="shrink-0 flex items-center">
                   {([-1, 1] as const).map(d => (
                     <button
@@ -372,7 +380,7 @@ export function LayoutEditPanel({ groups, hidden, meta }: {
               </div>
               {/* Search only: draw it as the full field or the icon alone. */}
               {x.id === SEARCH_ITEM && (
-                <div className="flex items-center gap-2 pl-[49px] pb-0.5">
+                <div className="flex items-center gap-2 pl-7 pb-0.5">
                   <label htmlFor="layout-search-style" className="flex-1 text-[11px] text-muted">{i18nT('nav.layout_show_as')}</label>
                   <SimpleSelect
                     id="layout-search-style"
