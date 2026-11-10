@@ -1,7 +1,7 @@
 import { surfaceLabel } from '../../surfaces/registry'
 import { railWidthFor } from '../../hooks/useRailWidth'
 import { FOCUS_INSET } from '../../hooks/useFocusMode'
-import { Coins, Compass, LayoutGrid, SquareTerminal, Smartphone, Search as SearchIcon } from 'lucide-react'
+import { Coins, Compass, LayoutGrid, Settings2, SquareTerminal, Smartphone, Search as SearchIcon } from 'lucide-react'
 import { motion } from 'framer-motion'
 import { toggleBottomTerminal } from '../../hooks/useBottomTerminal'
 import { focusPopout as focusTerminalPopout } from '../../utils/terminalPopout'
@@ -16,7 +16,7 @@ import { PinnedRailGroups } from './railPins'
 import { forwardRailContextMenu, pinAtPoint } from './railPinDrop'
 import { RAIL_PIN_MIME } from '../../lib/railLayout'
 import {
-  HISTORY_ITEM, PROFILE_ITEM, REMOTE_ITEM, isTwoPlaceItem, isWindowToggle, moveItem, removeFromBars, setSidebarMembership,
+  HISTORY_ITEM, PROFILE_ITEM, REMOTE_ITEM, isTwoPlaceItem, isWindowToggle, moveItem, removeFromBars, setLayoutEditing, setSidebarMembership,
   useHistoryPlace, useProfilePlace, useRemotePlace, useSearchPlace, useSearchStyle, useShellPlacement, useStatusPlace,
 } from '../../lib/shellLayout'
 import { ShellWidget, WidgetSlot } from '../layout/shellWidgets'
@@ -357,6 +357,21 @@ export function ShellNavRail({ shell }: { shell: AppShell }) {
                 />
               )}
               <div>{renderNavRow(cap)}</div>
+              {/* Design exploration: the phone's way into Edit layout. The
+                  desktop opens it from the "You" menu, which the phone drawer
+                  does not have, and a long-press on a row is not discoverable.
+                  The drawer stays open: the sidebar it edits lives in it. */}
+              {isMobile && (
+                <NavItem
+                  path="#"
+                  label={i18nT('nav.rail_customize')}
+                  icon={<Settings2 size={16} />}
+                  active={false}
+                  collapsed={effectiveCollapsed}
+                  onClickOverride={() => setLayoutEditing(true)}
+                  navId="edit-layout"
+                />
+              )}
               {/* Phone only: the account modal (balance, sign-in state) has no
                   other phone entry -- the readout capsule that opens it on the
                   desktop is not rendered on the phone. Shown on exactly the
