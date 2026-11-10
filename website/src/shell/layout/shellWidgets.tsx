@@ -10,7 +10,6 @@
 import type { ReactNode } from 'react'
 import { GripVertical } from 'lucide-react'
 
-import InstanceTabBar from '../../components/InstanceTabBar'
 import { NavHistoryArrows } from '../../components/NavHistoryArrows'
 import {
   HISTORY_ITEM, PROFILE_ITEM, REMOTE_ITEM, SEARCH_ITEM, STATUS_ITEM, useLayoutEditing, type ShellZone, type WidgetItem,
@@ -20,6 +19,7 @@ import type { AppShell } from '../appShell'
 import { startItemDrag } from './barItems'
 import { SearchTrigger } from './searchTrigger'
 import { SidebarStatus } from './sidebarStatus'
+import { RemoteCrewSwitcher } from './remoteCrews'
 
 /** A widget's wrapper: names it for drop indexing and lets it drag while editing. */
 export function WidgetSlot({ id, children, className = '' }: { id: WidgetItem; children: ReactNode; className?: string }) {
@@ -59,10 +59,10 @@ export function ShellWidget({ id, zone, shell, collapsed = false }: {
     case STATUS_ITEM:
       return <SidebarStatus shell={shell} collapsed={collapsed} />
     case REMOTE_ITEM:
-      // Renders nothing until a remote Crew is connected.
+      // Always shown, even with no remote yet (then it offers to add one).
       return (
-        <WidgetSlot id={REMOTE_ITEM} className={zone === 'sidebar' ? 'w-full overflow-hidden h-8' : 'h-full'}>
-          <InstanceTabBar variant="inline" />
+        <WidgetSlot id={REMOTE_ITEM} className={zone === 'sidebar' && !collapsed ? 'w-full' : ''}>
+          <RemoteCrewSwitcher shape={zone === 'sidebar' && collapsed ? 'icon' : 'chip'} fill={zone === 'sidebar' && !collapsed} />
         </WidgetSlot>
       )
     case HISTORY_ITEM:

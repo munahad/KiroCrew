@@ -164,11 +164,17 @@ export function ShellNavRail({ shell }: { shell: AppShell }) {
                head the sidebar (as in Claude, Codex and Slack) instead of the
                top bar. Expanded they share one row; collapsed, the logo is the
                expand control and the arrows stack under it. */
-            <div className={`flex mb-1.5 ${effectiveCollapsed ? 'flex-col items-center gap-1' : 'items-start gap-1'}`} data-testid="sidebar-header">
+            <div className={`flex mb-1.5 ${effectiveCollapsed ? 'flex-col items-center gap-1' : 'items-center gap-1'}`} data-testid="sidebar-header">
               <div className="flex-1 min-w-0 w-full [&>div]:mb-0">
                 <RailBrandToggle effectiveCollapsed={effectiveCollapsed} toggleNav={toggleNav} avatar={avatar} branding={branding} botName={botName} />
               </div>
-              {historyPlace === 'sidebar' && <WidgetSlot id={HISTORY_ITEM}><NavHistoryArrows vertical={effectiveCollapsed} /></WidgetSlot>}
+              {/* A hairline and a little room set Back/Forward apart from the
+                  logo row's collapse control, so the row reads as two groups. */}
+              {historyPlace === 'sidebar' && (
+                <WidgetSlot id={HISTORY_ITEM} className={effectiveCollapsed ? '' : 'ml-1 pl-1.5 border-l border-border h-7'}>
+                  <NavHistoryArrows vertical={effectiveCollapsed} />
+                </WidgetSlot>
+              )}
               {/* "Show as icon": search joins the header row (expanded only;
                   the collapsed strip keeps its own icon row below). */}
               {searchInHeader && (
@@ -178,10 +184,9 @@ export function ShellNavRail({ shell }: { shell: AppShell }) {
           )}
           {/* Design exploration: search can live here instead of the top bar. */}
           {/* Design exploration: the remote Crews switcher (Local and each
-              connected remote) under the header. Renders nothing until a
-              remote Crew exists. */}
-          {!isMobile && remotePlace === 'sidebar' && !effectiveCollapsed && (
-            <div className="mb-1.5"><ShellWidget id={REMOTE_ITEM} zone="sidebar" shell={shell} /></div>
+              connected remote) under the header; an icon in the collapsed strip. */}
+          {!isMobile && remotePlace === 'sidebar' && (
+            <div className={`mb-1.5 ${effectiveCollapsed ? 'flex justify-center' : ''}`}><ShellWidget id={REMOTE_ITEM} zone="sidebar" shell={shell} collapsed={effectiveCollapsed} /></div>
           )}
           {!isMobile && searchPlace === 'sidebar' && !searchInHeader && (
             <SearchTrigger variant="sidebar" collapsed={effectiveCollapsed} onOpen={commandPalette.openPalette} launcherOwned={!!slotOwners['quick-search']} />

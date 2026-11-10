@@ -53,7 +53,9 @@ type Category = 'all' | 'pages' | 'apps' | 'mates' | 'sessions' | 'tools'
 const CATEGORIES: Category[] = ['all', 'pages', 'apps', 'mates', 'sessions', 'tools']
 const SESSION_BROWSE_LIMIT = 20
 
-interface Candidate { id: string; category: Exclude<Category, 'all'>; meta: RailItemMeta }
+/** `detail`: a short tag that tells apart two items with the same name (two
+ *  sessions both titled "Kiro Crew Feature Request", say). Shown only then. */
+interface Candidate { id: string; category: Exclude<Category, 'all'>; meta: RailItemMeta; detail?: string }
 
 function categoryOf(id: string): Exclude<Category, 'all'> {
   if (id.startsWith(MATE_PIN_PREFIX)) return 'mates'
@@ -116,10 +118,10 @@ export function LayoutEditPanel({ groups, hidden, meta }: {
   const candidates = useMemo((): Candidate[] => {
     const out: Candidate[] = []
     const seen = new Set<string>()
-    const add = (id: string, m: RailItemMeta | null) => {
+    const add = (id: string, m: RailItemMeta | null, detail?: string) => {
       if (!m || seen.has(id)) return
       seen.add(id)
-      out.push({ id, category: categoryOf(id), meta: m })
+      out.push({ id, category: categoryOf(id), meta: m, detail })
     }
     add(SEARCH_ITEM, { label: i18nT('nav.layout_locked_search'), icon: <Search size={16} /> })
     add(REMOTE_ITEM, { label: i18nT('components.instanceTabBar.instances'), icon: <MonitorSmartphone size={16} /> })
@@ -133,7 +135,7 @@ export function LayoutEditPanel({ groups, hidden, meta }: {
       if (!isEntityPin(id) && !isWindowToggle(id)) add(id, meta(id))
     }
     for (const m of roster ?? []) add(matePinId(m.slug), { label: m.name, icon: <CrewAvatar seed={m.name} avatar={m.avatar} size={18} /> })
-    for (const s of slots) add(sessionPinId(s.key), { label: s.title || s.key, icon: <MessageSquare size={16} /> })
+    for (const s of slots) add(sessionPinId(s.key), { label: s.title || s.key, icon: <MessageSquare size={16} /> }, s.key.slice(-6))
     return out
   }, [groups, hidden, meta, placement.top, placement.bottom, roster, slots, terminalEnabled])
 
@@ -151,6 +153,13 @@ export function LayoutEditPanel({ groups, hidden, meta }: {
     return list
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [candidates, category, q])
+
+  // Names that appear more than once get their detail tag on the second line.
+  const repeated = useMemo(() => {
+    const n = new Map<string, number>()
+    for (const x of candidates) n.set(x.meta.label, (n.get(x.meta.label) ?? 0) + 1)
+    return new Set([...n].filter(([, c]) => c > 1).map(([l]) => l))
+  }, [candidates])
 
   const where = (id: string): ShellZone | 'none' => zoneOf(id, placement, onSidebar.has(id)) ?? 'none'
 
@@ -267,7 +276,9 @@ export function LayoutEditPanel({ groups, hidden, meta }: {
               <span className="w-5 h-5 flex items-center justify-center shrink-0 text-muted">{x.meta.icon}</span>
               <span className="flex-1 min-w-0">
                 <span className="block truncate text-[13px] text-text" title={x.meta.label}>{x.meta.label}</span>
-                <span className="block text-[11px] text-muted">{categoryLabel(x.category)}</span>
+                <span className="block text-[11px] text-muted">
+                  {categoryLabel(x.category)}{x.detail && repeated.has(x.meta.label) ? ` · ${x.detail}` : ''}
+                </span>
               </span>
               {/* The app's own dropdown (themed), kept out of the row's drag. */}
               <SimpleSelect

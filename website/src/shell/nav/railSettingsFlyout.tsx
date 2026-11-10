@@ -10,6 +10,7 @@ import { i18nT } from '../../i18n/t'
 import { sendFeedback } from '../../lib/shellLayout'
 import { surfaceLabel } from '../../surfaces/registry'
 import { NAV_ITEMS } from './navItems'
+import { RemoteCrewList } from '../layout/remoteCrews'
 import type { AppShell } from '../appShell'
 import { NavItem } from './navRow'
 
@@ -69,8 +70,8 @@ function MockDialog({ open, title, body, confirm, onClose }: { open: boolean; ti
  * comes first, then configuration (Settings, Customize, Edit layout), then
  * device and connection (phone, remote switching), then help and community
  * (Send feedback, Report issue, GitHub, Discord), then Sign out. The row shows
- * a chevron so it reads as opening a menu. Remote switching and Sign out are
- * prototype mocks: they explain what they would do and change nothing. The flyout is a
+ * a chevron so it reads as opening a menu. Switch remote… opens the real
+ * Crews list; Sign out is a prototype mock that explains and changes nothing. The flyout is a
  * Radix popover, portaled to the overlay root so the rail's `overflow-hidden`
  * cannot clip it.
  */
@@ -196,12 +197,16 @@ export function RailSettingsFlyout({ settings, customize, collapsed, activePath,
       confirm={i18nT('nav.profile_sign_out')}
       onClose={() => setMock(null)}
     />
-    <MockDialog
+    {/* "Switch remote…" is real: the same Crews list the switcher shows. */}
+    <Modal
       open={mock === 'remote'}
-      title={i18nT('nav.profile_remote_title')}
-      body={i18nT('nav.profile_remote_body')}
       onClose={() => setMock(null)}
-    />
+      title={i18nT('nav.profile_remote_title')}
+      maxWidth={420}
+    >
+      <p className="m-0 mb-3 text-sm text-muted">{i18nT('nav.profile_remote_body')}</p>
+      <RemoteCrewList onDone={() => setMock(null)} />
+    </Modal>
   </>)
 }
 

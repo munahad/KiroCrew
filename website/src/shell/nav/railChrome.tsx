@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
-import { ArrowLeftToLine, PanelLeft } from 'lucide-react'
+import { PanelLeft, PanelLeftClose } from 'lucide-react'
 import { GithubIcon, DiscordIcon } from '../../components/BrandIcon'
 import type { getThemeBranding } from '../../themeBranding'
 import { i18nT } from '../../i18n/t'
@@ -147,9 +147,11 @@ export function RailBrandToggle({ effectiveCollapsed, toggleNav, avatar, brandin
               exit={{ opacity: 0, transition: { duration: 0.12, ease: 'easeIn' } }}
               className="absolute right-0 top-[6px] h-4 flex items-center text-muted pointer-events-none"
             >
-              {/* Arrow-to-edge, not a hide-panel glyph: the rail
-                  collapses to an icon rail rather than hiding. */}
-              <ArrowLeftToLine size={15} />
+              {/* Design exploration: a sidebar glyph, not an arrow. With
+                  Back/Forward beside it in the header, an arrow-to-edge read as
+                  a third Back arrow. The collapsed state's expand control
+                  already uses the matching PanelLeft glyph. */}
+              <PanelLeftClose size={15} />
             </motion.span>
           )}
         </AnimatePresence>

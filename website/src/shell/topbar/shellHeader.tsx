@@ -26,6 +26,7 @@ import { BarItems } from '../layout/barItems'
 import { HISTORY_ITEM, REMOTE_ITEM, SEND_FEEDBACK_EVENT, useHistoryPlace, useRemotePlace, useSearchPlace, useStatusPlace } from '../../lib/shellLayout'
 import { NavHistoryArrows } from '../../components/NavHistoryArrows'
 import { WidgetSlot } from '../layout/shellWidgets'
+import { RemoteCrewSwitcher } from '../layout/remoteCrews'
 import { SearchTrigger } from '../layout/searchTrigger'
 
 // Lazy, like App.tsx's update-found popup: the pill renders nothing without an update,
@@ -289,7 +290,7 @@ export function ShellHeader({ shell }: { shell: AppShell }) {
           {!isMobile && historyPlace === 'top' && <WidgetSlot id={HISTORY_ITEM}><NavHistoryArrows /></WidgetSlot>}
           {isMobile
             ? <InstanceTabBar variant="inline" />
-            : remotePlace === 'top' && <WidgetSlot id={REMOTE_ITEM} className="h-full"><InstanceTabBar variant="inline" /></WidgetSlot>}
+            : remotePlace === 'top' && <WidgetSlot id={REMOTE_ITEM}><RemoteCrewSwitcher /></WidgetSlot>}
           </div>
         </div>
         )}
