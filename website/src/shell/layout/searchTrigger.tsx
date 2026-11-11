@@ -93,7 +93,6 @@ export function SearchTrigger({ onOpen, launcherOwned, variant, collapsed = fals
         aria-keyshortcuts={IS_MAC ? 'Meta+K' : 'Control+K'}
         data-bar-item={SEARCH_ITEM}
         data-testid="search-trigger-sidebar"
-        {...uiLocation('shell.search')}
         {...drag}
         className={`w-7 h-7 shrink-0 flex items-center justify-center rounded-md bg-transparent border-none text-muted hover:text-text hover:bg-bg-hover ${editing ? 'cursor-grab active:cursor-grabbing' : 'cursor-pointer'}`}
       >
@@ -114,7 +113,6 @@ export function SearchTrigger({ onOpen, launcherOwned, variant, collapsed = fals
         aria-keyshortcuts={IS_MAC ? 'Meta+K' : 'Control+K'}
         data-bar-item={SEARCH_ITEM}
         data-testid={`search-trigger-${variant}`}
-        {...(variant === 'top' ? uiLocation('shell.search') : {})}
         {...drag}
         className={`${variant === 'top' ? 'h-7 w-8' : 'mx-auto mb-1.5 w-9 h-8'} shrink-0 flex items-center justify-center rounded-lg border border-border bg-bg text-muted hover:text-text ${editCls}`}
       >
@@ -125,15 +123,15 @@ export function SearchTrigger({ onOpen, launcherOwned, variant, collapsed = fals
 
   return (
     <button
-      ref={ref}
       type="button"
       onClick={editing ? undefined : onOpen}
-      aria-label={label}
+      aria-label={launcherOwned ? i18nT('app.open_command_bar') : i18nT('app.search_sessions_files_and_commands')}
       aria-keyshortcuts={IS_MAC ? 'Meta+K' : 'Control+K'}
       data-bar-item={SEARCH_ITEM}
       data-testid={`search-trigger-${variant}`}
-      // The guide system points at this control by name.
-      {...uiLocation('shell.search')}
+      // The guide system points at this control by name. Only the full search
+      // field registers it: one location id names one render site.
+      {...uiLocation('shell.search', ref)}
       {...drag}
       className={`h-7 flex items-center gap-2 pl-2.5 pr-1.5 rounded-lg border border-border bg-bg text-muted hover:text-text transition-colors min-w-0 ${
         variant === 'top' ? 'w-[240px] max-w-full' : 'w-full mb-1.5'

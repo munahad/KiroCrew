@@ -153,7 +153,7 @@ export function ShellHeader({ shell }: { shell: AppShell }) {
     toggleFocusMode, focusActive, topPeek, topPeekSurface, topChromeShown, slotOwners, commandPalette,
     setKiroUsageOpen, kiroUsageState, usageSegmentHidden, metrics, capsuleCollapsed, setCapsuleCollapsed,
     capsuleLayoutPulse, pulseCapsuleLayout, sysMetrics, metricsProbeRef, metricsGroupRef, setReportProblemOpen,
-    requestFeature, toggleNav, effectiveCollapsed, botName, mobileSingle, membersRoute, membersBarPending, mobileNavOpen,
+    requestFeature, toggleNav, mobileSingle, membersRoute, membersBarPending, mobileNavOpen,
   } = shell
   // Design exploration: the profile menu's "Send feedback" starts the same
   // feature-request flow the top bar's pill used to.
