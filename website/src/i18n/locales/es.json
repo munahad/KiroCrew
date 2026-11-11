@@ -10729,7 +10729,6 @@
     "rail_reset": "Restablecer",
     "rail_done": "Listo",
     "rail_group_workspace": "Lista principal",
-    "status_bar": "Barra de estado",
     "rail_rename": "Cambiar nombre en la barra lateral",
     "rail_reset_name": "Restablecer nombre",
     "rail_drop_to_pin": "Suelta para añadir a la barra lateral",

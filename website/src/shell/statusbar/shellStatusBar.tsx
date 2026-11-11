@@ -1,4 +1,3 @@
-import { i18nT } from '../../i18n/t'
 import { BarItems, zoneLabel } from '../layout/barItems'
 import type { AppShell } from '../appShell'
 
