@@ -10802,7 +10802,8 @@
     "layout_moved_up": "Movido para cima: {{item}}",
     "layout_moved_down": "Movido para baixo: {{item}}",
     "layout_fixed_spot": "Posição fixa: use o menu para movê-lo para outro lugar",
-    "layout_fixed_short": "Fixa"
+    "layout_fixed_short": "Fixa",
+    "layout_phone_only": "As alterações aqui valem só para este telefone. O layout do computador continua igual."
   },
   "pages": {
     "agentsPage": {

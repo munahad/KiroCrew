@@ -15,7 +15,7 @@ import { OVERLAY_Z_MAX, THEME_DECOR_BEHIND_SLOT_ID, THEME_DECOR_SLOT_ID, registe
 import { ZoomProvider } from './hooks/ZoomProvider'
 import { api } from './api/client'
 import { MetricsCard } from './shell/topbar/metricsReadout'
-import { Rocket, RefreshCw, Package, Download, Hammer, XCircle, Check, AlertTriangle, Coins, Compass, LayoutGrid, SquareTerminal, Search as SearchIcon } from 'lucide-react'
+import { Rocket, RefreshCw, Package, Download, Hammer, XCircle, Check, AlertTriangle, Coins, Compass, LayoutGrid, Settings2, SquareTerminal, Search as SearchIcon } from 'lucide-react'
 import { FirstRunChapters } from './shell/boot/firstRun'
 import ErrorNotice from './components/ErrorNotice'
 import { MobileConnectDialog } from './shell/nav/mobileConnect'
@@ -87,7 +87,7 @@ import { guideTarget } from './uiLocations/targetRegistry'
 import { useAppShell } from './shell/appShell'
 import { ShellHeader } from './shell/topbar/shellHeader'
 import { ShellStatusBar } from './shell/statusbar/shellStatusBar'
-import { useBarHasContent, useLayoutEditing, useTopBarHasContent } from './lib/shellLayout'
+import { useBarHasContent, useLayoutEditing, useTopBarHasContent, setLayoutEditing } from './lib/shellLayout'
 import { LayoutZoneOutlines } from './shell/layout/layoutZones'
 import { ShellNavRail } from './shell/nav/navRail'
 import { NavItem, NavBadge } from './shell/nav/navRow'
@@ -487,6 +487,20 @@ export default function App() {
               />
             )}
             {railRow(capabilitiesSurface)}
+            {/* Design exploration: the chat page's drawer is this icon rail,
+                not the nav drawer, so it needs its own way into Edit layout.
+                It closes this drawer and opens the nav drawer, where the
+                sidebar being edited lives, with the editor on top. */}
+            <NavItem
+              navId="edit-layout"
+              path="#"
+              label={i18nT('nav.rail_customize')}
+              icon={<Settings2 size={16} />}
+              active={false}
+              collapsed
+              touch
+              onClickOverride={() => { onActivate(); shell.toggleNav(); setLayoutEditing(true) }}
+            />
             {/* The account modal (balance, sign-in state): the desktop opens it
                 from the readout capsule, which the phone does not render, so the
                 rail carries it -- on exactly the readings the desktop segment

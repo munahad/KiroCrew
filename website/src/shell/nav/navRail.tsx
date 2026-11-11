@@ -21,6 +21,8 @@ import {
 } from '../../lib/shellLayout'
 import { ShellWidget, WidgetSlot } from '../layout/shellWidgets'
 import { SidebarTools } from '../layout/sidebarTools'
+import { PhoneBarRows } from '../layout/phoneBarRows'
+import { forPhone, phoneBarIds, usePhoneLayout } from '../../lib/phoneLayout'
 import { SidebarStatus } from '../layout/sidebarStatus'
 import { SearchTrigger } from '../layout/searchTrigger'
 
@@ -73,6 +75,10 @@ export function ShellNavRail({ shell }: { shell: AppShell }) {
   const historyPlace = useHistoryPlace()
   const profilePlace = useProfilePlace()
   const placement = useShellPlacement()
+  // The phone's column: bar items join the drawer, in the phone's own order.
+  const phoneLayout = usePhoneLayout()
+  const phoneTop = forPhone(phoneBarIds(placement.top), phoneLayout)
+  const phoneBottom = forPhone([...phoneBarIds(placement.bottom), ...phoneLayout.extra], phoneLayout)
   const searchInHeader = !isMobile && searchPlace === 'sidebar' && searchStyle === 'icon' && !effectiveCollapsed
 
   // Render one standard nav row (used by the top-fixed mains, the Apps list,
@@ -213,6 +219,9 @@ export function ShellNavRail({ shell }: { shell: AppShell }) {
                 with Library-unpinned ones already filtered out, so a user with
                 no stored layout sees their apps exactly as before, in the Apps
                 group, and a newly installed app joins that group. */}
+            {/* Design exploration: the phone has no bars, so what the desktop
+                put in the top bar opens the column (the shell review's decision). */}
+            {isMobile && <PhoneBarRows ids={phoneTop} shell={shell} onNavigate={closeMobileNav} label={i18nT('nav.layout_zone_top')} />}
             <PinnedRailGroups
               onNavigate={closeMobileNav}
               available={[
@@ -259,6 +268,10 @@ export function ShellNavRail({ shell }: { shell: AppShell }) {
                 return n ? renderNavRow(n, label, covered) : null
               }}
             />
+            {/* Design exploration: the phone has no bars, so what the desktop
+                put in the bottom bar (and what the phone alone shows) closes
+                the column. */}
+            {isMobile && <PhoneBarRows ids={phoneBottom} shell={shell} onNavigate={closeMobileNav} label={i18nT('nav.layout_zone_bottom')} />}
           </div>
         </div>
 

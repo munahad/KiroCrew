@@ -53,12 +53,36 @@ export function startItemDrag(e: DragEvent, id: string) {
   window.addEventListener('drop', clear, true)
 }
 
+/** What tapping a placed item does, and whether it shows as on: shared by the
+ *  bars and the phone's sidebar column, so an item behaves the same anywhere. */
+export function useBarItemActions(shell: AppShell) {
+  const dispatch = useAppDispatch()
+  const navigate = useNavigate()
+  const location = useLocation()
+  const meta = useBarItemMeta(shell.allAppGroup)
+  const act = (id: string) => {
+    if (id === TERMINAL_ITEM) { if (shell.terminalPoppedOut) focusTerminalPopout(); else toggleBottomTerminal(shell.activeSlotProject); return }
+    if (id === PHONE_ITEM) { shell.setMobileConnectOpen(true); return }
+    if (id === FEEDBACK_ITEM) { void shell.requestFeature(); return }
+    const m = meta(id)
+    // A pinned session: switch the chat to it (navigate alone does not while /chat is open).
+    if (m?.sessionKey) { dispatch(switchSlot({ key: m.sessionKey, announceOnMissing: true, gesture: true })); navigate('/chat'); return }
+    if (m?.path) navigate(m.path)
+  }
+  const pressed = (id: string) => {
+    if (id === TERMINAL_ITEM) return shell.bottomTerminalOpen || shell.terminalPoppedOut
+    if (id === PHONE_ITEM) return shell.mobileConnectOpen
+    const path = meta(id)?.path
+    return !!path && (location.pathname === path || location.pathname.startsWith(path + '/'))
+  }
+  return { meta, act, pressed }
+}
+
 /** `slot`: in the top bar, which part this group draws (left, centre or right).
  *  Each part is its own drop target; widgets other than search draw on the right. */
 export function BarItems({ zone, shell, slot }: { zone: BarZone; shell: AppShell; slot?: TopSlot }) {
   const placement = useShellPlacement()
-  const dispatch = useAppDispatch()
-  const shellItemMeta = useBarItemMeta(shell.allAppGroup)
+  const { meta: shellItemMeta, act, pressed } = useBarItemActions(shell)
   const searchTopSlot = useSearchTopSlot()
   const slotOf = useZoneSlots(zone)
   const inThisSlot = (id: string) => !slot || slotOf(id) === slot
@@ -68,8 +92,6 @@ export function BarItems({ zone, shell, slot }: { zone: BarZone; shell: AppShell
     ? inThisSlot(id)
     : (!slot || slot === 'right') && (!TOP_NATIVE.has(id) || (id === SEARCH_ITEM && searchTopSlot === 'right')))
   const editing = useLayoutEditing()
-  const navigate = useNavigate()
-  const location = useLocation()
   const ref = useRef<HTMLDivElement>(null)
   const [over, setOver] = useState(false)
 
@@ -103,22 +125,6 @@ export function BarItems({ zone, shell, slot }: { zone: BarZone; shell: AppShell
   } : {}
 
   if (!editing && ids.length === 0 && widgets.length === 0) return null
-
-  const act = (id: string) => {
-    if (id === TERMINAL_ITEM) { if (shell.terminalPoppedOut) focusTerminalPopout(); else toggleBottomTerminal(shell.activeSlotProject); return }
-    if (id === PHONE_ITEM) { shell.setMobileConnectOpen(true); return }
-    if (id === FEEDBACK_ITEM) { void shell.requestFeature(); return }
-    const m = shellItemMeta(id)
-    // A pinned session: switch the chat to it (navigate alone does not while /chat is open).
-    if (m?.sessionKey) { dispatch(switchSlot({ key: m.sessionKey, announceOnMissing: true, gesture: true })); navigate('/chat'); return }
-    if (m?.path) navigate(m.path)
-  }
-  const pressed = (id: string) => {
-    if (id === TERMINAL_ITEM) return shell.bottomTerminalOpen || shell.terminalPoppedOut
-    if (id === PHONE_ITEM) return shell.mobileConnectOpen
-    const path = shellItemMeta(id)?.path
-    return !!path && (location.pathname === path || location.pathname.startsWith(path + '/'))
-  }
 
   return (
     <div

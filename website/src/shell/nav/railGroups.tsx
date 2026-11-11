@@ -19,6 +19,11 @@ import {
   type SidebarMembership,
 } from '../../lib/shellLayout'
 import { shellItemMeta, zonesFor } from '../layout/shellItems'
+import { useIsMobile } from '../../hooks/useIsMobile'
+import { forPhone, usePhoneLayout } from '../../lib/phoneLayout'
+
+/** No drag sensors: the phone's drawer rows do not drag. */
+const NO_SENSORS: ReturnType<typeof useDndSensors> = []
 
 import { zoneLabel } from '../layout/barItems'
 import { OPEN_RAIL_CUSTOMIZE_EVENT } from './railSettingsFlyout'
@@ -144,10 +149,21 @@ export function RailGroups({ available, renderItem, collapsed, defaultGroup, met
   setAppPinned?: (id: string, pinned: boolean) => void
 }) {
   const layout = useRailLayout()
-  const groups = useMemo(() => resolveRailLayout(layout, available, defaultGroup), [layout, available, defaultGroup])
+  // Design exploration: the phone shows the groups in its own order, without
+  // what was hidden on the phone (lib/phoneLayout.ts); the desktop is untouched.
+  const phone = useIsMobile()
+  const phoneLayout = usePhoneLayout()
+  const allGroups = useMemo(() => resolveRailLayout(layout, available, defaultGroup), [layout, available, defaultGroup])
+  const groups = useMemo(
+    () => (phone ? allGroups.map(x => ({ ...x, items: forPhone(x.items, phoneLayout) })) : allGroups),
+    [allGroups, phone, phoneLayout],
+  )
   const flat = useMemo(() => groups.flatMap(g => [headerId(g.id), ...g.items]), [groups])
   // Same 8px mouse threshold as the Apps list: a plain click must reach navigation.
-  const sensors = useDndSensors({ distance: 8 })
+  // The phone reorders from Edit layout's list instead: a drag here would
+  // write the desktop's order.
+  const dragSensors = useDndSensors({ distance: 8 })
+  const sensors = phone ? NO_SENSORS : dragSensors
   const [activeId, setActiveId] = useState<string | null>(null)
   // "Edit layout" edits the real canvas in place (design exploration).
   const editing = useLayoutEditing()
@@ -309,7 +325,7 @@ export function RailGroups({ available, renderItem, collapsed, defaultGroup, met
     </RailContextMenu>
     {editing && (
       <LayoutEditPanel
-        groups={groups}
+        groups={allGroups}
         hidden={hidden}
         meta={modalMeta}
         isApp={isApp}

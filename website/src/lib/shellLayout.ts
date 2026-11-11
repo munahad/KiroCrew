@@ -204,17 +204,24 @@ export const useTopSlots = () => useZoneSlots('top')
  */
 export function zoneDropAt(zone: BarZone, x: number, dragId: string | null): { slot: TopSlot; index: number; lineX: number | null } {
   const { slot, lineX: slotLine } = slotAt(zone, x)
+  const list = readShellPlacement()[zone].filter(id => id !== dragId)
+  const inSlot = list.filter(id => readZoneSlot(zone, id) === slot)
+  // Only the placed items on screen count as gaps. A widget drawn in the same
+  // part ("You", status) keeps its fixed spot and is not in `list`, so counting
+  // it shifted every drop by one; an item the bar cannot draw is not on screen.
   const els = [...document.querySelectorAll<HTMLElement>(`[data-layout-zone="${zone}"][data-top-slot="${slot}"] [data-bar-item]`)]
-    .filter(el => el.dataset.barItem !== dragId)
+    .filter(el => el.dataset.barItem !== dragId && inSlot.includes(el.dataset.barItem ?? ''))
   const rects = els.map(el => el.getBoundingClientRect())
   const i = rects.findIndex(r => r.left + r.width / 2 > x)
   const local = i < 0 ? rects.length : i
   let lineX = slotLine
   if (rects.length > 0) lineX = local < rects.length ? rects[local].left - 2 : rects[rects.length - 1].right + 2
-  // Local position among this slot's items -> index in the whole list.
-  const list = readShellPlacement()[zone].filter(id => id !== dragId)
-  const inSlot = list.filter(id => readZoneSlot(zone, id) === slot)
-  const index = local < inSlot.length ? list.indexOf(inSlot[local]) : inSlot.length ? list.indexOf(inSlot[inSlot.length - 1]) + 1 : list.length
+  // The gap's neighbour on screen -> index in the whole list.
+  const before = local < els.length ? els[local].dataset.barItem! : null
+  const after = local > 0 ? els[local - 1].dataset.barItem! : null
+  const index = before ? list.indexOf(before)
+    : after ? list.indexOf(after) + 1
+    : inSlot.length ? list.indexOf(inSlot[inSlot.length - 1]) + 1 : list.length
   return { slot, index, lineX }
 }
 export const topDropAt = (x: number, dragId: string | null) => zoneDropAt('top', x, dragId)

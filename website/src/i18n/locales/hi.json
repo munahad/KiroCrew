@@ -10655,7 +10655,8 @@
     "layout_moved_up": "{{item}} ऊपर ले जाया गया",
     "layout_moved_down": "{{item}} नीचे ले जाया गया",
     "layout_fixed_spot": "तय जगह: इसे दूसरी जगह ले जाने के लिए मेनू इस्तेमाल करो",
-    "layout_fixed_short": "तय"
+    "layout_fixed_short": "तय",
+    "layout_phone_only": "यहाँ किए बदलाव सिर्फ़ इस फ़ोन पर लागू होते हैं। डेस्कटॉप लेआउट वैसा ही रहता है।"
   },
   "pages": {
     "agentsPage": {

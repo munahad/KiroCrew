@@ -40,6 +40,7 @@ import {
 import { useTerminalEnabled } from '../../utils/terminalRegistry'
 import { useRailWidth } from '../../hooks/useRailWidth'
 import { useIsMobile } from '../../hooks/useIsMobile'
+import { forPhone, phoneBarIds, phoneHide, phoneShow, phoneStep, resetPhoneLayout, usePhoneLayout } from '../../lib/phoneLayout'
 import type { RailItemMeta } from '../nav/railCustomize'
 import { startItemDrag, zoneLabel } from './barItems'
 
@@ -107,11 +108,13 @@ export function LayoutEditPanel({ groups, hidden, meta }: {
   const [category, setCategory] = useState<Category>('all')
   const placement = useShellPlacement()
   const railWidth = useRailWidth()
-  // Phone layout: Edit layout edits the sidebar (the drawer) only. Its shell
-  // has no top or bottom bar, and its header, search and account controls are
-  // fixed, so only pages, apps, mates and sessions are listed, each with
-  // Sidebar or Not shown. The panel is a full-screen sheet.
+  // Phone layout: Edit layout edits the phone's one sidebar column, for this
+  // phone only (lib/phoneLayout.ts). Its shell has no top or bottom bar, so
+  // bar items join the column, and its header, search and account controls
+  // are fixed, so only pages, apps, mates, sessions and feedback are listed,
+  // each with Sidebar or Not shown. The panel is a full-screen sheet.
   const phone = useIsMobile()
+  const phoneLayout = usePhoneLayout()
   const searchStyle = useSearchStyle()
   const announcement = useLayoutAnnouncement()
   const terminalEnabled = useTerminalEnabled()
@@ -130,6 +133,16 @@ export function LayoutEditPanel({ groups, hidden, meta }: {
 
   const onSidebar = useMemo(() => new Set(groups.flatMap(g => g.items)), [groups])
 
+  /** The phone's column in parts (top-bar items, each sidebar group, then
+   *  bottom-bar and phone-only items), each in the phone's order. Move up and
+   *  Move down stay within a part, as they stay within a group on the desktop. */
+  const phoneParts = useMemo(() => (phone ? [
+    forPhone(phoneBarIds(placement.top), phoneLayout),
+    ...groups.map(g => forPhone(g.items, phoneLayout)),
+    forPhone([...phoneBarIds(placement.bottom), ...phoneLayout.extra], phoneLayout),
+  ] : []), [phone, placement.top, placement.bottom, groups, phoneLayout])
+  const phoneColumn = useMemo(() => phoneParts.flat(), [phoneParts])
+
   const candidates = useMemo((): Candidate[] => {
     const out: Candidate[] = []
     const seen = new Set<string>()
@@ -147,14 +160,16 @@ export function LayoutEditPanel({ groups, hidden, meta }: {
       if (terminalEnabled) add(TERMINAL_ITEM, { label: i18nT('app.terminal'), icon: <SquareTerminal size={16} /> })
       add(PHONE_ITEM, { label: i18nT('app.connect_your_phone'), icon: <Smartphone size={16} /> })
       add(FEEDBACK_ITEM, { label: i18nT('nav.send_feedback'), icon: <Lightbulb size={16} /> })
+    } else {
+      add(FEEDBACK_ITEM, { label: i18nT('nav.send_feedback'), icon: <Lightbulb size={16} /> })
     }
-    for (const id of [...groups.flatMap(g => g.items), ...hidden, ...placement.top, ...placement.bottom]) {
+    for (const id of [...groups.flatMap(g => g.items), ...hidden, ...placement.top, ...placement.bottom, ...(phone ? phoneLayout.extra : [])]) {
       if (!isEntityPin(id) && !isWindowToggle(id)) add(id, meta(id))
     }
     for (const m of roster ?? []) add(matePinId(m.slug), { label: m.name, icon: <CrewAvatar seed={m.name} avatar={m.avatar} size={18} /> })
     for (const s of slots) add(sessionPinId(s.key), { label: s.title || s.key, icon: <MessageSquare size={16} /> }, s.key.slice(-6))
     return out
-  }, [groups, hidden, meta, placement.top, placement.bottom, roster, slots, terminalEnabled, phone])
+  }, [groups, hidden, meta, placement.top, placement.bottom, roster, slots, terminalEnabled, phone, phoneLayout.extra])
 
   const q = query.trim().toLowerCase()
   const matches = (x: Candidate) => !q || x.meta.label.toLowerCase().includes(q)
@@ -187,6 +202,7 @@ export function LayoutEditPanel({ groups, hidden, meta }: {
     [HISTORY_ITEM]: -3, [REMOTE_ITEM]: -2, [SEARCH_ITEM]: -1, [STATUS_ITEM]: 20_000, [PROFILE_ITEM]: 20_001,
   }
   const orderOf = (id: string, section: ShellZone | 'none'): number => {
+    if (phone) return section === 'sidebar' ? phoneColumn.indexOf(id) : 0
     if (section === 'sidebar' && id in SIDEBAR_SLOT) return SIDEBAR_SLOT[id]
     if (isTwoPlaceItem(id)) return -1
     if (section === 'top') return placement.top.indexOf(id)
@@ -197,6 +213,11 @@ export function LayoutEditPanel({ groups, hidden, meta }: {
   /** Can this row move one step? Widgets keep fixed slots; sidebar rows move
    *  within their own group; bar items within their bar. */
   const canStep = (id: string, delta: -1 | 1): boolean => {
+    if (phone) {
+      const part = phoneParts.find(p => p.includes(id))
+      const i = part ? part.indexOf(id) : -1
+      return !!part && i + delta >= 0 && i + delta < part.length
+    }
     if (isTwoPlaceItem(id)) return false
     for (const list of [placement.top, placement.bottom, placement.side]) {
       const i = list.indexOf(id)
@@ -208,6 +229,11 @@ export function LayoutEditPanel({ groups, hidden, meta }: {
     return i + delta >= 0 && i + delta < g.items.length
   }
   const step = (id: string, delta: -1 | 1, label: string) => {
+    if (phone) {
+      const part = phoneParts.find(p => p.includes(id))
+      if (part && phoneStep(part, id, delta)) announceLayout(i18nT(delta < 0 ? 'nav.layout_moved_up' : 'nav.layout_moved_down', { item: label }))
+      return
+    }
     let moved = moveWithinBar(id, delta)
     if (!moved) {
       const g = groups.find(x => x.items.includes(id))
@@ -224,13 +250,22 @@ export function LayoutEditPanel({ groups, hidden, meta }: {
   }
 
   const where = (id: string): ShellZone | 'none' => {
-    const z = zoneOf(id, placement, onSidebar.has(id)) ?? 'none'
-    // On the phone an item a desktop window put in a bar is simply not shown.
-    return phone && (z === 'top' || z === 'bottom') ? 'none' : z
+    // On the phone every placed item is in its one column, unless hidden there.
+    if (phone) return phoneColumn.includes(id) ? 'sidebar' : 'none'
+    return zoneOf(id, placement, onSidebar.has(id)) ?? 'none'
   }
 
   const place = (id: string, to: ShellZone | 'none', label: string) => {
     if (to === where(id)) return
+    // The phone changes the phone only; the desktop layout stays as it is.
+    if (phone) {
+      if (to === 'none') phoneHide(id)
+      else phoneShow(id, zoneOf(id, placement, onSidebar.has(id)) !== null)
+      announceLayout(to === 'none'
+        ? i18nT('nav.layout_removed', { item: label })
+        : i18nT('nav.layout_moved', { item: label, place: zoneLabel('sidebar') }))
+      return
+    }
     // One path for every item. An installed app's Library pin follows through
     // the sidebar-membership event that moveItem raises (RailGroups listens).
     if (isEntityPin(id) && to === 'sidebar') {
@@ -276,8 +311,14 @@ export function LayoutEditPanel({ groups, hidden, meta }: {
         <div className="flex-1 min-w-0">
           <h2 className="m-0 text-[15px] font-semibold text-text">{i18nT('nav.rail_customize_title')}</h2>
           {/* One line: a longer translation shortens with "…" and the full
-              hint stays in the tooltip. */}
-          <p className="mt-1 mb-0 text-[12px] text-muted truncate" title={i18nT('nav.layout_hint')}>{i18nT('nav.layout_hint')}</p>
+              hint stays in the tooltip. On the phone the line says instead
+              that changes here stay on this phone. */}
+          {phone
+            ? <p className="mt-1 mb-0 text-[12px] text-muted flex items-start gap-1.5" data-testid="layout-phone-only">
+                <Smartphone size={13} aria-hidden="true" className="shrink-0 mt-px" />
+                <span>{i18nT('nav.layout_phone_only')}</span>
+              </p>
+            : <p className="mt-1 mb-0 text-[12px] text-muted truncate" title={i18nT('nav.layout_hint')}>{i18nT('nav.layout_hint')}</p>}
         </div>
         <button
           type="button"
@@ -481,7 +522,8 @@ export function LayoutEditPanel({ groups, hidden, meta }: {
       </ul>
 
       <footer className="flex items-center justify-between gap-2 px-4 py-3 border-t border-border">
-        <Btn onClick={() => { resetShellLayout(); announceLayout(i18nT('nav.layout_reset_done')) }}>{i18nT('nav.rail_reset')}</Btn>
+        {/* On the phone, Reset clears the phone's own changes only. */}
+        <Btn onClick={() => { if (phone) resetPhoneLayout(); else resetShellLayout(); announceLayout(i18nT('nav.layout_reset_done')) }}>{i18nT('nav.rail_reset')}</Btn>
         <Btn primary onClick={() => setLayoutEditing(false)}>{i18nT('nav.rail_done')}</Btn>
       </footer>
 

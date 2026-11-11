@@ -10802,7 +10802,8 @@
     "layout_moved_up": "Se movió {{item}} hacia arriba",
     "layout_moved_down": "Se movió {{item}} hacia abajo",
     "layout_fixed_spot": "Posición fija: usa el menú para moverlo a otro lugar",
-    "layout_fixed_short": "Fija"
+    "layout_fixed_short": "Fija",
+    "layout_phone_only": "Los cambios aquí solo se aplican a este teléfono. El diseño del escritorio no cambia."
   },
   "pages": {
     "agentsPage": {

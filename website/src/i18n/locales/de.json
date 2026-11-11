@@ -10655,7 +10655,8 @@
     "layout_moved_up": "{{item}} nach oben verschoben",
     "layout_moved_down": "{{item}} nach unten verschoben",
     "layout_fixed_spot": "Fester Platz: Über das Menü an einen anderen Ort verschieben",
-    "layout_fixed_short": "Fest"
+    "layout_fixed_short": "Fest",
+    "layout_phone_only": "Änderungen hier gelten nur für dieses Telefon. Das Desktop-Layout bleibt unverändert."
   },
   "pages": {
     "agentsPage": {

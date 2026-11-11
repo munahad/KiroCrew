@@ -4734,7 +4734,8 @@
     "layout_moved_up": "{{item}} moved up",
     "layout_moved_down": "{{item}} moved down",
     "layout_fixed_spot": "Fixed spot: use the menu to move it to another place",
-    "layout_fixed_short": "Fixed"
+    "layout_fixed_short": "Fixed",
+    "layout_phone_only": "Changes here apply to this phone only. Your desktop layout stays the same."
   },
   "pages": {
     "aidlc": {

@@ -10655,7 +10655,8 @@
     "layout_moved_up": "{{item}} উপরে সরানো হয়েছে",
     "layout_moved_down": "{{item}} নিচে সরানো হয়েছে",
     "layout_fixed_spot": "নির্দিষ্ট জায়গা: অন্য জায়গায় সরাতে মেনু ব্যবহার করো",
-    "layout_fixed_short": "নির্দিষ্ট"
+    "layout_fixed_short": "নির্দিষ্ট",
+    "layout_phone_only": "এখানের পরিবর্তন শুধু এই ফোনে প্রযোজ্য। ডেস্কটপের লেআউট একই থাকে।"
   },
   "pages": {
     "agentsPage": {
