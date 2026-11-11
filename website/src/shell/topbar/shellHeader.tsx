@@ -23,7 +23,7 @@ import type { AppShell } from '../appShell'
 import { hiddenChromeProps } from '../focus/focusChrome'
 import { setAgentSwitchNotice } from '../../store/chatSlice'
 import { BarItems } from '../layout/barItems'
-import { HISTORY_ITEM, REMOTE_ITEM, SEND_FEEDBACK_EVENT, useHistoryPlace, useRemotePlace, useSearchPlace, useStatusPlace } from '../../lib/shellLayout'
+import { HISTORY_ITEM, REMOTE_ITEM, SEND_FEEDBACK_EVENT, useHistoryPlace, useSearchTopSlot, useRemotePlace, useSearchPlace, useStatusPlace } from '../../lib/shellLayout'
 import { NavHistoryArrows } from '../../components/NavHistoryArrows'
 import { WidgetSlot } from '../layout/shellWidgets'
 import { RemoteCrewSwitcher } from '../layout/remoteCrews'
@@ -169,6 +169,7 @@ export function ShellHeader({ shell }: { shell: AppShell }) {
   const statusTop = useStatusPlace() === 'top'
   const remotePlace = useRemotePlace()
   const historyPlace = useHistoryPlace()
+  const searchTopSlot = useSearchTopSlot()
   return (
     <>
       {/* Topbar */}
@@ -288,6 +289,10 @@ export function ShellHeader({ shell }: { shell: AppShell }) {
               here only when Edit layout puts them in the top bar (both start
               in the sidebar). The phone keeps its switcher here. */}
           {!isMobile && historyPlace === 'top' && <WidgetSlot id={HISTORY_ITEM}><NavHistoryArrows /></WidgetSlot>}
+          {/* Search dropped on the left part of the top bar sits here. */}
+          {!isMobile && searchPlace === 'top' && searchTopSlot === 'left' && (
+            <SearchTrigger variant="top" onOpen={commandPalette.openPalette} launcherOwned={!!slotOwners['quick-search']} />
+          )}
           {isMobile
             ? <InstanceTabBar variant="inline" />
             : remotePlace === 'top' && <WidgetSlot id={REMOTE_ITEM}><RemoteCrewSwitcher /></WidgetSlot>}
@@ -335,7 +340,7 @@ export function ShellHeader({ shell }: { shell: AppShell }) {
           {/* Design exploration: the Command Bar trigger, drawn as a compact
               search field. It sits here unless Edit layout moved it to the
               sidebar; a spacer keeps the focus-mode toggle in place. */}
-          {searchPlace === 'top'
+          {searchPlace === 'top' && searchTopSlot === 'center'
             ? <SearchTrigger variant="top" onOpen={commandPalette.openPalette} launcherOwned={!!slotOwners['quick-search']} />
             : <span className="flex-1 min-w-0" aria-hidden="true" />}
           {/* Focus mode. `aria-pressed` rather than a second label, so a screen

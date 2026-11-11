@@ -19,7 +19,7 @@ import { i18nT } from '../../i18n/t'
 import { RAIL_PIN_MIME } from '../../lib/railLayout'
 import {
   FEEDBACK_ITEM, HISTORY_ITEM, PHONE_ITEM, REMOTE_ITEM, SEARCH_ITEM, SHELL_ITEM_MIME, STATUS_ITEM, TERMINAL_ITEM, announceLayout, isWindowToggle, moveItem,
-  readChromeDrag, setChromeDrag, useLayoutEditing, useShellPlacement, useWidgetsIn, type BarZone,
+  readChromeDrag, setChromeDrag, setSearchTopSlot, useLayoutEditing, useSearchTopSlot, useShellPlacement, useWidgetsIn, type BarZone,
 } from '../../lib/shellLayout'
 import { focusPopout as focusTerminalPopout } from '../../utils/terminalPopout'
 import type { AppShell } from '../appShell'
@@ -56,7 +56,9 @@ export function BarItems({ zone, shell }: { zone: BarZone; shell: AppShell }) {
   const placement = useShellPlacement()
   const dispatch = useAppDispatch()
   const shellItemMeta = useBarItemMeta(shell.allAppGroup)
-  const widgets = useWidgetsIn(zone).filter(id => zone === 'bottom' || !TOP_NATIVE.has(id))
+  const searchTopSlot = useSearchTopSlot()
+  // In the top bar, search draws here only when it sits in the right cluster.
+  const widgets = useWidgetsIn(zone).filter(id => zone === 'bottom' || !TOP_NATIVE.has(id) || (id === SEARCH_ITEM && searchTopSlot === 'right'))
   const editing = useLayoutEditing()
   const navigate = useNavigate()
   const location = useLocation()
@@ -90,6 +92,8 @@ export function BarItems({ zone, shell }: { zone: BarZone; shell: AppShell }) {
       e.preventDefault()
       const id = e.dataTransfer.getData(SHELL_ITEM_MIME)
       if (!id) return
+      // Dropped on the top bar's right cluster: search joins it there.
+      if (id === SEARCH_ITEM && zone === 'top') setSearchTopSlot('right')
       moveItem(id, zone, indexAt(e.clientX))
       announceLayout(i18nT('nav.layout_moved', { item: shellItemMeta(id)?.label ?? id, place: zoneLabel(zone) }))
     },

@@ -109,6 +109,51 @@ export const useRemotePlace = () => usePlace(REMOTE_ITEM)
 export const useHistoryPlace = () => usePlace(HISTORY_ITEM)
 export const useProfilePlace = () => usePlace(PROFILE_ITEM)
 
+/** Where search sits inside the top bar: the left cluster, the centre slot
+ *  (default) or the start of the right cluster. Set from where it is dropped,
+ *  so it lands where you let go (Gary's first look: dropped on the right, it
+ *  snapped to the middle). */
+export type TopSlot = 'left' | 'center' | 'right'
+const SEARCH_TOP_SLOT_KEY = 'mc-search-top-slot'
+const SEARCH_TOP_SLOT_EVENT = 'mc:search-top-slot-changed'
+
+export function readSearchTopSlot(): TopSlot {
+  const v = safeGetItem(SEARCH_TOP_SLOT_KEY)
+  return v === 'left' || v === 'right' ? v : 'center'
+}
+
+export function setSearchTopSlot(slot: TopSlot): void {
+  if (slot === 'center') safeRemoveItem(SEARCH_TOP_SLOT_KEY)
+  else safeSetItem(SEARCH_TOP_SLOT_KEY, slot)
+  window.dispatchEvent(new Event(SEARCH_TOP_SLOT_EVENT))
+}
+
+export function useSearchTopSlot(): TopSlot {
+  const [s, setS] = useState(readSearchTopSlot)
+  useEffect(() => {
+    const sync = () => setS(readSearchTopSlot())
+    window.addEventListener(SEARCH_TOP_SLOT_EVENT, sync)
+    window.addEventListener('storage', sync)
+    return () => {
+      window.removeEventListener(SEARCH_TOP_SLOT_EVENT, sync)
+      window.removeEventListener('storage', sync)
+    }
+  }, [])
+  return s
+}
+
+/** The top-bar slot a drop at client-x `x` means (thirds of the bar), and the
+ *  x to draw the drop line at. */
+export function searchTopSlotAt(x: number): { slot: TopSlot; lineX: number | null } {
+  const el = document.querySelector<HTMLElement>('[data-layout-outline="top"]')
+  const r = el?.getBoundingClientRect()
+  if (!r || r.width === 0) return { slot: 'center', lineX: null }
+  const third = r.width / 3
+  if (x < r.left + third) return { slot: 'left', lineX: r.left + 12 }
+  if (x > r.right - third) return { slot: 'right', lineX: r.right - third + 12 }
+  return { slot: 'center', lineX: r.left + r.width / 2 }
+}
+
 /** How search is drawn: the full field (default) or only its magnifier icon.
  *  Set from the search row in Edit layout; applies wherever search lives. In
  *  the expanded sidebar the icon joins the header row, beside Back/Forward. */
@@ -312,6 +357,8 @@ export function resetShellLayout(): void {
   safeRemoveItem(PLACEMENT_KEY)
   for (const id of WIDGET_ITEMS) safeRemoveItem(PLACE_KEY[id])
   safeRemoveItem(SEARCH_STYLE_KEY)
+  safeRemoveItem(SEARCH_TOP_SLOT_KEY)
+  window.dispatchEvent(new Event(SEARCH_TOP_SLOT_EVENT))
   window.dispatchEvent(new Event(PLACE_EVENT))
   window.dispatchEvent(new Event(SEARCH_STYLE_EVENT))
   window.dispatchEvent(new Event(PLACEMENT_EVENT))

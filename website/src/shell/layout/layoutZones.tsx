@@ -27,7 +27,7 @@ import { Ban } from 'lucide-react'
 
 import { i18nT } from '../../i18n/t'
 import {
-  SHELL_ITEM_MIME, announceLayout, barDropAt, moveItem, readChromeDrag, setChromeDrag, useChromeDrag, useLayoutEditing,
+  SEARCH_ITEM, SHELL_ITEM_MIME, announceLayout, barDropAt, searchTopSlotAt, setSearchTopSlot, moveItem, readChromeDrag, setChromeDrag, useChromeDrag, useLayoutEditing,
   type BarZone, type ShellZone,
 } from '../../lib/shellLayout'
 import { shellItemMeta, zonesFor } from './shellItems'
@@ -72,7 +72,10 @@ function ZoneOutline({ zone, area, dragging, nativeDrag, allowed, over, lineX }:
     if (!bar || !allowed || !e.dataTransfer.types.includes(SHELL_ITEM_MIME)) return
     e.preventDefault()
     e.dataTransfer.dropEffect = 'move'
-    setChromeDrag({ over: bar, lineX: barDropAt(bar, e.clientX, readChromeDrag().id).lineX })
+    const dragged = readChromeDrag().id
+    // Search over the top bar lands in its left, centre or right part.
+    const lineX = dragged === SEARCH_ITEM && bar === 'top' ? searchTopSlotAt(e.clientX).lineX : barDropAt(bar, e.clientX, dragged).lineX
+    setChromeDrag({ over: bar, lineX })
   }
   const onDragLeave = (e: DragEvent) => {
     if (e.currentTarget.contains(e.relatedTarget as Node | null)) return
@@ -83,6 +86,7 @@ function ZoneOutline({ zone, area, dragging, nativeDrag, allowed, over, lineX }:
     e.preventDefault()
     const id = e.dataTransfer.getData(SHELL_ITEM_MIME)
     if (!id) return
+    if (id === SEARCH_ITEM && bar === 'top') setSearchTopSlot(searchTopSlotAt(e.clientX).slot)
     moveItem(id, bar, barDropAt(bar, e.clientX, id).index)
     announceLayout(i18nT('nav.layout_moved', { item: shellItemMeta(id)?.label ?? id, place: zoneLabel(bar) }))
   }
