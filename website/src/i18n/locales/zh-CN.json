@@ -10509,7 +10509,14 @@
     "layout_moved_down": "已将{{item}}下移",
     "layout_fixed_spot": "固定位置：使用菜单将其移到其他位置",
     "layout_fixed_short": "固定",
-    "layout_phone_only": "此处的更改仅适用于这部手机。桌面布局保持不变。"
+    "layout_phone_only": "此处的更改仅适用于这部手机。桌面布局保持不变。",
+    "layout_move_left": "将{{item}}左移",
+    "layout_move_right": "将{{item}}右移",
+    "layout_moved_left": "已将{{item}}左移",
+    "layout_moved_right": "已将{{item}}右移",
+    "layout_style_label": "图标和标签",
+    "layout_now_label": "{{item}}现在显示图标和标签",
+    "layout_now_icon": "{{item}}现在仅显示图标"
   },
   "pages": {
     "agentsPage": {

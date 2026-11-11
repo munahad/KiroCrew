@@ -10509,7 +10509,14 @@
     "layout_moved_down": "{{item}}을(를) 아래로 이동했습니다",
     "layout_fixed_spot": "고정 위치: 다른 곳으로 옮기려면 메뉴를 사용하세요",
     "layout_fixed_short": "고정",
-    "layout_phone_only": "여기서 바꾼 내용은 이 휴대폰에만 적용됩니다. 데스크톱 레이아웃은 그대로입니다."
+    "layout_phone_only": "여기서 바꾼 내용은 이 휴대폰에만 적용됩니다. 데스크톱 레이아웃은 그대로입니다.",
+    "layout_move_left": "{{item}} 왼쪽으로 이동",
+    "layout_move_right": "{{item}} 오른쪽으로 이동",
+    "layout_moved_left": "{{item}}을(를) 왼쪽으로 이동했습니다",
+    "layout_moved_right": "{{item}}을(를) 오른쪽으로 이동했습니다",
+    "layout_style_label": "아이콘과 레이블",
+    "layout_now_label": "{{item}}에 이제 아이콘과 레이블이 표시됩니다",
+    "layout_now_icon": "{{item}}에 이제 아이콘만 표시됩니다"
   },
   "pages": {
     "agentsPage": {

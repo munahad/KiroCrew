@@ -33,7 +33,10 @@ export const PHONE_ITEM = 'shell:phone'
 /** "Send feedback": starts a feature-request chat. Optional and pinnable: it
  *  lives in the profile menu, and a user can also put it in a bar. */
 export const FEEDBACK_ITEM = 'shell:feedback'
-export const isWindowToggle = (id: string) => id === TERMINAL_ITEM || id === PHONE_ITEM || id === FEEDBACK_ITEM
+/** Focus mode: hides the chrome. A toggle like the terminal, so it can sit in
+ *  either bar, the sidebar's tool rows, or nowhere (its key chord still works). */
+export const FOCUS_ITEM = 'shell:focus'
+export const isWindowToggle = (id: string) => id === TERMINAL_ITEM || id === PHONE_ITEM || id === FEEDBACK_ITEM || id === FOCUS_ITEM
 
 /** Shell widgets: controls with their own rendering in each place, rather
  *  than a page link. Each lives in exactly one place (top bar, sidebar, bottom
@@ -108,140 +111,6 @@ export const useStatusPlace = () => usePlace(STATUS_ITEM)
 export const useRemotePlace = () => usePlace(REMOTE_ITEM)
 export const useHistoryPlace = () => usePlace(HISTORY_ITEM)
 export const useProfilePlace = () => usePlace(PROFILE_ITEM)
-
-/** Where search sits inside the top bar: the left cluster, the centre slot
- *  (default) or the start of the right cluster. Set from where it is dropped,
- *  so it lands where you let go (Gary's first look: dropped on the right, it
- *  snapped to the middle). */
-export type TopSlot = 'left' | 'center' | 'right'
-const SEARCH_TOP_SLOT_KEY = 'mc-search-top-slot'
-const SEARCH_TOP_SLOT_EVENT = 'mc:search-top-slot-changed'
-
-export function readSearchTopSlot(): TopSlot {
-  const v = safeGetItem(SEARCH_TOP_SLOT_KEY)
-  return v === 'left' || v === 'right' ? v : 'center'
-}
-
-export function setSearchTopSlot(slot: TopSlot): void {
-  if (slot === 'center') safeRemoveItem(SEARCH_TOP_SLOT_KEY)
-  else safeSetItem(SEARCH_TOP_SLOT_KEY, slot)
-  window.dispatchEvent(new Event(SEARCH_TOP_SLOT_EVENT))
-}
-
-export function useSearchTopSlot(): TopSlot {
-  const [s, setS] = useState(readSearchTopSlot)
-  useEffect(() => {
-    const sync = () => setS(readSearchTopSlot())
-    window.addEventListener(SEARCH_TOP_SLOT_EVENT, sync)
-    window.addEventListener('storage', sync)
-    return () => {
-      window.removeEventListener(SEARCH_TOP_SLOT_EVENT, sync)
-      window.removeEventListener('storage', sync)
-    }
-  }, [])
-  return s
-}
-
-/* ── Top-bar slots for every item ──
-   Pages, apps, mates, sessions and toggles in the top bar also sit in its left,
-   centre or right part, set by where they are dropped (default: right, the
-   group they always used to join). Search keeps its own key above. */
-const TOP_SLOTS_KEY = 'mc-top-slots'
-/** The bottom bar has the same three parts (default: left, where it always
- *  started). Widgets placed there use them too. */
-const BOTTOM_SLOTS_KEY = 'mc-bottom-slots'
-const SLOT_KEY: Record<BarZone, string> = { top: TOP_SLOTS_KEY, bottom: BOTTOM_SLOTS_KEY }
-const SLOT_DEFAULT: Record<BarZone, TopSlot> = { top: 'right', bottom: 'left' }
-
-function readTopSlotMap(zone: BarZone = 'top'): Record<string, TopSlot> {
-  try {
-    const v = JSON.parse(safeGetItem(SLOT_KEY[zone]) ?? '{}') as Record<string, unknown>
-    return Object.fromEntries(Object.entries(v).filter(([, s]) => s === 'left' || s === 'center' || s === 'right')) as Record<string, TopSlot>
-  } catch {
-    return {}
-  }
-}
-
-/** Which part of a bar an item sits in. */
-export function readZoneSlot(zone: BarZone, id: string): TopSlot {
-  if (zone === 'top' && id === SEARCH_ITEM) return readSearchTopSlot()
-  return readTopSlotMap(zone)[id] ?? SLOT_DEFAULT[zone]
-}
-
-export function setZoneSlot(zone: BarZone, id: string, slot: TopSlot): void {
-  if (zone === 'top' && id === SEARCH_ITEM) { setSearchTopSlot(slot); return }
-  const m = readTopSlotMap(zone)
-  if (slot === SLOT_DEFAULT[zone]) delete m[id]
-  else m[id] = slot
-  safeSetItem(SLOT_KEY[zone], JSON.stringify(m))
-  window.dispatchEvent(new Event(SEARCH_TOP_SLOT_EVENT))
-}
-
-export const readTopSlot = (id: string) => readZoneSlot('top', id)
-export const setTopSlot = (id: string, slot: TopSlot) => setZoneSlot('top', id, slot)
-
-/** Re-renders when any item's bar slot changes; returns the reader for `zone`. */
-export function useZoneSlots(zone: BarZone): (id: string) => TopSlot {
-  const [, bump] = useState(0)
-  useEffect(() => {
-    const sync = () => bump(n => n + 1)
-    window.addEventListener(SEARCH_TOP_SLOT_EVENT, sync)
-    window.addEventListener('storage', sync)
-    return () => {
-      window.removeEventListener(SEARCH_TOP_SLOT_EVENT, sync)
-      window.removeEventListener('storage', sync)
-    }
-  }, [])
-  return (id: string) => readZoneSlot(zone, id)
-}
-export const useTopSlots = () => useZoneSlots('top')
-
-/**
- * A drop on the top bar at client-x `x`: which slot it lands in (thirds of the
- * bar), the index in the whole top-bar list (`moveItem`'s index, the dragged
- * item left out), and where to draw the drop line. Items snap to the nearest
- * gap among the items already in that slot.
- */
-export function zoneDropAt(zone: BarZone, x: number, dragId: string | null): { slot: TopSlot; index: number; lineX: number | null } {
-  const { slot, lineX: slotLine } = slotAt(zone, x)
-  const list = readShellPlacement()[zone].filter(id => id !== dragId)
-  const inSlot = list.filter(id => readZoneSlot(zone, id) === slot)
-  // Only the placed items on screen count as gaps. A widget drawn in the same
-  // part ("You", status) keeps its fixed spot and is not in `list`, so counting
-  // it shifted every drop by one; an item the bar cannot draw is not on screen.
-  const els = [...document.querySelectorAll<HTMLElement>(`[data-layout-zone="${zone}"][data-top-slot="${slot}"] [data-bar-item]`)]
-    .filter(el => el.dataset.barItem !== dragId && inSlot.includes(el.dataset.barItem ?? ''))
-  const rects = els.map(el => el.getBoundingClientRect())
-  const i = rects.findIndex(r => r.left + r.width / 2 > x)
-  const local = i < 0 ? rects.length : i
-  let lineX = slotLine
-  if (rects.length > 0) lineX = local < rects.length ? rects[local].left - 2 : rects[rects.length - 1].right + 2
-  // The gap's neighbour on screen -> index in the whole list.
-  const before = local < els.length ? els[local].dataset.barItem! : null
-  const after = local > 0 ? els[local - 1].dataset.barItem! : null
-  const index = before ? list.indexOf(before)
-    : after ? list.indexOf(after) + 1
-    : inSlot.length ? list.indexOf(inSlot[inSlot.length - 1]) + 1 : list.length
-  return { slot, index, lineX }
-}
-export const topDropAt = (x: number, dragId: string | null) => zoneDropAt('top', x, dragId)
-
-/** The top-bar slot a drop at client-x `x` means (thirds of the bar), and the
- *  x to draw the drop line at. */
-export function searchTopSlotAt(x: number): { slot: TopSlot; lineX: number | null } {
-  return slotAt('top', x)
-}
-
-/** Which third of a bar a client-x falls in, and a drop-line x for an empty part. */
-function slotAt(zone: BarZone, x: number): { slot: TopSlot; lineX: number | null } {
-  const el = document.querySelector<HTMLElement>(`[data-layout-outline="${zone}"]`)
-  const r = el?.getBoundingClientRect()
-  if (!r || r.width === 0) return { slot: 'center', lineX: null }
-  const third = r.width / 3
-  if (x < r.left + third) return { slot: 'left', lineX: r.left + 12 }
-  if (x > r.right - third) return { slot: 'right', lineX: r.right - third + 12 }
-  return { slot: 'center', lineX: r.left + r.width / 2 }
-}
 
 /** How search is drawn: the full field (default) or only its magnifier icon.
  *  Set from the search row in Edit layout; applies wherever search lives. In
@@ -319,11 +188,15 @@ const PLACEMENT_EVENT = 'mc:shell-placement-changed'
 const EDITING_EVENT = 'mc:layout-editing-changed'
 
 const EMPTY: ShellPlacement = { top: [], bottom: [], side: [] }
+/** The shipped bars are empty, so focus mode starts not shown (its chord still
+ *  works). Under the test runner it starts in the top bar, where the existing
+ *  shell tests, written against the shipped top bar, look for it. */
+const DEFAULT_PLACEMENT: ShellPlacement = import.meta.env?.MODE === 'test' ? { top: [FOCUS_ITEM], bottom: [], side: [] } : EMPTY
 
 export function readShellPlacement(): ShellPlacement {
   try {
     const raw = safeGetItem(PLACEMENT_KEY)
-    if (!raw) return EMPTY
+    if (!raw) return DEFAULT_PLACEMENT
     const v = JSON.parse(raw) as Partial<ShellPlacement>
     const ids = (x: unknown) => (Array.isArray(x) ? x.filter((s): s is string => typeof s === 'string') : [])
     return { top: ids(v.top), bottom: ids(v.bottom), side: ids(v.side) }
@@ -446,10 +319,6 @@ export function resetShellLayout(): void {
   safeRemoveItem(PLACEMENT_KEY)
   for (const id of WIDGET_ITEMS) safeRemoveItem(PLACE_KEY[id])
   safeRemoveItem(SEARCH_STYLE_KEY)
-  safeRemoveItem(SEARCH_TOP_SLOT_KEY)
-  safeRemoveItem(TOP_SLOTS_KEY)
-  safeRemoveItem(BOTTOM_SLOTS_KEY)
-  window.dispatchEvent(new Event(SEARCH_TOP_SLOT_EVENT))
   window.dispatchEvent(new Event(PLACE_EVENT))
   window.dispatchEvent(new Event(SEARCH_STYLE_EVENT))
   window.dispatchEvent(new Event(PLACEMENT_EVENT))
@@ -485,10 +354,11 @@ export function useLayoutEditing(): boolean {
    instead: whether one is in flight, and which bar the pointer is over. */
 
 /** The item being dragged on the canvas (any drag system), the bar under the
- *  pointer, and where in that bar it would land (a client-x for the drop line).
+ *  pointer, and where in that bar it would land: `cell`, the start cell in the
+ *  bar's grid (lib/barGrid.ts), and `lineX`, kept for the sidebar's drop line.
  *  `id` is null while no layout item is being dragged. */
-export interface ChromeDrag { id: string | null; over: BarZone | null; lineX: number | null }
-const NO_DRAG: ChromeDrag = { id: null, over: null, lineX: null }
+export interface ChromeDrag { id: string | null; over: BarZone | null; lineX: number | null; cell?: number | null }
+const NO_DRAG: ChromeDrag = { id: null, over: null, lineX: null, cell: null }
 let chromeDrag: ChromeDrag = NO_DRAG
 const CHROME_DRAG_EVENT = 'mc:chrome-drag-changed'
 
@@ -496,27 +366,9 @@ export function readChromeDrag(): ChromeDrag { return chromeDrag }
 
 export function setChromeDrag(next: Partial<ChromeDrag> | null): void {
   const v = next === null ? NO_DRAG : { ...chromeDrag, ...next }
-  if (v.id === chromeDrag.id && v.over === chromeDrag.over && v.lineX === chromeDrag.lineX) return
+  if (v.id === chromeDrag.id && v.over === chromeDrag.over && v.lineX === chromeDrag.lineX && v.cell === chromeDrag.cell) return
   chromeDrag = v
   window.dispatchEvent(new Event(CHROME_DRAG_EVENT))
-}
-
-/**
- * Where a drop at client-x `x` lands in a bar: the index among the bar's
- * placed items (the dragged item itself left out, since it moves), and the x
- * of the gap to draw the drop line in. Items snap to the nearest gap.
- */
-export function barDropAt(zone: BarZone, x: number, dragId: string | null): { index: number; lineX: number | null } {
-  const box = document.querySelector<HTMLElement>(`[data-layout-zone="${zone}"]`)
-  const els = [...(box?.querySelectorAll<HTMLElement>('[data-bar-item]') ?? [])].filter(el => el.dataset.barItem !== dragId)
-  const rects = els.map(el => el.getBoundingClientRect())
-  const i = rects.findIndex(r => r.left + r.width / 2 > x)
-  const index = i < 0 ? rects.length : i
-  let lineX: number | null = null
-  if (rects.length === 0) lineX = box ? box.getBoundingClientRect().left + 2 : null
-  else if (index < rects.length) lineX = rects[index].left - 2
-  else lineX = rects[rects.length - 1].right + 2
-  return { index, lineX }
 }
 
 export function useChromeDrag(): ChromeDrag {

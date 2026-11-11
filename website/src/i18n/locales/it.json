@@ -10803,7 +10803,14 @@
     "layout_moved_down": "Spostato in basso: {{item}}",
     "layout_fixed_spot": "Posizione fissa: usa il menu per spostarlo in un altro punto",
     "layout_fixed_short": "Fissa",
-    "layout_phone_only": "Le modifiche qui valgono solo per questo telefono. Il layout desktop resta invariato."
+    "layout_phone_only": "Le modifiche qui valgono solo per questo telefono. Il layout desktop resta invariato.",
+    "layout_move_left": "Sposta {{item}} a sinistra",
+    "layout_move_right": "Sposta {{item}} a destra",
+    "layout_moved_left": "Spostato a sinistra: {{item}}",
+    "layout_moved_right": "Spostato a destra: {{item}}",
+    "layout_style_label": "Icona ed etichetta",
+    "layout_now_label": "{{item}} ora mostra icona ed etichetta",
+    "layout_now_icon": "{{item}} ora mostra solo l’icona"
   },
   "pages": {
     "agentsPage": {

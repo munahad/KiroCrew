@@ -442,7 +442,9 @@ describe('top-bar metrics control — collapsed band opens a popover', () => {
     await waitFor(() => expect(queryClient.getQueryState(['system-metrics'])?.status).toBe('error'))
 
     const notice = await screen.findByTestId('topbar-metrics-error')
-    const right = notice.closest('.tb-right')!
+    // Design exploration: the capsule and its notice now sit together in the
+    // top bar's status item (the bar grid's cell), not in a `.tb-right` cluster.
+    const right = notice.closest('[data-bar-item="shell:status"]')!
     const capsule = right.querySelector('.tb-capsule')!
     expect(notice.getAttribute('role')).toBe('alert')
     expect(notice.textContent).toContain('metrics unavailable')

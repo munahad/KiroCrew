@@ -15,9 +15,10 @@ import { SortableAppNavRow } from './appRail'
 import { RailContextMenu, groupTitle, type RailItemMeta } from './railCustomize'
 import { LayoutEditPanel } from '../layout/layoutEditPanel'
 import {
-  SIDEBAR_MEMBERSHIP_EVENT, announceLayout, barZoneAt, setZoneSlot, zoneDropAt, moveItem, setChromeDrag, setLayoutEditing, useLayoutEditing,
+  SIDEBAR_MEMBERSHIP_EVENT, announceLayout, barZoneAt, setChromeDrag, setLayoutEditing, useLayoutEditing,
   type SidebarMembership,
 } from '../../lib/shellLayout'
+import { cellAt, placeOnBar } from '../../lib/barGrid'
 import { shellItemMeta, zonesFor } from '../layout/shellItems'
 import { useIsMobile } from '../../hooks/useIsMobile'
 import { forPhone, usePhoneLayout } from '../../lib/phoneLayout'
@@ -230,19 +231,18 @@ export function RailGroups({ available, renderItem, collapsed, defaultGroup, met
     const bar = p ? barZoneAt(p.x, p.y) : null
     if (!bar || !p) return null
     const allowed = zonesFor(id).includes(bar)
-    const t = zoneDropAt(bar, p.x, id)
-    return { bar, allowed, index: t.index, lineX: t.lineX, slot: t.slot }
+    return { bar, allowed, cell: cellAt(bar, p.x, id) }
   }
   const onDragStart = useCallback((e: DragStartEvent) => {
     haptic('medium')
     setActiveId(String(e.active.id))
     // Apps are sidebar-only here even when a page of the same id could sit in a bar.
-    if (editing) setChromeDrag({ id: String(e.active.id), over: null, lineX: null })
+    if (editing) setChromeDrag({ id: String(e.active.id), over: null, lineX: null, cell: null })
   }, [editing])
   const onDragMove = (e: DragMoveEvent) => {
     if (!editing) return
     const t = barTarget(e)
-    setChromeDrag({ over: t?.bar ?? null, lineX: t?.allowed ? t.lineX : null })
+    setChromeDrag({ over: t?.bar ?? null, lineX: null, cell: t?.allowed ? t.cell : null })
   }
   const onDragCancel = useCallback(() => { setActiveId(null); setChromeDrag(null) }, [])
   const onDragEnd = useCallback((e: DragEndEvent) => {
@@ -254,8 +254,7 @@ export function RailGroups({ available, renderItem, collapsed, defaultGroup, met
       if (!t.allowed) return
       const id = String(e.active.id)
       haptic('light')
-      setZoneSlot(t.bar, id, t.slot)
-      moveItem(id, t.bar, t.index)
+      placeOnBar(t.bar, id, t.cell ?? 0)
       announceLayout(i18nT('nav.layout_moved', { item: shellItemMeta(id)?.label ?? id, place: zoneLabel(t.bar) }))
       return
     }
@@ -288,7 +287,7 @@ export function RailGroups({ available, renderItem, collapsed, defaultGroup, met
     {/* Drop host: sessions dragged from the chat sidebar land on the zone the
         sidebar portals in here; Mates drag natively and drop on this element. */}
     <div id={RAIL_PIN_DROP_HOST_ID} data-layout-zone="sidebar" className="relative pb-6" {...nativeDrop.handlers}>
-    {nativeDrop.over && <div aria-hidden="true" className="absolute inset-0 pointer-events-none rounded-lg border-2 border-dashed border-accent bg-accent/10 z-10" />}
+    {nativeDrop.over && <div aria-hidden="true" className="absolute inset-0 pointer-events-none rounded-lg border-2 border-dashed border-text/70 bg-text/5 z-10" />}
     <DndContext sensors={sensors} collisionDetection={closestCenter} onDragStart={onDragStart} onDragMove={onDragMove} onDragEnd={onDragEnd} onDragCancel={onDragCancel}>
       <SortableContext items={flat} strategy={verticalListSortingStrategy}>
         {groups.map((g, gi) => (

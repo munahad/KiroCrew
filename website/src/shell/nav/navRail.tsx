@@ -22,6 +22,7 @@ import {
 import { ShellWidget, WidgetSlot } from '../layout/shellWidgets'
 import { SidebarTools } from '../layout/sidebarTools'
 import { PhoneBarRows } from '../layout/phoneBarRows'
+import { SidebarGridRows } from '../layout/barGridView'
 import { forPhone, phoneBarIds, usePhoneLayout } from '../../lib/phoneLayout'
 import { SidebarStatus } from '../layout/sidebarStatus'
 import { SearchTrigger } from '../layout/searchTrigger'
@@ -462,7 +463,7 @@ export function ShellNavRail({ shell }: { shell: AppShell }) {
           // eslint-disable-next-line jsx-a11y/no-noninteractive-element-interactions
           <nav
             ref={railPeekSurface}
-            className="focus-chrome-rail bg-bg-elevated border border-border rounded-xl flex flex-col mx-2 mt-0 mb-2 shadow-sm z-50 overflow-hidden"
+            className="focus-chrome-rail relative bg-bg-elevated border border-border rounded-xl flex flex-col mx-2 mt-0 mb-2 shadow-sm z-50 overflow-hidden"
             // Focus mode: same overlay treatment as the header. The rail's own
             // `mx-2` means translateX(-100%) would leave its 8px left margin
             // showing as a sliver, hence the extra 12px of travel. Width has to
@@ -497,6 +498,8 @@ export function ShellNavRail({ shell }: { shell: AppShell }) {
             {...hiddenChromeProps(focusActive && !railPeek.open && focusChromeInert)}
             {...(focusActive ? railPeek.surfaceProps : {})}
           >
+            {/* Design exploration: the drafting grid while dragging in Edit layout. */}
+            <SidebarGridRows />
             {navBody}
           </nav>
         )

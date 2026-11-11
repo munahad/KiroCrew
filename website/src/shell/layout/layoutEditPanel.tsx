@@ -17,7 +17,7 @@
  */
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
-import { ArrowLeftRight, Bell, ChevronDown, ChevronUp, CircleUserRound, EyeOff, GripVertical, PanelBottom, PanelTop, RectangleHorizontal, Lightbulb, Lock, MessageSquare, MonitorSmartphone, PanelLeft, Search, Smartphone, SquareTerminal, X } from 'lucide-react'
+import { ArrowLeftRight, Bell, ChevronDown, ChevronLeft, ChevronRight, ChevronUp, CircleUserRound, EyeOff, Fullscreen, GripVertical, PanelBottom, PanelTop, RectangleHorizontal, Square, Lightbulb, Lock, MessageSquare, MonitorSmartphone, PanelLeft, Search, Smartphone, SquareTerminal, X } from 'lucide-react'
 
 import CrewAvatar from '../../components/CrewAvatar'
 import {
@@ -34,9 +34,10 @@ import {
   updateRail, writeRailLayout, type RailGroup,
 } from '../../lib/railLayout'
 import {
-  FEEDBACK_ITEM, HISTORY_ITEM, PHONE_ITEM, PROFILE_ITEM, REMOTE_ITEM, SEARCH_ITEM, removeFromBars, STATUS_ITEM, TERMINAL_ITEM, isTwoPlaceItem, announceLayout, isWindowToggle, moveItem, resetShellLayout, setLayoutEditing,
-  moveWithinBar, setSearchStyle, useLayoutAnnouncement, useSearchStyle, useShellPlacement, zoneOf, type ShellZone,
+  FEEDBACK_ITEM, FOCUS_ITEM, HISTORY_ITEM, PHONE_ITEM, PROFILE_ITEM, REMOTE_ITEM, SEARCH_ITEM, removeFromBars, STATUS_ITEM, TERMINAL_ITEM, isTwoPlaceItem, announceLayout, isWindowToggle, moveItem, resetShellLayout, setLayoutEditing,
+  moveWithinBar, setSearchStyle, useLayoutAnnouncement, useSearchStyle, useShellPlacement, zoneOf, type BarZone, type ShellZone,
 } from '../../lib/shellLayout'
+import { barOrder, cellOf, clearBarCells, setItemStyle, shiftOnBar, useBarCells, useItemStyle } from '../../lib/barGrid'
 import { useTerminalEnabled } from '../../utils/terminalRegistry'
 import { useRailWidth } from '../../hooks/useRailWidth'
 import { useIsMobile } from '../../hooks/useIsMobile'
@@ -107,6 +108,9 @@ export function LayoutEditPanel({ groups, hidden, meta }: {
   const [query, setQuery] = useState('')
   const [category, setCategory] = useState<Category>('all')
   const placement = useShellPlacement()
+  // Re-render when a bar item moves cells, so its row and arrows follow.
+  useBarCells('top')
+  useBarCells('bottom')
   const railWidth = useRailWidth()
   // Phone layout: Edit layout edits the phone's one sidebar column, for this
   // phone only (lib/phoneLayout.ts). Its shell has no top or bottom bar, so
@@ -116,6 +120,7 @@ export function LayoutEditPanel({ groups, hidden, meta }: {
   const phone = useIsMobile()
   const phoneLayout = usePhoneLayout()
   const searchStyle = useSearchStyle()
+  const styleOf = useItemStyle()
   const announcement = useLayoutAnnouncement()
   const terminalEnabled = useTerminalEnabled()
   const slots = useAppSelector(s => s.dashboard.slots)
@@ -160,6 +165,7 @@ export function LayoutEditPanel({ groups, hidden, meta }: {
       if (terminalEnabled) add(TERMINAL_ITEM, { label: i18nT('app.terminal'), icon: <SquareTerminal size={16} /> })
       add(PHONE_ITEM, { label: i18nT('app.connect_your_phone'), icon: <Smartphone size={16} /> })
       add(FEEDBACK_ITEM, { label: i18nT('nav.send_feedback'), icon: <Lightbulb size={16} /> })
+      add(FOCUS_ITEM, { label: i18nT('app.focus_mode'), icon: <Fullscreen size={16} /> })
     } else {
       add(FEEDBACK_ITEM, { label: i18nT('nav.send_feedback'), icon: <Lightbulb size={16} /> })
     }
@@ -203,20 +209,32 @@ export function LayoutEditPanel({ groups, hidden, meta }: {
   }
   const orderOf = (id: string, section: ShellZone | 'none'): number => {
     if (phone) return section === 'sidebar' ? phoneColumn.indexOf(id) : 0
+    // The bars list their items left to right, as their grid draws them.
+    if (section === 'top' || section === 'bottom') return barOrder(section).indexOf(id)
     if (section === 'sidebar' && id in SIDEBAR_SLOT) return SIDEBAR_SLOT[id]
     if (isTwoPlaceItem(id)) return -1
-    if (section === 'top') return placement.top.indexOf(id)
-    if (section === 'bottom') return placement.bottom.indexOf(id)
     if (section === 'sidebar') return placement.side.includes(id) ? 10_000 + placement.side.indexOf(id) : flat.indexOf(id)
     return 0
   }
-  /** Can this row move one step? Widgets keep fixed slots; sidebar rows move
-   *  within their own group; bar items within their bar. */
+  /** The bar a row sits in, when it is in one (desktop). */
+  const barOf = (id: string): BarZone | null => {
+    if (phone) return null
+    const z = where(id)
+    return z === 'top' || z === 'bottom' ? z : null
+  }
+  /** Can this row move one step? In a bar, one cell left or right (pushing a
+   *  neighbour aside); in the sidebar, widgets keep fixed slots and rows move
+   *  within their own group. */
   const canStep = (id: string, delta: -1 | 1): boolean => {
     if (phone) {
       const part = phoneParts.find(p => p.includes(id))
       const i = part ? part.indexOf(id) : -1
       return !!part && i + delta >= 0 && i + delta < part.length
+    }
+    const bar = barOf(id)
+    if (bar) {
+      const at = cellOf(bar, id)
+      return !!at && at.col + delta >= 0 && at.col + delta <= at.max
     }
     if (isTwoPlaceItem(id)) return false
     for (const list of [placement.top, placement.bottom, placement.side]) {
@@ -232,6 +250,11 @@ export function LayoutEditPanel({ groups, hidden, meta }: {
     if (phone) {
       const part = phoneParts.find(p => p.includes(id))
       if (part && phoneStep(part, id, delta)) announceLayout(i18nT(delta < 0 ? 'nav.layout_moved_up' : 'nav.layout_moved_down', { item: label }))
+      return
+    }
+    const bar = barOf(id)
+    if (bar) {
+      if (shiftOnBar(bar, id, delta)) announceLayout(i18nT(delta < 0 ? 'nav.layout_moved_left' : 'nav.layout_moved_right', { item: label }))
       return
     }
     let moved = moveWithinBar(id, delta)
@@ -388,9 +411,13 @@ export function LayoutEditPanel({ groups, hidden, meta }: {
             <ul aria-labelledby={headingId} className="m-0 p-0 list-none">
         {rows.map((x, i) => {
           const at = where(x.id)
+          // Widgets keep a fixed spot in the sidebar only; in a bar they move
+          // along its cells like anything else.
+          const fixed = at === 'sidebar' && !phone && isTwoPlaceItem(x.id)
+          const inBar = at === 'top' || at === 'bottom'
           // A hairline between fixed-spot rows and the rows you can reorder,
           // so a first movable row does not look like it should move up.
-          const breakAbove = i > 0 && isTwoPlaceItem(x.id) !== isTwoPlaceItem(rows[i - 1].id)
+          const breakAbove = section === 'sidebar' && i > 0 && isTwoPlaceItem(x.id) !== isTwoPlaceItem(rows[i - 1].id)
           return (
             <li
               key={x.id}
@@ -409,9 +436,37 @@ export function LayoutEditPanel({ groups, hidden, meta }: {
                 <span className="block text-[11px] text-muted">
                   {categoryLabel(x.category)}{x.detail && repeated.has(x.meta.label) ? ` · ${x.detail}` : ''}
                   {/* Why this row has no Move up / Move down, said in words. */}
-                  {at !== 'none' && isTwoPlaceItem(x.id) && <span title={i18nT('nav.layout_fixed_spot')}>{' · '}{i18nT('nav.layout_fixed_short')}</span>}
+                  {fixed && <span title={i18nT('nav.layout_fixed_spot')}>{' · '}{i18nT('nav.layout_fixed_short')}</span>}
                 </span>
               </span>
+              {/* A placed item in a bar: icon and label (as dropped) or the icon
+                  only, the user's choice, never a rule the bar applies. Same
+                  two-icon toggle as search's. */}
+              {inBar && !isTwoPlaceItem(x.id) && (
+                <span role="group" aria-label={i18nT('nav.layout_show_as')} className="shrink-0 flex items-center p-0.5 rounded-md border border-border">
+                  {(['label', 'icon'] as const).map(style => {
+                    const name = i18nT(style === 'icon' ? 'nav.layout_search_icon' : 'nav.layout_style_label')
+                    const on = styleOf(x.id) === style
+                    return (
+                      <button
+                        key={style}
+                        type="button"
+                        aria-pressed={on}
+                        aria-label={name}
+                        title={name}
+                        onClick={() => {
+                          if (on) return
+                          setItemStyle(x.id, style)
+                          announceLayout(i18nT(style === 'icon' ? 'nav.layout_now_icon' : 'nav.layout_now_label', { item: x.meta.label }))
+                        }}
+                        className={`w-6 h-5 flex items-center justify-center rounded border-none cursor-pointer ${on ? 'bg-bg-hover text-text' : 'bg-transparent text-muted hover:text-text'}`}
+                      >
+                        {style === 'icon' ? <Square size={11} /> : <RectangleHorizontal size={13} />}
+                      </button>
+                    )
+                  })}
+                </span>
+              )}
               {/* Search only: field or icon, as a two-icon toggle on the row
                   itself (no second line). Each half names itself for screen
                   readers and on hover; the pressed one is the current style. */}
@@ -436,28 +491,36 @@ export function LayoutEditPanel({ groups, hidden, meta }: {
                   ))}
                 </span>
               )}
-              {/* Move up / Move down: reorder without dragging (WCAG 2.5.7). Not
-                  on hidden items (no order) or on fixed-slot items (search,
-                  remote Crews, Back/Forward, "You", status), which move between
-                  places with the menu but keep their own spot within one. */}
+              {/* Move up / Move down in the sidebar, Move left / Move right in a
+                  bar (one cell): reorder without dragging (WCAG 2.5.7). Not on
+                  hidden items (no place) or on the sidebar's fixed-spot items
+                  (search, remote Crews, Back/Forward, "You", status), which
+                  move between places with the menu but keep their own spot
+                  within the sidebar. */}
               {/* Fixed-spot items: an empty slot where the arrows would be, so
                   every row's menu button lines up. */}
-              {at !== 'none' && isTwoPlaceItem(x.id) && <span className="shrink-0 w-12" aria-hidden="true" />}
-              {at !== 'none' && !isTwoPlaceItem(x.id) && (
+              {fixed && <span className="shrink-0 w-12" aria-hidden="true" />}
+              {at !== 'none' && !fixed && (
                 <span className="shrink-0 flex items-center">
-                  {([-1, 1] as const).map(d => (
-                    <button
-                      key={d}
-                      type="button"
-                      disabled={!canStep(x.id, d)}
-                      onClick={() => step(x.id, d, x.meta.label)}
-                      aria-label={i18nT(d < 0 ? 'nav.layout_move_up' : 'nav.layout_move_down', { item: x.meta.label })}
-                      title={i18nT(d < 0 ? 'nav.layout_move_up' : 'nav.layout_move_down', { item: x.meta.label })}
-                      className="w-6 h-6 flex items-center justify-center rounded-md bg-transparent border-none text-muted hover:text-text hover:bg-bg-hover cursor-pointer disabled:opacity-30 disabled:pointer-events-none"
-                    >
-                      {d < 0 ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
-                    </button>
-                  ))}
+                  {([-1, 1] as const).map(d => {
+                    const key = inBar
+                      ? (d < 0 ? 'nav.layout_move_left' : 'nav.layout_move_right')
+                      : (d < 0 ? 'nav.layout_move_up' : 'nav.layout_move_down')
+                    const Icon = inBar ? (d < 0 ? ChevronLeft : ChevronRight) : (d < 0 ? ChevronUp : ChevronDown)
+                    return (
+                      <button
+                        key={d}
+                        type="button"
+                        disabled={!canStep(x.id, d)}
+                        onClick={() => step(x.id, d, x.meta.label)}
+                        aria-label={i18nT(key, { item: x.meta.label })}
+                        title={i18nT(key, { item: x.meta.label })}
+                        className="w-6 h-6 flex items-center justify-center rounded-md bg-transparent border-none text-muted hover:text-text hover:bg-bg-hover cursor-pointer disabled:opacity-30 disabled:pointer-events-none"
+                      >
+                        <Icon size={14} />
+                      </button>
+                    )
+                  })}
                 </span>
               )}
               {/* Where it goes: a compact menu button, not a dropdown showing the
@@ -523,7 +586,7 @@ export function LayoutEditPanel({ groups, hidden, meta }: {
 
       <footer className="flex items-center justify-between gap-2 px-4 py-3 border-t border-border">
         {/* On the phone, Reset clears the phone's own changes only. */}
-        <Btn onClick={() => { if (phone) resetPhoneLayout(); else resetShellLayout(); announceLayout(i18nT('nav.layout_reset_done')) }}>{i18nT('nav.rail_reset')}</Btn>
+        <Btn onClick={() => { if (phone) resetPhoneLayout(); else { resetShellLayout(); clearBarCells() } announceLayout(i18nT('nav.layout_reset_done')) }}>{i18nT('nav.rail_reset')}</Btn>
         <Btn primary onClick={() => setLayoutEditing(false)}>{i18nT('nav.rail_done')}</Btn>
       </footer>
 

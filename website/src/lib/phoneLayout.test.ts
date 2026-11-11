@@ -5,7 +5,7 @@
 import { afterEach, describe, expect, it } from 'vitest'
 
 import { forPhone, phoneBarIds, phoneHide, phoneShow, phoneStep, readPhoneLayout, resetPhoneLayout } from './phoneLayout'
-import { FEEDBACK_ITEM, PHONE_ITEM, PROFILE_ITEM, SEARCH_ITEM, TERMINAL_ITEM, moveItem, readShellPlacement, resetShellLayout } from './shellLayout'
+import { FEEDBACK_ITEM, FOCUS_ITEM, PHONE_ITEM, PROFILE_ITEM, SEARCH_ITEM, TERMINAL_ITEM, moveItem, readShellPlacement, resetShellLayout } from './shellLayout'
 
 afterEach(() => { resetPhoneLayout(); resetShellLayout(); localStorage.clear() })
 
@@ -17,11 +17,12 @@ describe('phone layout', () => {
   it('moves an item one step within its part, on the phone only', () => {
     moveItem('schedule', 'top')
     moveItem('artifacts', 'top')
-    const part = forPhone(readShellPlacement().top, readPhoneLayout())
+    const top = () => phoneBarIds(readShellPlacement().top)
+    const part = forPhone(top(), readPhoneLayout())
     expect(phoneStep(part, 'artifacts', -1)).toBe(true)
-    expect(forPhone(readShellPlacement().top, readPhoneLayout())).toEqual(['artifacts', 'schedule'])
+    expect(forPhone(top(), readPhoneLayout())).toEqual(['artifacts', 'schedule'])
     // The desktop's top bar is unchanged.
-    expect(readShellPlacement().top).toEqual(['schedule', 'artifacts'])
+    expect(top()).toEqual(['schedule', 'artifacts'])
   })
 
   it('refuses a step past either end', () => {
@@ -31,11 +32,12 @@ describe('phone layout', () => {
 
   it('hides on the phone without touching the desktop', () => {
     moveItem('schedule', 'top')
+    const top = () => phoneBarIds(readShellPlacement().top)
     phoneHide('schedule')
-    expect(forPhone(readShellPlacement().top, readPhoneLayout())).toEqual([])
-    expect(readShellPlacement().top).toEqual(['schedule'])
+    expect(forPhone(top(), readPhoneLayout())).toEqual([])
+    expect(top()).toEqual(['schedule'])
     phoneShow('schedule', true)
-    expect(forPhone(readShellPlacement().top, readPhoneLayout())).toEqual(['schedule'])
+    expect(forPhone(top(), readPhoneLayout())).toEqual(['schedule'])
     expect(readPhoneLayout().extra).toEqual([])
   })
 
@@ -47,6 +49,6 @@ describe('phone layout', () => {
   })
 
   it('leaves widgets and the drawer\'s own rows out of the bar items it adds', () => {
-    expect(phoneBarIds([SEARCH_ITEM, PROFILE_ITEM, TERMINAL_ITEM, PHONE_ITEM, FEEDBACK_ITEM, 'schedule'])).toEqual([FEEDBACK_ITEM, 'schedule'])
+    expect(phoneBarIds([SEARCH_ITEM, PROFILE_ITEM, TERMINAL_ITEM, PHONE_ITEM, FOCUS_ITEM, FEEDBACK_ITEM, 'schedule'])).toEqual([FEEDBACK_ITEM, 'schedule'])
   })
 })

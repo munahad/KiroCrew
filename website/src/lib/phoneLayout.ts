@@ -16,7 +16,7 @@
 import { useEffect, useState } from 'react'
 
 import { safeGetItem, safeRemoveItem, safeSetItem } from '../utils/safeStorage'
-import { PHONE_ITEM, TERMINAL_ITEM, isWidgetItem } from './shellLayout'
+import { FOCUS_ITEM, PHONE_ITEM, TERMINAL_ITEM, isWidgetItem } from './shellLayout'
 
 export interface PhoneLayout { order: string[]; hidden: string[]; extra: string[] }
 
@@ -59,7 +59,8 @@ export function usePhoneLayout(): PhoneLayout {
  *  feedback. Widgets keep the phone's fixed spots, and the terminal and phone
  *  rows are already fixed rows of the phone drawer. */
 export function phoneBarIds(ids: readonly string[]): string[] {
-  return ids.filter(id => !isWidgetItem(id) && id !== TERMINAL_ITEM && id !== PHONE_ITEM)
+  // Focus mode is a desktop control: the phone has no chrome to hide.
+  return ids.filter(id => !isWidgetItem(id) && id !== TERMINAL_ITEM && id !== PHONE_ITEM && id !== FOCUS_ITEM)
 }
 
 /** `ids` in the phone's order, phone-hidden ones dropped. Ids the phone has no

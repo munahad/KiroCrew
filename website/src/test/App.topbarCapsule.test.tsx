@@ -127,7 +127,10 @@ describe('App top bar — update pill shifts the collapse-ladder budget', () => 
     // pill's own mount is asserted alongside the class at every step.
     const { container, store } = renderWithProviders(<App />, { route: '/chat' })
     await screen.findByLabelText(/Gateway connected/i)
-    const group = container.querySelector('.tb-right') as HTMLElement
+    // Design exploration: the desktop top bar's fixed controls sit in one
+    // trailing group (the bar grid holds everything placed), which carries
+    // the class in place of the old `.tb-right` cluster.
+    const group = container.querySelector('[data-topbar-actions]') as HTMLElement
     expect(group).toBeTruthy()
     expect(group.classList.contains('tb-has-update')).toBe(false)
     expect(screen.queryByTestId('update-pill')).toBeNull()

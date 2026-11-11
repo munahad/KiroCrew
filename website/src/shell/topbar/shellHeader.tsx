@@ -2,7 +2,7 @@ import { useEffect, useState, lazy, Suspense, type ReactNode } from 'react'
 import { TOPBAR_FOCUS_Z, TOPBAR_Z } from '../../lib/themeDecorLayer'
 import { kiroUsageSegment } from './kiroUsageReadout'
 import { metricsSegment, MetricsErrorNotice } from './metricsReadout'
-import { Bell, Fullscreen, Menu, Plug, Unplug } from 'lucide-react'
+import { Bell, Menu, Plug, Unplug } from 'lucide-react'
 import { motion } from 'framer-motion'
 import { isWinElectron } from '../../lib/electron'
 import { setNativeBadgeCount } from '../platform/electronBridge'
@@ -12,7 +12,6 @@ import { useNotificationSheet, NotificationSheet } from '../notifications/notifi
 import InstanceTabBar from '../../components/InstanceTabBar'
 import { getTopBarWidgets } from '../../apps/topBarWidgets'
 import { getCapsuleSegments } from '../../apps/capsuleSegments'
-import { IS_MAC } from '../../hooks/useKeyboardShortcuts'
 import { useNavShortcutHint } from '../../hooks/useNavShortcutHint'
 import { Glass } from '../../components/Glass'
 import WindowsTitlebarMenu from '../../components/WindowsTitlebarMenu'
@@ -21,13 +20,9 @@ import { uiLocation } from '../../uiLocations/uiLocation'
 import { GuideRevealScope } from '../../guide/GuideRevealScope'
 import type { AppShell } from '../appShell'
 import { hiddenChromeProps } from '../focus/focusChrome'
-import { setAgentSwitchNotice } from '../../store/chatSlice'
-import { BarItems } from '../layout/barItems'
-import { HISTORY_ITEM, REMOTE_ITEM, SEND_FEEDBACK_EVENT, useHistoryPlace, useSearchTopSlot, useRemotePlace, useSearchPlace, useStatusPlace } from '../../lib/shellLayout'
-import { NavHistoryArrows } from '../../components/NavHistoryArrows'
-import { WidgetSlot } from '../layout/shellWidgets'
-import { RemoteCrewSwitcher } from '../layout/remoteCrews'
-import { SearchTrigger } from '../layout/searchTrigger'
+import { zoneLabel } from '../layout/barItems'
+import { BarGrid } from '../layout/barGridView'
+import { SEND_FEEDBACK_EVENT, useStatusPlace } from '../../lib/shellLayout'
 
 // Lazy, like App.tsx's update-found popup: the pill renders nothing without an update,
 // so its code rides the on-demand chunk instead of the app core.
@@ -149,8 +144,8 @@ export function NotificationsBellButton() {
  */
 export function ShellHeader({ shell }: { shell: AppShell }) {
   const {
-    connected, updateAvailable, authRequired, gatewayStatusMsg, focusModeChord, focusModeExitMsgVisible, focusChromeInert, dispatch, colorTheme, resolvedMode, branding, avatar, isMobile, focusMode,
-    toggleFocusMode, focusActive, topPeek, topPeekSurface, topChromeShown, slotOwners, commandPalette,
+    connected, updateAvailable, authRequired, gatewayStatusMsg, focusChromeInert, colorTheme, resolvedMode, branding, avatar, isMobile,
+    focusActive, topPeek, topPeekSurface, topChromeShown,
     setKiroUsageOpen, kiroUsageState, usageSegmentHidden, metrics, capsuleCollapsed, setCapsuleCollapsed,
     capsuleLayoutPulse, pulseCapsuleLayout, sysMetrics, metricsProbeRef, metricsGroupRef, setReportProblemOpen,
     requestFeature, toggleNav, mobileSingle, membersRoute, membersBarPending, mobileNavOpen,
@@ -163,321 +158,12 @@ export function ShellHeader({ shell }: { shell: AppShell }) {
     return () => window.removeEventListener(SEND_FEEDBACK_EVENT, onSend)
   }, [requestFeature])
   void setReportProblemOpen
-  const searchPlace = useSearchPlace()
   // Design exploration: the status cluster (connection, usage, bell) lives in
   // the sidebar by default; the capsule and bell draw here only when moved back.
   const statusTop = useStatusPlace() === 'top'
-  const remotePlace = useRemotePlace()
-  const historyPlace = useHistoryPlace()
-  const searchTopSlot = useSearchTopSlot()
-  return (
-    <>
-      {/* Topbar */}
-      {/* stable theming hook — see website/docs/theming-contract.md */}
-      <header
-        ref={topPeekSurface}
-        // `topbar-single` (phone chat page) swaps the three-track grid for
-        // `auto minmax(0,1fr) auto` (index.css): the centre cell is the chat
-        // page's title slot and takes every pixel the two side cells leave.
-        // Those side cells are a plain flex div / `tb-trail`, NOT `tb-left` /
-        // `tb-right`: the latter are inline-size containers, and a size
-        // container in an `auto` track has no content size to give, so it
-        // collapses to its padding and clips whatever it holds
-        // (test/topbarMenuButtonNarrow.test.ts records the measurement).
-        //
-        // `tb-measured` is the desktop form: both forms keep each side group's
-        // container-query ladder, and desktop adds a measured ladder that folds
-        // more when those rungs still leave contents overflowing
-        // (useTopbarCollapse in useAppShell). Desktop only, on purpose: below 768px the
-        // phone header's icon-only search and container rungs already fit.
-        className={`topbar topbar-glass relative pl-2 pr-3${mobileSingle ? ' topbar-single' : ''}${isMobile ? '' : ' tb-measured'}`}
-        // On a phone the chat title is portaled into this bar, above the
-        // transcript: inert while a transcript selection is held, so a dragged
-        // handle cannot land on the title (useSelectionInertOverlays).
-        {...{ [SELECTION_INERT_ATTR]: '' }}
-        // Both z-indexes come from lib/themeDecorLayer.ts, which derives the
-        // theme-overlay ceiling from them — the header must outrank pack
-        // decoration in both layouts (#7377), and a literal here could drift.
-        //
-        // In focus mode the header leaves the grid and becomes an overlay
-        // positioned against the shell (which is already `relative`), NOT the
-        // viewport: `position: fixed` would be measured against whichever
-        // ancestor happens to establish a containing block, and the shell is the
-        // app area either way. It stays MOUNTED and slides — unmounting it would
-        // tear down the notification/metrics popovers it owns and lose their
-        // state on every peek. TOPBAR_FOCUS_Z (62) clears the whole chat-pane
-        // stack (max 61) and the rail (50) while staying under the update banner
-        // (70), side sheets (89/90) and every modal (100+).
-        style={focusActive
-          ? {
-            position: 'absolute',
-            top: 0, left: 0, right: 0, height: 42,
-            zIndex: TOPBAR_FOCUS_Z,
-            transform: topChromeShown ? 'translateY(0)' : 'translateY(-100%)',
-            transition: 'transform 200ms cubic-bezier(0.2, 0, 0, 1)',
-            // Hidden chrome must not eat clicks aimed at the content beneath it.
-            pointerEvents: topChromeShown ? 'auto' : 'none',
-          }
-          : { gridArea: 'topbar', zIndex: TOPBAR_Z }}
-        // ...nor stay a Tab stop or be announced while off screen (hiddenChromeProps).
-        {...hiddenChromeProps(focusActive && !topChromeShown && focusChromeInert)}
-        {...(focusActive ? topPeek.surfaceProps : {})}
-      >
-        {/* Left: mobile menu toggle + inline instance selector. The brand now
-            lives in the sidebar (item 1.1). The selector reuses InstanceTabBar's
-            visibility rule — it renders nothing unless >=1 remote instance
-            exists, so the common single-instance header-left is empty (only the
-            macOS traffic-light clearance remains). */}
-        {/* No mobile-only `px-2` here on purpose. The icon buttons inside carry
-            their own 8px, so this padding stacked on top of the header's `pl-2`
-            and pushed the hamburger out past the page's own left edge. Dropping
-            it lands the button's BOX at 8 + 8 = 16px, the page gutter; the glyph
-            inside it then needs its own 2.5px correction because `Menu`'s artwork
-            does not fill its box (see the button below). Box and glyph together
-            put the hamburger, the page title and the chat session-list toggle on
-            one line. Deliberately only the LEFT cluster:
-            `.tb-right` carries a padding/negative-margin pair that keeps the
-            notification badge's 4px overhang from being clipped, and re-tuning
-            that needs a real WebKit check, not a local one. */}
-        {!mobileSingle && (
-        <div className="tb-left relative h-full">
-          <div className="tb-measure">
-          {/* Windows only: the application menu shares this cluster. It needs no
-              width reservation of its own: the identity group is sized by its own
-              grid track, and the menu growing from the hamburger to its six
-              labels therefore consumes the GROUP's width -- which its collapse
-              ladder responds to -- instead of eating the centred search's. */}
-          {!isMobile && isWinElectron && <WindowsTitlebarMenu />}
-
-          {/* Route-history Back/Forward (#8258). Desktop layout only: on mobile
-              the platform owns Back (left-edge swipe), and the drill-in surfaces
-              navigate by component state that pushes nothing, so arrows there
-              would walk an unrelated stack. Order: after the Windows app menu,
-              before the instance selector — the leftmost NAVIGATION control,
-              matching where every browser puts it. */}
-          {/* Left-rail POC: the rail's brand + expand toggle lives here on
-              desktop, ahead of Back/Forward. The phone keeps its drawer header. */}
-          {/* Design exploration: the brand, collapse toggle and Back/Forward
-              moved to the head of the sidebar (see navRail's sidebar header). */}
-          {isMobile && (
-            <button className="group p-2 rounded-md bg-transparent border-none cursor-pointer text-muted hover:text-text shrink-0" onClick={toggleNav} aria-label={i18nT('app.open_menu')} {...uiLocation('shell.mobile-menu')}>
-              {/* The product logo, not a generic menu glyph. A narrow layout has exactly
-                  one nav affordance, and it opens the same rail whose header carries this
-                  same `avatar` on a wide one -- so it is the same asset, the same
-                  `rounded-md object-contain` treatment and the same hover tilt, which is
-                  live here because this bar is what a NARROW WINDOW gets, not only a
-                  touch device. Reading `avatar` rather than importing a file is what
-                  keeps a theme-supplied or user-configured logo in step: the branding
-                  registry resolves it once for the whole shell.
-
-                  A full-colour raster mark is an <img>, which is exactly what the
-                  `use-lucide-icons` rule's brand-mark exception prescribes -- a CSS mask
-                  over `currentColor` would flatten the art to one colour. But an <img>
-                  can FAIL, and `alt=""` + `aria-hidden` means failure renders nothing --
-                  an invisible button as the page's only nav route -- so MobileNavGlyph
-                  holds the Menu hamburger up until the logo's own `load` event.
-
-                  Square box, so no optical correction exists: the art is square and
-                  `object-contain` fills the box, putting the ink on the 16px page gutter
-                  (topbar pl-2 + this button's p-2) that the page title and every card's
-                  left edge below it sit on, with the button's own box at 24 + 16 = 40px
-                  for the tap target. `narrowFirstBaseline.test.ts` re-derives that sum. */}
-              <MobileNavGlyph avatar={avatar} />
-            </button>
-          )}
-          {/* Design exploration: Back/Forward and the remote Crews switcher sit
-              here only when Edit layout puts them in the top bar (both start
-              in the sidebar). The phone keeps its switcher here. */}
-          {!isMobile && historyPlace === 'top' && <WidgetSlot id={HISTORY_ITEM}><NavHistoryArrows /></WidgetSlot>}
-          {/* Search dropped on the left part of the top bar sits here. */}
-          {!isMobile && searchPlace === 'top' && searchTopSlot === 'left' && (
-            <SearchTrigger variant="top" onOpen={commandPalette.openPalette} launcherOwned={!!slotOwners['quick-search']} />
-          )}
-          {/* Items dropped on the left part of the top bar. */}
-          {!isMobile && <BarItems zone="top" slot="left" shell={shell} />}
-          {isMobile
-            ? <InstanceTabBar variant="inline" />
-            : remotePlace === 'top' && <WidgetSlot id={REMOTE_ITEM}><RemoteCrewSwitcher /></WidgetSlot>}
-          </div>
-        </div>
-        )}
-        {/* Phone chat page, leading cell: the crew switcher (renders nothing
-            until a remote crew exists) and downstream widgets while they exist.
-            The update pill is NOT here: with a remote crew the switcher already
-            renders its chip and its dropdown, and the pill made a third action
-            in the group — on this page the update is the first item of the
-            chat page's overflow menu instead (UpdatePill variant="menu-item").
-            The nav-drawer logo is not here either — on this page the main
-            destinations are the rail inside the sessions drawer, opened by the
-            toggle the chat page puts first in the centre slot, so the bar never
-            offers two drawers. Sized `auto`, so the common empty cell costs no
-            width and the sessions toggle stays on the gutter. */}
-        {mobileSingle && (
-          <div data-testid="topbar-lead" className="relative h-full flex items-center gap-1.5 min-w-0">
-            <InstanceTabBar variant="inline" />
-            {getTopBarWidgets().map(w => (
-              <ErrorBoundary key={w.id} scope={`topbar-widget:${w.id}`} fallback={null}>
-                <w.component />
-              </ErrorBoundary>
-            ))}
-          </div>
-        )}
-        {/* Centre track: the ⌘K trigger. A flow item, not an overlay — its width
-            is the track's width, so it can never sit under a sibling cluster and
-            never has to be dropped to stay clear of one. On mobile the same
-            track holds the icon-only form below.
-
-            Wrapped with the focus-mode toggle in ONE flex cell rather than added
-            as a fourth grid child: `.topbar` declares exactly three tracks, so a
-            bare sibling would be auto-placed into `.tb-right` and land inside the
-            readout capsule's cluster. Two controls, which is the ceiling
-            website/AUTOSDE.yaml's max-two-buttons-per-row sets.
-
-            `data-topbar-overlay` is read by the crew-pin capture harnesses
-            (website/scripts/capture-crew-pin-chips.mjs, record-crew-pin-chips.mjs,
-            capture-crew-chip-shrink.mjs) to find this cell; nothing in src/
-            reads it any more. Keep it. */}
-        {!isMobile && (
-          <div data-topbar-overlay className="flex items-center justify-center gap-1.5 min-w-0">
-          {/* Design exploration: the Command Bar trigger, drawn as a compact
-              search field. It sits here unless Edit layout moved it to the
-              sidebar; a spacer keeps the focus-mode toggle in place. */}
-          {/* Items dropped on the middle of the top bar. */}
-          <BarItems zone="top" slot="center" shell={shell} />
-          {searchPlace === 'top' && searchTopSlot === 'center'
-            ? <SearchTrigger variant="top" onOpen={commandPalette.openPalette} launcherOwned={!!slotOwners['quick-search']} />
-            : <span className="flex-1 min-w-0" aria-hidden="true" />}
-          {/* Focus mode. `aria-pressed` rather than a second label, so a screen
-              reader gets the state from the control instead of from copy that
-              would have to be kept in step with the icon. */}
-          <button
-            type="button"
-            data-testid="focus-mode-toggle"
-            // A sighted keyboard user who activates this with Enter/Space is the
-            // one person the inert chrome leaves stranded: the toggle they just
-            // pressed vanishes, Tab cannot bring it back, and the chord that can
-            // lived only in the hover title. So on a keyboard activation that
-            // turns focus mode ON, the shared shell notice (the agent-switch card)
-            // shows the same sentence the live region speaks, in display
-            // spelling. `detail === 0` is how a keyboard-synthesised click differs
-            // from a pointer click (which counts its clicks). A pointer user can
-            // hover an edge; a chord user just typed the chord; neither gets the
-            // card. The sr-only region is the spoken carrier either way.
-            onClick={e => {
-              const turningOn = !focusMode
-              toggleFocusMode()
-              if (turningOn && e.detail === 0 && focusModeExitMsgVisible) dispatch(setAgentSwitchNotice(focusModeExitMsgVisible))
-            }}
-            className={`flex items-center justify-center w-7 h-7 rounded-md hover:bg-bg-hover transition-colors bg-transparent border-none cursor-pointer shrink-0 ${focusMode ? 'text-accent' : 'text-muted hover:text-text'}`}
-            aria-label={i18nT('app.focus_mode')}
-            aria-pressed={focusMode}
-            // The chord as currently bound (focusModeChord): the `title` below
-            // names the default for sighted hover, this names the live one for
-            // assistive tech. Omitted when the user unbound it.
-            aria-keyshortcuts={focusModeChord ?? undefined}
-            {...uiLocation('shell.focus-mode')}
-            title={i18nT(IS_MAC ? 'app.focus_mode_title_mac' : 'app.focus_mode_title')}
-          >
-            <Fullscreen size={15} />
-          </button>
-          </div>
-        )}
-        {/* Mobile centre cell. On the chat page it is the slot the chat page
-            fills through a portal: [sessions toggle][session title + menu].
-            `min-w-0` + `flex` so the title inside can truncate instead of
-            growing the cell. Elsewhere the cell is an empty spacer: the search
-            trigger that used to sit here moved into the chat drawer's rail, and
-            the header still needs its third in-flow child so the actions group
-            is not auto-placed into the `auto` centre track (where, as a size
-            container, it would collapse to its padding). */}
-        {/* The Crewmates page puts its header here once a crewmate is open.
-            Until then (`pending`, still reading) the page has no drawer bound,
-            so the slot holds a nav-drawer toggle and the bar never sits empty.
-            It wears the logo row's `Menu` glyph, not the roster drawer's panel
-            glyph, so one icon never opens two different drawers. */}
-        {isMobile && (mobileSingle
-          ? (
-            <div id="mobile-topbar-slot" data-testid="mobile-topbar-slot" className="flex items-center gap-1 min-w-0 h-full">
-              {membersBarPending && (
-                <button
-                  type="button"
-                  className="mc-touch-hit p-2 rounded-md text-text hover:text-text-strong hover:bg-bg-hover cursor-pointer bg-transparent border-none shrink-0"
-                  onClick={toggleNav}
-                  aria-label={i18nT('app.open_menu')}
-                  aria-expanded={mobileNavOpen}
-                  data-testid="mobile-topbar-nav-toggle"
-                >
-                  <Menu size={18} />
-                </button>
-              )}
-            </div>
-          )
-          : <span aria-hidden="true" data-testid="topbar-centre-spacer" className="w-0" />
-        )}
-        {/* Theme decoration: the active theme's center top-bar element (e.g. a
-            scanner sweep), chosen by resolved mode. Absent unless a registered
-            theme declares one. It renders as a BACKGROUND layer rather than a
-            grid cell: the header's three tracks are load-bearing now (sides are
-            pure remainder), so a fourth flow item would land in an implicit
-            column and shift the search off centre. A sweep/scanline is visually
-            a backdrop anyway, so it is inert to pointers and sits behind the
-            controls. Wrapped in a slot-level ErrorBoundary (fallback=null) so a
-            faulty registered extension disables only itself instead of crashing
-            the whole shell via the root boundary. */}
-        {(() => {
-          if (branding?.topBarHideOnMobile && isMobile) return null
-          const TB = resolvedMode === 'light' ? branding?.topBar?.light : branding?.topBar?.dark
-          return TB ? (
-            <ErrorBoundary key={`${colorTheme}:${resolvedMode}`} scope="theme-topbar" fallback={null}>
-              <div className="absolute inset-0 pointer-events-none overflow-hidden" aria-hidden="true"><TB /></div>
-            </ErrorBoundary>
-          ) : null
-        })()}
-        {/* `tb-has-update` shifts the collapse ladder's rungs (index.css): the
-            update pill is a conditional, non-shrinking sibling of the ladder,
-            so while it is mounted the group's fixed content is wider by the
-            pill's footprint and the ≥640px rungs fire that much earlier. Below
-            640px no rung shifts (#7698): a phone hands the group ≤240px
-            routinely, so a shifted terminal rung blanked the readouts for the
-            whole time an update was pending; the nowrap backstop clips the
-            squeeze instead. The class keys off the same selector the pill
-            itself reads, so they move together; during the pill's lazy-chunk
-            fetch the class can lead the pill by a moment, which costs readout
-            room briefly and harms nothing. */}
-        {!mobileSingle && (
-        <div ref={metricsGroupRef} className={`tb-right relative${updateAvailable ? ' tb-has-update' : ''}`}>
-          <div className="tb-measure">
-          {/* Zero-footprint probe for the metrics rung. It carries the readings'
-              own class, so JS reads the LADDER's verdict rather than a copy of
-              its thresholds. Out of flow and 0x0, so it costs no ladder budget
-              and adds no flex gap. */}
-          <span ref={metricsProbeRef} className="tb-drop-metrics tb-metrics-probe" aria-hidden="true" />
-
-          {/* Design exploration: items the user placed in the top bar via Edit layout. */}
-          <BarItems zone="top" slot="right" shell={shell} />
-
-          {/* Theme decoration: extra aside control (e.g. a stardate / clock). */}
-          {branding?.topBarAside && !(branding?.topBarHideOnMobile && isMobile) && (
-            <ErrorBoundary key={`${colorTheme}:${resolvedMode}`} scope="theme-aside" fallback={null}>
-              <branding.topBarAside />
-            </ErrorBoundary>
-          )}
-          {/* Unified readout capsule — connection glyph . system metrics .
-              kiro-credits usage pooled into one bordered pill. Offline: the
-              glyph turns from a plug into an unplugged plug and the whole
-              capsule tints danger (red border + subtle red bg), no "Offline"
-              text — the shape change is the signal, the colour backs it. When
-              auth expired the session-expired banner stays the primary signal;
-              the capsule reddens quietly underneath it. (The upstream
-              enterprise-SSO segment is dropped here: that SSO flow is stubbed
-              in this fork. The Claude-cost usage branch is likewise dropped:
-              this fork's usage pill is Kiro-credits-only.)
-
-              Desktop only. A phone bar has room for two controls on the right
-              (bell + the chat page's overflow menu) and a resource readout is
-              not something a phone user acts on; the session-expired banner
-              stays the offline signal there. */}
-          {!isMobile && statusTop && (() => {
+  // The readout capsule (connection, metrics, credits). Desktop only, and
+  // only while status is in the top bar, where the bar grid draws it.
+  const statusCapsule = !isMobile && statusTop ? (() => {
             const offline = !connected
             // `gatewayStatusMsg` (useAppShell) is the announced cause; see its
             // comment for why auth wording wins over transport state. It mirrors
@@ -593,7 +279,292 @@ export function ShellHeader({ shell }: { shell: AppShell }) {
                 </Glass>
               </motion.div>
             )
-          })()}
+  })() : null
+  return (
+    <>
+      {/* Topbar */}
+      {/* stable theming hook — see website/docs/theming-contract.md */}
+      <header
+        ref={topPeekSurface}
+        // `topbar-single` (phone chat page) swaps the three-track grid for
+        // `auto minmax(0,1fr) auto` (index.css): the centre cell is the chat
+        // page's title slot and takes every pixel the two side cells leave.
+        // Those side cells are a plain flex div / `tb-trail`, NOT `tb-left` /
+        // `tb-right`: the latter are inline-size containers, and a size
+        // container in an `auto` track has no content size to give, so it
+        // collapses to its padding and clips whatever it holds
+        // (test/topbarMenuButtonNarrow.test.ts records the measurement).
+        //
+        // `tb-measured` is the desktop form: both forms keep each side group's
+        // container-query ladder, and desktop adds a measured ladder that folds
+        // more when those rungs still leave contents overflowing
+        // (useTopbarCollapse in useAppShell). Desktop only, on purpose: below 768px the
+        // phone header's icon-only search and container rungs already fit.
+        className={`topbar topbar-glass relative pl-2 pr-3${mobileSingle ? ' topbar-single' : ''}${isMobile ? '' : ' tb-measured'}`}
+        // On a phone the chat title is portaled into this bar, above the
+        // transcript: inert while a transcript selection is held, so a dragged
+        // handle cannot land on the title (useSelectionInertOverlays).
+        {...{ [SELECTION_INERT_ATTR]: '' }}
+        // Both z-indexes come from lib/themeDecorLayer.ts, which derives the
+        // theme-overlay ceiling from them — the header must outrank pack
+        // decoration in both layouts (#7377), and a literal here could drift.
+        //
+        // In focus mode the header leaves the grid and becomes an overlay
+        // positioned against the shell (which is already `relative`), NOT the
+        // viewport: `position: fixed` would be measured against whichever
+        // ancestor happens to establish a containing block, and the shell is the
+        // app area either way. It stays MOUNTED and slides — unmounting it would
+        // tear down the notification/metrics popovers it owns and lose their
+        // state on every peek. TOPBAR_FOCUS_Z (62) clears the whole chat-pane
+        // stack (max 61) and the rail (50) while staying under the update banner
+        // (70), side sheets (89/90) and every modal (100+).
+        style={focusActive
+          ? {
+            position: 'absolute',
+            top: 0, left: 0, right: 0, height: 42,
+            zIndex: TOPBAR_FOCUS_Z,
+            transform: topChromeShown ? 'translateY(0)' : 'translateY(-100%)',
+            transition: 'transform 200ms cubic-bezier(0.2, 0, 0, 1)',
+            // Hidden chrome must not eat clicks aimed at the content beneath it.
+            pointerEvents: topChromeShown ? 'auto' : 'none',
+          }
+          : { gridArea: 'topbar', zIndex: TOPBAR_Z }}
+        // ...nor stay a Tab stop or be announced while off screen (hiddenChromeProps).
+        {...hiddenChromeProps(focusActive && !topChromeShown && focusChromeInert)}
+        {...(focusActive ? topPeek.surfaceProps : {})}
+      >
+        {/* Left: mobile menu toggle + inline instance selector. The brand now
+            lives in the sidebar (item 1.1). The selector reuses InstanceTabBar's
+            visibility rule — it renders nothing unless >=1 remote instance
+            exists, so the common single-instance header-left is empty (only the
+            macOS traffic-light clearance remains). */}
+        {/* No mobile-only `px-2` here on purpose. The icon buttons inside carry
+            their own 8px, so this padding stacked on top of the header's `pl-2`
+            and pushed the hamburger out past the page's own left edge. Dropping
+            it lands the button's BOX at 8 + 8 = 16px, the page gutter; the glyph
+            inside it then needs its own 2.5px correction because `Menu`'s artwork
+            does not fill its box (see the button below). Box and glyph together
+            put the hamburger, the page title and the chat session-list toggle on
+            one line. Deliberately only the LEFT cluster:
+            `.tb-right` carries a padding/negative-margin pair that keeps the
+            notification badge's 4px overhang from being clipped, and re-tuning
+            that needs a real WebKit check, not a local one. */}
+        {isMobile && !mobileSingle && (
+        <div className="tb-left relative h-full">
+          <div className="tb-measure">
+          {/* Windows only: the application menu shares this cluster. It needs no
+              width reservation of its own: the identity group is sized by its own
+              grid track, and the menu growing from the hamburger to its six
+              labels therefore consumes the GROUP's width -- which its collapse
+              ladder responds to -- instead of eating the centred search's. */}
+
+          {/* Route-history Back/Forward (#8258). Desktop layout only: on mobile
+              the platform owns Back (left-edge swipe), and the drill-in surfaces
+              navigate by component state that pushes nothing, so arrows there
+              would walk an unrelated stack. Order: after the Windows app menu,
+              before the instance selector — the leftmost NAVIGATION control,
+              matching where every browser puts it. */}
+          {/* Left-rail POC: the rail's brand + expand toggle lives here on
+              desktop, ahead of Back/Forward. The phone keeps its drawer header. */}
+          {/* Design exploration: the brand, collapse toggle and Back/Forward
+              moved to the head of the sidebar (see navRail's sidebar header). */}
+          {isMobile && (
+            <button className="group p-2 rounded-md bg-transparent border-none cursor-pointer text-muted hover:text-text shrink-0" onClick={toggleNav} aria-label={i18nT('app.open_menu')} {...uiLocation('shell.mobile-menu')}>
+              {/* The product logo, not a generic menu glyph. A narrow layout has exactly
+                  one nav affordance, and it opens the same rail whose header carries this
+                  same `avatar` on a wide one -- so it is the same asset, the same
+                  `rounded-md object-contain` treatment and the same hover tilt, which is
+                  live here because this bar is what a NARROW WINDOW gets, not only a
+                  touch device. Reading `avatar` rather than importing a file is what
+                  keeps a theme-supplied or user-configured logo in step: the branding
+                  registry resolves it once for the whole shell.
+
+                  A full-colour raster mark is an <img>, which is exactly what the
+                  `use-lucide-icons` rule's brand-mark exception prescribes -- a CSS mask
+                  over `currentColor` would flatten the art to one colour. But an <img>
+                  can FAIL, and `alt=""` + `aria-hidden` means failure renders nothing --
+                  an invisible button as the page's only nav route -- so MobileNavGlyph
+                  holds the Menu hamburger up until the logo's own `load` event.
+
+                  Square box, so no optical correction exists: the art is square and
+                  `object-contain` fills the box, putting the ink on the 16px page gutter
+                  (topbar pl-2 + this button's p-2) that the page title and every card's
+                  left edge below it sit on, with the button's own box at 24 + 16 = 40px
+                  for the tap target. `narrowFirstBaseline.test.ts` re-derives that sum. */}
+              <MobileNavGlyph avatar={avatar} />
+            </button>
+          )}
+          {/* Design exploration: Back/Forward and the remote Crews switcher sit
+              here only when Edit layout puts them in the top bar (both start
+              in the sidebar). The phone keeps its switcher here. */}
+          <InstanceTabBar variant="inline" />
+          </div>
+        </div>
+        )}
+        {/* Phone chat page, leading cell: the crew switcher (renders nothing
+            until a remote crew exists) and downstream widgets while they exist.
+            The update pill is NOT here: with a remote crew the switcher already
+            renders its chip and its dropdown, and the pill made a third action
+            in the group — on this page the update is the first item of the
+            chat page's overflow menu instead (UpdatePill variant="menu-item").
+            The nav-drawer logo is not here either — on this page the main
+            destinations are the rail inside the sessions drawer, opened by the
+            toggle the chat page puts first in the centre slot, so the bar never
+            offers two drawers. Sized `auto`, so the common empty cell costs no
+            width and the sessions toggle stays on the gutter. */}
+        {mobileSingle && (
+          <div data-testid="topbar-lead" className="relative h-full flex items-center gap-1.5 min-w-0">
+            <InstanceTabBar variant="inline" />
+            {getTopBarWidgets().map(w => (
+              <ErrorBoundary key={w.id} scope={`topbar-widget:${w.id}`} fallback={null}>
+                <w.component />
+              </ErrorBoundary>
+            ))}
+          </div>
+        )}
+        {/* Centre track: the ⌘K trigger. A flow item, not an overlay — its width
+            is the track's width, so it can never sit under a sibling cluster and
+            never has to be dropped to stay clear of one. On mobile the same
+            track holds the icon-only form below.
+
+            Wrapped with the focus-mode toggle in ONE flex cell rather than added
+            as a fourth grid child: `.topbar` declares exactly three tracks, so a
+            bare sibling would be auto-placed into `.tb-right` and land inside the
+            readout capsule's cluster. Two controls, which is the ceiling
+            website/AUTOSDE.yaml's max-two-buttons-per-row sets.
+
+            `data-topbar-overlay` is read by the crew-pin capture harnesses
+            (website/scripts/capture-crew-pin-chips.mjs, record-crew-pin-chips.mjs,
+            capture-crew-chip-shrink.mjs) to find this cell; nothing in src/
+            reads it any more. Keep it. */}
+        {/* Design exploration: on the desktop the top bar is one row. Its
+            items sit in a cell grid (lib/barGrid.ts), each where it was
+            dropped; the controls nobody places (update, extension widgets,
+            focus mode) keep a fixed group at the end. Spans every track.
+            `data-topbar-overlay` is read by the crew-pin capture harnesses. */}
+        {!isMobile && (
+          <div data-topbar-overlay className="h-full flex items-center gap-1.5 min-w-0" style={{ gridColumn: '1 / -1' }}>
+          {isWinElectron && <WindowsTitlebarMenu />}
+          <div role="toolbar" aria-label={zoneLabel('top')} className="flex-1 min-w-0 h-full">
+            <BarGrid
+              zone="top"
+              shell={shell}
+              renderStatus={() => <span className="flex items-center gap-1.5">{statusCapsule}{statusCapsule && <MetricsErrorNotice metrics={metrics} />}<NotificationsBellButton /></span>}
+            />
+          </div>
+          <div ref={metricsGroupRef} data-topbar-actions className={`relative h-full flex items-center gap-1.5 shrink-0${updateAvailable ? ' tb-has-update' : ''}`}>
+          <span ref={metricsProbeRef} className="tb-drop-metrics tb-metrics-probe" aria-hidden="true" />
+          {branding?.topBarAside && (
+            <ErrorBoundary key={`${colorTheme}:${resolvedMode}`} scope="theme-aside" fallback={null}>
+              <branding.topBarAside />
+            </ErrorBoundary>
+          )}
+          {getTopBarWidgets().map(w => (
+            <ErrorBoundary key={w.id} scope={`topbar-widget:${w.id}`} fallback={null}>
+              <w.component />
+            </ErrorBoundary>
+          ))}
+          {updateAvailable && (
+            <Suspense fallback={null}>
+              <UpdatePill />
+            </Suspense>
+          )}
+          {/* Focus mode is a placeable item now (FOCUS_ITEM, barItems.tsx). */}
+          </div>
+          </div>
+        )}
+        {/* Mobile centre cell. On the chat page it is the slot the chat page
+            fills through a portal: [sessions toggle][session title + menu].
+            `min-w-0` + `flex` so the title inside can truncate instead of
+            growing the cell. Elsewhere the cell is an empty spacer: the search
+            trigger that used to sit here moved into the chat drawer's rail, and
+            the header still needs its third in-flow child so the actions group
+            is not auto-placed into the `auto` centre track (where, as a size
+            container, it would collapse to its padding). */}
+        {/* The Crewmates page puts its header here once a crewmate is open.
+            Until then (`pending`, still reading) the page has no drawer bound,
+            so the slot holds a nav-drawer toggle and the bar never sits empty.
+            It wears the logo row's `Menu` glyph, not the roster drawer's panel
+            glyph, so one icon never opens two different drawers. */}
+        {isMobile && (mobileSingle
+          ? (
+            <div id="mobile-topbar-slot" data-testid="mobile-topbar-slot" className="flex items-center gap-1 min-w-0 h-full">
+              {membersBarPending && (
+                <button
+                  type="button"
+                  className="mc-touch-hit p-2 rounded-md text-text hover:text-text-strong hover:bg-bg-hover cursor-pointer bg-transparent border-none shrink-0"
+                  onClick={toggleNav}
+                  aria-label={i18nT('app.open_menu')}
+                  aria-expanded={mobileNavOpen}
+                  data-testid="mobile-topbar-nav-toggle"
+                >
+                  <Menu size={18} />
+                </button>
+              )}
+            </div>
+          )
+          : <span aria-hidden="true" data-testid="topbar-centre-spacer" className="w-0" />
+        )}
+        {/* Theme decoration: the active theme's center top-bar element (e.g. a
+            scanner sweep), chosen by resolved mode. Absent unless a registered
+            theme declares one. It renders as a BACKGROUND layer rather than a
+            grid cell: the header's three tracks are load-bearing now (sides are
+            pure remainder), so a fourth flow item would land in an implicit
+            column and shift the search off centre. A sweep/scanline is visually
+            a backdrop anyway, so it is inert to pointers and sits behind the
+            controls. Wrapped in a slot-level ErrorBoundary (fallback=null) so a
+            faulty registered extension disables only itself instead of crashing
+            the whole shell via the root boundary. */}
+        {(() => {
+          if (branding?.topBarHideOnMobile && isMobile) return null
+          const TB = resolvedMode === 'light' ? branding?.topBar?.light : branding?.topBar?.dark
+          return TB ? (
+            <ErrorBoundary key={`${colorTheme}:${resolvedMode}`} scope="theme-topbar" fallback={null}>
+              <div className="absolute inset-0 pointer-events-none overflow-hidden" aria-hidden="true"><TB /></div>
+            </ErrorBoundary>
+          ) : null
+        })()}
+        {/* `tb-has-update` shifts the collapse ladder's rungs (index.css): the
+            update pill is a conditional, non-shrinking sibling of the ladder,
+            so while it is mounted the group's fixed content is wider by the
+            pill's footprint and the ≥640px rungs fire that much earlier. Below
+            640px no rung shifts (#7698): a phone hands the group ≤240px
+            routinely, so a shifted terminal rung blanked the readouts for the
+            whole time an update was pending; the nowrap backstop clips the
+            squeeze instead. The class keys off the same selector the pill
+            itself reads, so they move together; during the pill's lazy-chunk
+            fetch the class can lead the pill by a moment, which costs readout
+            room briefly and harms nothing. */}
+        {isMobile && !mobileSingle && (
+        <div ref={metricsGroupRef} className={`tb-right relative${updateAvailable ? ' tb-has-update' : ''}`}>
+          <div className="tb-measure">
+          {/* Zero-footprint probe for the metrics rung. It carries the readings'
+              own class, so JS reads the LADDER's verdict rather than a copy of
+              its thresholds. Out of flow and 0x0, so it costs no ladder budget
+              and adds no flex gap. */}
+          <span ref={metricsProbeRef} className="tb-drop-metrics tb-metrics-probe" aria-hidden="true" />
+
+          {/* Theme decoration: extra aside control (e.g. a stardate / clock). */}
+          {branding?.topBarAside && !(branding?.topBarHideOnMobile && isMobile) && (
+            <ErrorBoundary key={`${colorTheme}:${resolvedMode}`} scope="theme-aside" fallback={null}>
+              <branding.topBarAside />
+            </ErrorBoundary>
+          )}
+          {/* Unified readout capsule — connection glyph . system metrics .
+              kiro-credits usage pooled into one bordered pill. Offline: the
+              glyph turns from a plug into an unplugged plug and the whole
+              capsule tints danger (red border + subtle red bg), no "Offline"
+              text — the shape change is the signal, the colour backs it. When
+              auth expired the session-expired banner stays the primary signal;
+              the capsule reddens quietly underneath it. (The upstream
+              enterprise-SSO segment is dropped here: that SSO flow is stubbed
+              in this fork. The Claude-cost usage branch is likewise dropped:
+              this fork's usage pill is Kiro-credits-only.)
+
+              Desktop only. A phone bar has room for two controls on the right
+              (bell + the chat page's overflow menu) and a resource readout is
+              not something a phone user acts on; the session-expired banner
+              stays the offline signal there. */}
           {!isMobile && <MetricsErrorNotice metrics={metrics} />}
           {/* Extension slot: downstream-registered top-bar widgets (e.g. a
               credential-TTL capsule or spend pill). Empty in the stock build.
@@ -622,7 +593,7 @@ export function ShellHeader({ shell }: { shell: AppShell }) {
               (The activity-panel open toggle now lives in the session header,
               beside the pop-out control — see ChatPage — so opening the panel
               no longer narrows this full-width header.) */}
-          {(isMobile || statusTop) && <NotificationsBellButton />}
+          <NotificationsBellButton />
           </div>
         </div>
         )}

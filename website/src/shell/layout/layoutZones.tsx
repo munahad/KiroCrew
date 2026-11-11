@@ -12,8 +12,9 @@
  * dnd-kit drag of a sidebar row, which the rail reports through
  * `setChromeDrag`), each zone shows its name, and:
  *  - a zone that can take the item is outlined in the accent colour; the one
- *    under the pointer lights up and draws a drop line in the gap where the
- *    item will land (it snaps to the nearest gap between items);
+ *    under the pointer lights up, and its bar shows its cells, with the ones
+ *    the item would take highlighted and the items there sliding aside
+ *    (barGridView.tsx);
  *  - a zone that cannot take it (an app, Mate or session over a bar; search
  *    over the bottom bar; a window toggle over the sidebar) is greyed, with a
  *    "no" mark on its name, and refuses the drop, so the item goes back.
@@ -27,9 +28,10 @@ import { Ban } from 'lucide-react'
 
 import { i18nT } from '../../i18n/t'
 import {
-  SHELL_ITEM_MIME, announceLayout, setZoneSlot, zoneDropAt, moveItem, readChromeDrag, setChromeDrag, useChromeDrag, useLayoutEditing,
+  SHELL_ITEM_MIME, announceLayout, readChromeDrag, setChromeDrag, useChromeDrag, useLayoutEditing,
   type BarZone, type ShellZone,
 } from '../../lib/shellLayout'
+import { cellAt, placeOnBar } from '../../lib/barGrid'
 import { shellItemMeta, zonesFor } from './shellItems'
 import { zoneLabel } from './barItems'
 
@@ -72,27 +74,20 @@ function ZoneOutline({ zone, area, dragging, nativeDrag, allowed, over, lineX }:
     if (!bar || !allowed || !e.dataTransfer.types.includes(SHELL_ITEM_MIME)) return
     e.preventDefault()
     e.dataTransfer.dropEffect = 'move'
-    const dragged = readChromeDrag().id
-    // Search over the top bar lands in its left, centre or right part.
-    // The top bar has a left, centre and right part: anything lands in the one
-    // under the pointer, at the nearest gap there.
-    const lineX = zoneDropAt(bar, e.clientX, dragged).lineX
-    setChromeDrag({ over: bar, lineX })
+    // The cells the item would take, centred under the pointer.
+    setChromeDrag({ over: bar, lineX: null, cell: cellAt(bar, e.clientX, readChromeDrag().id) })
   }
   const onDragLeave = (e: DragEvent) => {
     if (e.currentTarget.contains(e.relatedTarget as Node | null)) return
-    if (readChromeDrag().over === bar) setChromeDrag({ over: null, lineX: null })
+    if (readChromeDrag().over === bar) setChromeDrag({ over: null, lineX: null, cell: null })
   }
   const onDrop = (e: DragEvent) => {
     if (!bar || !allowed || !e.dataTransfer.types.includes(SHELL_ITEM_MIME)) return
     e.preventDefault()
     const id = e.dataTransfer.getData(SHELL_ITEM_MIME)
     if (!id) return
-    // Both bars have a left, centre and right part: the item joins the one
-    // under the pointer, at the nearest gap there.
-    const t = zoneDropAt(bar, e.clientX, id)
-    setZoneSlot(bar, id, t.slot)
-    moveItem(id, bar, t.index)
+    // The item takes the cells under the pointer; what was there moves aside.
+    placeOnBar(bar, id, cellAt(bar, e.clientX, id) ?? 0)
     announceLayout(i18nT('nav.layout_moved', { item: shellItemMeta(id)?.label ?? id, place: zoneLabel(bar) }))
   }
 
@@ -111,8 +106,8 @@ function ZoneOutline({ zone, area, dragging, nativeDrag, allowed, over, lineX }:
       } ${unavailable
         ? 'border-border bg-bg-hover/60 shadow-none'
         : over
-          ? 'border-accent bg-accent/10 shadow-[0_10px_28px_-6px_rgba(0,0,0,0.45)]'
-          : 'border-accent/80 shadow-[0_8px_22px_-8px_rgba(0,0,0,0.4)]'}`}
+          ? 'border-text/70 bg-text/5 shadow-[0_10px_28px_-6px_rgba(0,0,0,0.45)]'
+          : 'border-text/40 shadow-[0_8px_22px_-8px_rgba(0,0,0,0.4)]'}`}
       {...(catches ? { onDragOver, onDragLeave, onDrop } : {})}
     >
       {/* Where the item will land: a line in the gap it snaps to. */}
@@ -127,7 +122,7 @@ function ZoneOutline({ zone, area, dragging, nativeDrag, allowed, over, lineX }:
         // faces the page, away from the corners where two zones meet, so it can
         // only belong to its own zone. Shown only while an item is dragged.
         className={`absolute inline-flex items-center gap-1 whitespace-nowrap px-1.5 py-px rounded text-[10px] font-medium uppercase tracking-wide pointer-events-none transition-opacity duration-150 motion-reduce:transition-none ${
-          unavailable ? 'bg-bg-elevated text-muted border border-border' : 'bg-accent text-accent-fg'
+          unavailable ? 'bg-bg-elevated text-muted border border-border' : 'bg-text text-bg'
         } ${dragging ? 'opacity-100' : 'opacity-0'} ${
           zone === 'sidebar'
             ? 'right-0 top-1/2 translate-x-1/2 -translate-y-1/2'

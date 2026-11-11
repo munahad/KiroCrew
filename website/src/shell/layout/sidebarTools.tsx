@@ -5,7 +5,7 @@
  * sidebar, above the status row, instead of in the sidebar's groups.
  */
 import {
-  FEEDBACK_ITEM, PHONE_ITEM, TERMINAL_ITEM, useLayoutEditing, useShellPlacement,
+  FEEDBACK_ITEM, FOCUS_ITEM, PHONE_ITEM, TERMINAL_ITEM, useLayoutEditing, useShellPlacement,
 } from '../../lib/shellLayout'
 import { toggleBottomTerminal } from '../../hooks/useBottomTerminal'
 import { focusPopout as focusTerminalPopout } from '../../utils/terminalPopout'
@@ -20,16 +20,19 @@ export function SidebarTools({ shell, collapsed }: { shell: AppShell; collapsed:
   const ids = placement.side.filter(id => {
     if (id === TERMINAL_ITEM) return shell.terminalEnabled
     if (id === PHONE_ITEM) return shell.hasRenderableMobileConnect
-    return id === FEEDBACK_ITEM
+    return id === FEEDBACK_ITEM || id === FOCUS_ITEM
   })
   if (ids.length === 0) return null
   const act = (id: string) => {
     if (id === TERMINAL_ITEM) { if (shell.terminalPoppedOut) focusTerminalPopout(); else toggleBottomTerminal(shell.activeSlotProject); return }
     if (id === PHONE_ITEM) { shell.setMobileConnectOpen(true); return }
+    if (id === FOCUS_ITEM) { shell.toggleFocusMode(); return }
     void shell.requestFeature()
   }
   const pressed = (id: string) =>
-    id === TERMINAL_ITEM ? shell.bottomTerminalOpen || shell.terminalPoppedOut : id === PHONE_ITEM ? shell.mobileConnectOpen : false
+    id === TERMINAL_ITEM ? shell.bottomTerminalOpen || shell.terminalPoppedOut
+      : id === PHONE_ITEM ? shell.mobileConnectOpen
+        : id === FOCUS_ITEM ? shell.focusMode : false
   return (
     <div className="grid gap-0.5" data-testid="sidebar-tools">
       {ids.map(id => {
