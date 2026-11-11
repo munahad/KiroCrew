@@ -10507,8 +10507,6 @@
     "layout_move_down": "将{{item}}下移",
     "layout_moved_up": "已将{{item}}上移",
     "layout_moved_down": "已将{{item}}下移",
-    "layout_fixed_spot": "固定位置：使用菜单将其移到其他位置",
-    "layout_fixed_short": "固定",
     "layout_phone_only": "此处的更改仅适用于这部手机。桌面布局保持不变。",
     "layout_move_left": "将{{item}}左移",
     "layout_move_right": "将{{item}}右移",

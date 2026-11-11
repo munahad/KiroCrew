@@ -10801,8 +10801,6 @@
     "layout_move_down": "Sposta {{item}} in basso",
     "layout_moved_up": "Spostato in alto: {{item}}",
     "layout_moved_down": "Spostato in basso: {{item}}",
-    "layout_fixed_spot": "Posizione fissa: usa il menu per spostarlo in un altro punto",
-    "layout_fixed_short": "Fissa",
     "layout_phone_only": "Le modifiche qui valgono solo per questo telefono. Il layout desktop resta invariato.",
     "layout_move_left": "Sposta {{item}} a sinistra",
     "layout_move_right": "Sposta {{item}} a destra",

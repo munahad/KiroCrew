@@ -15,10 +15,14 @@ import { SortableAppNavRow } from './appRail'
 import { RailContextMenu, groupTitle, type RailItemMeta } from './railCustomize'
 import { LayoutEditPanel } from '../layout/layoutEditPanel'
 import {
-  SIDEBAR_MEMBERSHIP_EVENT, announceLayout, barZoneAt, setChromeDrag, setLayoutEditing, useLayoutEditing,
-  type SidebarMembership,
+  HISTORY_ITEM, PROFILE_ITEM, REMOTE_ITEM, SEARCH_ITEM, SIDEBAR_MEMBERSHIP_EVENT, STATUS_ITEM, announceLayout, barZoneAt, isWidgetItem, moveItem,
+  setChromeDrag, setLayoutEditing, useLayoutEditing, type SidebarMembership,
 } from '../../lib/shellLayout'
 import { cellAt, placeOnBar } from '../../lib/barGrid'
+
+/** Where widgets start in the sidebar: the top of its rows, and the bottom. */
+const SIDEBAR_HEAD_WIDGETS = [HISTORY_ITEM, REMOTE_ITEM, SEARCH_ITEM]
+const SIDEBAR_FOOT_WIDGETS = [STATUS_ITEM, PROFILE_ITEM]
 import { shellItemMeta, zonesFor } from '../layout/shellItems'
 import { useIsMobile } from '../../hooks/useIsMobile'
 import { forPhone, usePhoneLayout } from '../../lib/phoneLayout'
@@ -30,6 +34,7 @@ import { zoneLabel } from '../layout/barItems'
 import { OPEN_RAIL_CUSTOMIZE_EVENT } from './railSettingsFlyout'
 import { RAIL_PIN_DROP_HOST_ID, useRailNativeDrop } from './railPinDrop'
 import { RailRenameInput } from './railRename'
+import { SidebarColumn } from './sidebarColumn'
 
 /** Sortable id of a group's header. Prefixed so it can never equal a nav id. */
 const HEADER_PREFIX = 'rail-group:'
@@ -154,7 +159,20 @@ export function RailGroups({ available, renderItem, collapsed, defaultGroup, met
   // what was hidden on the phone (lib/phoneLayout.ts); the desktop is untouched.
   const phone = useIsMobile()
   const phoneLayout = usePhoneLayout()
-  const allGroups = useMemo(() => resolveRailLayout(layout, available, defaultGroup), [layout, available, defaultGroup])
+  const allGroups = useMemo(() => {
+    const g = resolveRailLayout(layout, available, defaultGroup)
+    // Design exploration: a widget the stored layout has never listed starts
+    // where the fixed widgets used to sit: Back/Forward, remote Crews and
+    // search at the top, status and "You" at the bottom. Once moved, its row
+    // keeps the place it was dropped in, like any other row.
+    const listed = new Set(layout.groups.flatMap(x => x.items))
+    const fresh = new Set(available.filter(id => isWidgetItem(id) && !listed.has(id)))
+    if (fresh.size === 0 || g.length === 0) return g
+    const out = g.map(x => ({ ...x, items: x.items.filter(id => !fresh.has(id)) }))
+    out[0].items.unshift(...SIDEBAR_HEAD_WIDGETS.filter(id => fresh.has(id)))
+    out[out.length - 1].items.push(...SIDEBAR_FOOT_WIDGETS.filter(id => fresh.has(id)))
+    return out
+  }, [layout, available, defaultGroup])
   const groups = useMemo(
     () => (phone ? allGroups.map(x => ({ ...x, items: forPhone(x.items, phoneLayout) })) : allGroups),
     [allGroups, phone, phoneLayout],
@@ -177,7 +195,10 @@ export function RailGroups({ available, renderItem, collapsed, defaultGroup, met
   // Unpin: apps go through the Library's set (the rail drops them via
   // `sortedAppGroup`); everything else is hidden in the layout itself.
   const unpin = useCallback((id: string) => {
-    if (isApp(id)) setAppPinned?.(id, false)
+    // A widget leaves the sidebar by its own place, so the panel lists it as
+    // not shown and can bring it back.
+    if (isWidgetItem(id)) moveItem(id, null)
+    else if (isApp(id)) setAppPinned?.(id, false)
     // A pinned session or Mate has no shipped slot to remember: it just goes.
     else if (isEntityPin(id)) updateRail(l => removePin(l, id))
     else commitRail(groups.map(g => ({ ...g, items: g.items.filter(x => x !== id) })), { add: id })
@@ -288,6 +309,44 @@ export function RailGroups({ available, renderItem, collapsed, defaultGroup, met
         sidebar portals in here; Mates drag natively and drop on this element. */}
     <div id={RAIL_PIN_DROP_HOST_ID} data-layout-zone="sidebar" className="relative pb-6" {...nativeDrop.handlers}>
     {nativeDrop.over && <div aria-hidden="true" className="absolute inset-0 pointer-events-none rounded-lg border-2 border-dashed border-text/70 bg-text/5 z-10" />}
+    {/* Design exploration: the desktop sidebar is a column of rows where every
+        row stays where it was dropped (sidebarColumn.tsx). The phone keeps
+        the plain sortable list below. */}
+    {!phone && (
+      <SidebarColumn
+        groups={groups}
+        collapsed={collapsed}
+        labelOf={id => labelOf(id) ?? meta(id)?.label ?? id}
+        groupTitle={groupTitle}
+        renderHeader={g => (
+          <div role="presentation" className="w-full">
+            {collapsed
+              ? <div aria-hidden="true" className="h-px bg-border mx-2" />
+              : (
+                <div className="nav-section flex items-center pl-3 pr-1">
+                  {renamingGroup === g.id
+                    ? <GroupNameInput initial={g.title ?? ''} onSave={name => saveGroupName(g.id, name)} onCancel={() => saveGroupName(g.id, null)} />
+                    : <span title={groupTitle(g)} className="text-[13px] font-medium text-muted whitespace-nowrap overflow-hidden">{groupTitle(g)}</span>}
+                </div>
+              )}
+          </div>
+        )}
+        renderRow={id => (
+          <div data-rail-item={id} className="relative">
+            {renderItem(id, labelOf(id))}
+            {renaming === id && (
+              <RailRenameInput
+                initial={labelOf(id) ?? meta(id)?.label ?? ''}
+                collapsed={collapsed}
+                onSave={name => saveName(id, name)}
+                onCancel={() => setRenaming(null)}
+              />
+            )}
+          </div>
+        )}
+      />
+    )}
+    {phone && (
     <DndContext sensors={sensors} collisionDetection={closestCenter} onDragStart={onDragStart} onDragMove={onDragMove} onDragEnd={onDragEnd} onDragCancel={onDragCancel}>
       <SortableContext items={flat} strategy={verticalListSortingStrategy}>
         {groups.map((g, gi) => (
@@ -320,6 +379,7 @@ export function RailGroups({ available, renderItem, collapsed, defaultGroup, met
       </SortableContext>
       <DragOverlay>{activeId ? renderItem(activeId, labelOf(activeId)) : null}</DragOverlay>
     </DndContext>
+    )}
     </div>
     </RailContextMenu>
     {editing && (

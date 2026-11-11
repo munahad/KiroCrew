@@ -16,7 +16,7 @@
  * other controls keep their room. It keeps its name and shortcut for
  * assistive tech either way.
  */
-import { useEffect, useRef, useState } from 'react'
+import { useContext, useEffect, useRef, useState } from 'react'
 import { GripVertical, Search } from 'lucide-react'
 
 import { IS_MAC } from '../../hooks/useKeyboardShortcuts'
@@ -24,6 +24,7 @@ import { i18nT } from '../../i18n/t'
 import { uiLocation } from '../../uiLocations/uiLocation'
 import { SEARCH_ITEM, useLayoutEditing, useSearchStyle } from '../../lib/shellLayout'
 import { startItemDrag } from './barItems'
+import { DragOwnedByParent } from './dragOwner'
 
 /** Below this top-bar width (px) the top-bar field becomes an icon. */
 export const SEARCH_ICON_BELOW = 820
@@ -77,7 +78,9 @@ export function SearchTrigger({ onOpen, launcherOwned, variant, collapsed = fals
   const label = launcherOwned ? i18nT('app.open_command_bar') : i18nT('app.search_sessions_files_and_commands')
   const placeholder = launcherOwned ? i18nT('app.k_run_a_command') : i18nT('nav.search_placeholder')
   const chord = IS_MAC ? '⌘K' : 'Ctrl K'
-  const drag = editing
+  // Inside a sidebar row or a bar cell, that wrapper owns the drag.
+  const owned = useContext(DragOwnedByParent)
+  const drag = editing && !owned
     ? { draggable: true, onDragStart: (e: React.DragEvent) => startItemDrag(e, SEARCH_ITEM) }
     : {}
   const editCls = editing ? 'group/edit relative cursor-grab active:cursor-grabbing [&_*]:cursor-grab hover:bg-bg-hover' : 'cursor-pointer hover:border-text/30'
@@ -139,7 +142,7 @@ export function SearchTrigger({ onOpen, launcherOwned, variant, collapsed = fals
     >
       {/* In the sidebar the grip sits in the gutter, outside the field, so the
           field keeps the same width as the rest of the sidebar while editing. */}
-      {editing && <GripVertical size={12} aria-hidden="true" className={`absolute top-1/2 -translate-y-1/2 text-muted opacity-0 group-hover/edit:opacity-100 ${variant === 'sidebar' ? '-left-2.5' : 'left-0.5'}`} />}
+      {editing && !owned && <GripVertical size={12} aria-hidden="true" className={`absolute top-1/2 -translate-y-1/2 text-muted opacity-0 group-hover/edit:opacity-100 ${variant === 'sidebar' ? '-left-2.5' : 'left-0.5'}`} />}
       <Search size={14} className="shrink-0" aria-hidden="true" />
       <span className="flex-1 min-w-0 truncate text-left text-[13px]">{placeholder}</span>
       <kbd className="shrink-0 px-1.5 py-px rounded border border-border bg-bg-elevated text-[10px] font-medium text-muted font-sans">{chord}</kbd>

@@ -142,7 +142,7 @@ type Cols = Record<string, number>
 
 /** Order by start cell, then make every item fit: no overlaps, inside 0..n.
  *  Too many items for the bar: they keep their order and run past the end. */
-function normalize(ids: readonly string[], want: Cols, span: (id: string) => number, n: number): Cols {
+export function normalize(ids: readonly string[], want: Cols, span: (id: string) => number, n: number): Cols {
   const order = ids.map((id, i) => ({ id, i })).sort((a, b) => want[a.id] - want[b.id] || a.i - b.i).map(x => x.id)
   const out: Cols = {}
   let end = 0

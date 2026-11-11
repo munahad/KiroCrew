@@ -7,6 +7,7 @@
  * Edit layout can move it back to the top bar, where the original readout
  * capsule draws it. While editing, it drags like any other item.
  */
+import { useContext } from 'react'
 import { GripVertical, Plug, Unplug } from 'lucide-react'
 
 import { useLayoutEditing, STATUS_ITEM } from '../../lib/shellLayout'
@@ -14,12 +15,14 @@ import { kiroUsageSegment } from '../topbar/kiroUsageReadout'
 import { NotificationsBellButton } from '../topbar/shellHeader'
 import type { AppShell } from '../appShell'
 import { startItemDrag } from './barItems'
+import { DragOwnedByParent } from './dragOwner'
 
 export function SidebarStatus({ shell, collapsed }: {
   shell: Pick<AppShell, 'connected' | 'gatewayStatusMsg' | 'kiroUsageState' | 'usageSegmentHidden' | 'setKiroUsageOpen'>
   collapsed: boolean
 }) {
-  const editing = useLayoutEditing()
+  const owned = useContext(DragOwnedByParent)
+  const editing = useLayoutEditing() && !owned
   const { connected, gatewayStatusMsg, kiroUsageState, usageSegmentHidden, setKiroUsageOpen } = shell
   const seg = 'flex items-center gap-1 px-1.5 py-0.5 rounded-md bg-transparent border-none cursor-pointer transition-colors hover:bg-bg-hover whitespace-nowrap'
   // The credits reading needs room: shown in the expanded sidebar only.

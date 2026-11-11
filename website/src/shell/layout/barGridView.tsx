@@ -23,6 +23,7 @@ import { BarItemButton, startItemDrag, useBarItemActions } from './barItems'
 import { RemoteCrewSwitcher } from './remoteCrews'
 import { SearchTrigger } from './searchTrigger'
 import { SidebarStatus } from './sidebarStatus'
+import { DragOwnedByParent } from './dragOwner'
 
 /** The grid's look: neutral tints of the theme's text colour, so it reads as
  *  a drafting grid in any theme rather than in the accent colour. */
@@ -161,7 +162,12 @@ export function BarGrid({ zone, shell, renderStatus }: {
           >
             {editing && <GripVertical size={12} aria-hidden="true" className="absolute left-0 top-1/2 -translate-y-1/2 text-muted opacity-0 group-hover/edit:opacity-100" />}
             <Measured onWidth={w => setPx(p => (Math.abs((p[id] ?? 0) - w) < 1 ? p : { ...p, [id]: w }))}>
-              {render(id)}
+              {/* The cell drags the item, so the widget's own drag is off, and
+                  while editing presses pass through to the cell: a menu
+                  trigger would otherwise take the press and block the drag. */}
+              <div className={editing ? '[&_*]:pointer-events-none' : 'contents'}>
+                <DragOwnedByParent.Provider value>{render(id)}</DragOwnedByParent.Provider>
+              </div>
             </Measured>
           </div>
         )
@@ -170,44 +176,3 @@ export function BarGrid({ zone, shell, renderStatus }: {
   )
 }
 
-/**
- * The sidebar's rows as the same neutral drafting grid, from its top to its
- * bottom edge, while an item is dragged in "Edit layout" (every drag reports
- * through `setChromeDrag`, the sidebar's own included). The sidebar is a list,
- * so a drop still lands between rows, never in an empty gap. Place inside the
- * sidebar's `relative` frame.
- */
-export function SidebarGridRows() {
-  const editing = useLayoutEditing()
-  const dragId = useChromeDrag().id
-  const ref = useRef<HTMLDivElement>(null)
-  const [pitch, setPitch] = useState(0)
-  const [offset, setOffset] = useState(0)
-  const on = editing && dragId !== null
-  useLayoutEffect(() => {
-    if (!on) return
-    const nav = ref.current?.parentElement
-    const rows = nav?.querySelectorAll<HTMLElement>('[data-rail-item]')
-    if (!nav || !rows || rows.length === 0) return
-    const a = rows[0].getBoundingClientRect()
-    const b = rows[1]?.getBoundingClientRect()
-    const p = b ? b.top - a.top : a.height + 2
-    setPitch(p)
-    // Lines on the rows' own edges, from the top of the sidebar down.
-    setOffset(p > 0 ? (((a.top - nav.getBoundingClientRect().top) % p) + p) % p : 0)
-  }, [on])
-  if (!on) return null
-  return (
-    <div
-      ref={ref}
-      aria-hidden="true"
-      data-testid="sidebar-grid-rows"
-      className="absolute inset-0 pointer-events-none z-0 rounded-xl"
-      style={pitch > 0 ? {
-        backgroundImage: `linear-gradient(to bottom, ${GRID_LINE} 1px, transparent 1px)`,
-        backgroundSize: `100% ${pitch}px`,
-        backgroundPosition: `0 ${offset}px`,
-      } : undefined}
-    />
-  )
-}

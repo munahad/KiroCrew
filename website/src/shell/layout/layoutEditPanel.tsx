@@ -30,14 +30,15 @@ import { isAppNavId } from '../../appNotificationBadges'
 import { i18nT } from '../../i18n/t'
 import { useAppSelector } from '../../store'
 import {
-  MATE_PIN_PREFIX, SESSION_PIN_PREFIX, applyVisibleOrder, insertPin, isEntityPin, matePinId, readRailLayout, removePin, sessionPinId,
-  updateRail, writeRailLayout, type RailGroup,
+  MATE_PIN_PREFIX, SESSION_PIN_PREFIX, insertPin, isEntityPin, matePinId, removePin, sessionPinId,
+  updateRail, type RailGroup,
 } from '../../lib/railLayout'
 import {
   FEEDBACK_ITEM, FOCUS_ITEM, HISTORY_ITEM, PHONE_ITEM, PROFILE_ITEM, REMOTE_ITEM, SEARCH_ITEM, removeFromBars, STATUS_ITEM, TERMINAL_ITEM, isTwoPlaceItem, announceLayout, isWindowToggle, moveItem, resetShellLayout, setLayoutEditing,
   moveWithinBar, setSearchStyle, useLayoutAnnouncement, useSearchStyle, useShellPlacement, zoneOf, type BarZone, type ShellZone,
 } from '../../lib/shellLayout'
 import { barOrder, cellOf, clearBarCells, setItemStyle, shiftOnBar, useBarCells, useItemStyle } from '../../lib/barGrid'
+import { canShiftInSidebar, clearSidebarRows, columnIdsOf, columnOrder, shiftInSidebar, useSidebarRows } from '../../lib/sidebarGrid'
 import { useTerminalEnabled } from '../../utils/terminalRegistry'
 import { useRailWidth } from '../../hooks/useRailWidth'
 import { useIsMobile } from '../../hooks/useIsMobile'
@@ -111,6 +112,7 @@ export function LayoutEditPanel({ groups, hidden, meta }: {
   // Re-render when a bar item moves cells, so its row and arrows follow.
   useBarCells('top')
   useBarCells('bottom')
+  useSidebarRows()
   const railWidth = useRailWidth()
   // Phone layout: Edit layout edits the phone's one sidebar column, for this
   // phone only (lib/phoneLayout.ts). Its shell has no top or bottom bar, so
@@ -199,21 +201,13 @@ export function LayoutEditPanel({ groups, hidden, meta }: {
     return new Set([...n].filter(([, c]) => c > 1).map(([l]) => l))
   }, [candidates])
 
-  /** Where a row sits in its place, so each section lists items in the order
-   *  the canvas shows them (widgets, which have fixed slots, come first). */
-  const flat = useMemo(() => groups.flatMap(g => g.items), [groups])
-  // The sidebar's own order: header widgets, then its rows, then the tool rows,
-  // status and "You" at its foot, so the list reads top to bottom like it.
-  const SIDEBAR_SLOT: Record<string, number> = {
-    [HISTORY_ITEM]: -3, [REMOTE_ITEM]: -2, [SEARCH_ITEM]: -1, [STATUS_ITEM]: 20_000, [PROFILE_ITEM]: 20_001,
-  }
   const orderOf = (id: string, section: ShellZone | 'none'): number => {
     if (phone) return section === 'sidebar' ? phoneColumn.indexOf(id) : 0
     // The bars list their items left to right, as their grid draws them.
     if (section === 'top' || section === 'bottom') return barOrder(section).indexOf(id)
-    if (section === 'sidebar' && id in SIDEBAR_SLOT) return SIDEBAR_SLOT[id]
-    if (isTwoPlaceItem(id)) return -1
-    if (section === 'sidebar') return placement.side.includes(id) ? 10_000 + placement.side.indexOf(id) : flat.indexOf(id)
+    // The sidebar's own order: its rows top to bottom as the column draws
+    // them, then its tool rows.
+    if (section === 'sidebar') return placement.side.includes(id) ? 10_000 + placement.side.indexOf(id) : columnOrder(columnIdsOf(groups)).indexOf(id)
     return 0
   }
   /** The bar a row sits in, when it is in one (desktop). */
@@ -222,9 +216,8 @@ export function LayoutEditPanel({ groups, hidden, meta }: {
     const z = where(id)
     return z === 'top' || z === 'bottom' ? z : null
   }
-  /** Can this row move one step? In a bar, one cell left or right (pushing a
-   *  neighbour aside); in the sidebar, widgets keep fixed slots and rows move
-   *  within their own group. */
+  /** Can this row move one step? In a bar, one cell left or right; in the
+   *  sidebar, one row up or down. Either way a neighbour is pushed aside. */
   const canStep = (id: string, delta: -1 | 1): boolean => {
     if (phone) {
       const part = phoneParts.find(p => p.includes(id))
@@ -236,15 +229,12 @@ export function LayoutEditPanel({ groups, hidden, meta }: {
       const at = cellOf(bar, id)
       return !!at && at.col + delta >= 0 && at.col + delta <= at.max
     }
-    if (isTwoPlaceItem(id)) return false
     for (const list of [placement.top, placement.bottom, placement.side]) {
       const i = list.indexOf(id)
       if (i >= 0) return i + delta >= 0 && i + delta < list.length
     }
-    const g = groups.find(x => x.items.includes(id))
-    if (!g) return false
-    const i = g.items.indexOf(id)
-    return i + delta >= 0 && i + delta < g.items.length
+    // A sidebar row moves one row in the column, gaps included.
+    return canShiftInSidebar(groups, id, delta)
   }
   const step = (id: string, delta: -1 | 1, label: string) => {
     if (phone) {
@@ -257,18 +247,9 @@ export function LayoutEditPanel({ groups, hidden, meta }: {
       if (shiftOnBar(bar, id, delta)) announceLayout(i18nT(delta < 0 ? 'nav.layout_moved_left' : 'nav.layout_moved_right', { item: label }))
       return
     }
-    let moved = moveWithinBar(id, delta)
-    if (!moved) {
-      const g = groups.find(x => x.items.includes(id))
-      const i = g ? g.items.indexOf(id) : -1
-      if (g && i + delta >= 0 && i + delta < g.items.length) {
-        const items = [...g.items]
-        ;[items[i], items[i + delta]] = [items[i + delta], items[i]]
-        // Same write the sidebar's own drag-reorder uses.
-        writeRailLayout(applyVisibleOrder(readRailLayout(), groups.map(x => (x === g ? { ...x, items } : x))))
-        moved = true
-      }
-    }
+    // Tool rows move within their own list; every other sidebar row moves
+    // one row in the column, gaps included.
+    const moved = moveWithinBar(id, delta) || shiftInSidebar(groups, id, delta)
     if (moved) announceLayout(i18nT(delta < 0 ? 'nav.layout_moved_up' : 'nav.layout_moved_down', { item: label }))
   }
 
@@ -409,21 +390,15 @@ export function LayoutEditPanel({ groups, hidden, meta }: {
               {placeLabel(section)} <span className="opacity-70 normal-case">{rows.length}</span>
             </h3>
             <ul aria-labelledby={headingId} className="m-0 p-0 list-none">
-        {rows.map((x, i) => {
+        {rows.map(x => {
           const at = where(x.id)
-          // Widgets keep a fixed spot in the sidebar only; in a bar they move
-          // along its cells like anything else.
-          const fixed = at === 'sidebar' && !phone && isTwoPlaceItem(x.id)
           const inBar = at === 'top' || at === 'bottom'
-          // A hairline between fixed-spot rows and the rows you can reorder,
-          // so a first movable row does not look like it should move up.
-          const breakAbove = section === 'sidebar' && i > 0 && isTwoPlaceItem(x.id) !== isTwoPlaceItem(rows[i - 1].id)
           return (
             <li
               key={x.id}
               draggable
               onDragStart={e => startItemDrag(e, x.id)}
-              className={`${breakAbove ? 'mt-1 before:content-[""] before:absolute before:-top-0.5 before:left-2 before:right-2 before:h-px before:bg-border' : ''} group/row relative flex flex-col gap-1 pl-3 pr-1.5 py-1.5 rounded-lg hover:bg-bg-hover cursor-grab active:cursor-grabbing`}
+              className="group/row relative flex flex-col gap-1 pl-3 pr-1.5 py-1.5 rounded-lg hover:bg-bg-hover cursor-grab active:cursor-grabbing"
             >
               <div className="relative flex items-center gap-2">
               {/* The grip overlays the row's left padding on hover instead of
@@ -435,8 +410,6 @@ export function LayoutEditPanel({ groups, hidden, meta }: {
                 <span className="block truncate text-[13px] text-text" title={x.meta.label}>{x.meta.label}</span>
                 <span className="block text-[11px] text-muted">
                   {categoryLabel(x.category)}{x.detail && repeated.has(x.meta.label) ? ` · ${x.detail}` : ''}
-                  {/* Why this row has no Move up / Move down, said in words. */}
-                  {fixed && <span title={i18nT('nav.layout_fixed_spot')}>{' · '}{i18nT('nav.layout_fixed_short')}</span>}
                 </span>
               </span>
               {/* A placed item in a bar: icon and label (as dropped) or the icon
@@ -493,14 +466,9 @@ export function LayoutEditPanel({ groups, hidden, meta }: {
               )}
               {/* Move up / Move down in the sidebar, Move left / Move right in a
                   bar (one cell): reorder without dragging (WCAG 2.5.7). Not on
-                  hidden items (no place) or on the sidebar's fixed-spot items
-                  (search, remote Crews, Back/Forward, "You", status), which
-                  move between places with the menu but keep their own spot
-                  within the sidebar. */}
-              {/* Fixed-spot items: an empty slot where the arrows would be, so
-                  every row's menu button lines up. */}
-              {fixed && <span className="shrink-0 w-12" aria-hidden="true" />}
-              {at !== 'none' && !fixed && (
+                  hidden items, which have no place. Nothing has a fixed spot:
+                  widgets are ordinary rows in the sidebar too. */}
+              {at !== 'none' && (
                 <span className="shrink-0 flex items-center">
                   {([-1, 1] as const).map(d => {
                     const key = inBar
@@ -586,7 +554,7 @@ export function LayoutEditPanel({ groups, hidden, meta }: {
 
       <footer className="flex items-center justify-between gap-2 px-4 py-3 border-t border-border">
         {/* On the phone, Reset clears the phone's own changes only. */}
-        <Btn onClick={() => { if (phone) resetPhoneLayout(); else { resetShellLayout(); clearBarCells() } announceLayout(i18nT('nav.layout_reset_done')) }}>{i18nT('nav.rail_reset')}</Btn>
+        <Btn onClick={() => { if (phone) resetPhoneLayout(); else { resetShellLayout(); clearBarCells(); clearSidebarRows() } announceLayout(i18nT('nav.layout_reset_done')) }}>{i18nT('nav.rail_reset')}</Btn>
         <Btn primary onClick={() => setLayoutEditing(false)}>{i18nT('nav.rail_done')}</Btn>
       </footer>
 

@@ -10507,8 +10507,6 @@
     "layout_move_down": "{{item}} 아래로 이동",
     "layout_moved_up": "{{item}}을(를) 위로 이동했습니다",
     "layout_moved_down": "{{item}}을(를) 아래로 이동했습니다",
-    "layout_fixed_spot": "고정 위치: 다른 곳으로 옮기려면 메뉴를 사용하세요",
-    "layout_fixed_short": "고정",
     "layout_phone_only": "여기서 바꾼 내용은 이 휴대폰에만 적용됩니다. 데스크톱 레이아웃은 그대로입니다.",
     "layout_move_left": "{{item}} 왼쪽으로 이동",
     "layout_move_right": "{{item}} 오른쪽으로 이동",

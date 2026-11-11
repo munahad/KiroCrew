@@ -10507,8 +10507,6 @@
     "layout_move_down": "{{item}}を下に移動",
     "layout_moved_up": "{{item}}を上に移動しました",
     "layout_moved_down": "{{item}}を下に移動しました",
-    "layout_fixed_spot": "固定の位置：別の場所に移動するにはメニューを使います",
-    "layout_fixed_short": "固定",
     "layout_phone_only": "ここでの変更はこのスマートフォンだけに適用されます。デスクトップのレイアウトは変わりません。",
     "layout_move_left": "{{item}}を左に移動",
     "layout_move_right": "{{item}}を右に移動",

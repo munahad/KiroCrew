@@ -7,7 +7,7 @@
  * While editing, every widget drags like any other item (WidgetSlot), and the
  * Edit layout panel's "Show in" menu moves it without a drag (WCAG 2.5.7).
  */
-import type { ReactNode } from 'react'
+import { useContext, type ReactNode } from 'react'
 import { GripVertical } from 'lucide-react'
 
 import { NavHistoryArrows } from '../../components/NavHistoryArrows'
@@ -17,6 +17,7 @@ import {
 import { ShellProfileMenu } from '../nav/railSettingsFlyout'
 import type { AppShell } from '../appShell'
 import { startItemDrag } from './barItems'
+import { DragOwnedByParent } from './dragOwner'
 import { SearchTrigger } from './searchTrigger'
 import { SidebarStatus } from './sidebarStatus'
 import { RemoteCrewSwitcher } from './remoteCrews'
@@ -31,7 +32,8 @@ export function WidgetSlot({ id, children, className = '', gutter = false }: {
    *  In a bar there is no gutter, so the control makes room for the grip. */
   gutter?: boolean
 }) {
-  const editing = useLayoutEditing()
+  const owned = useContext(DragOwnedByParent)
+  const editing = useLayoutEditing() && !owned
   return (
     <div
       data-bar-item={id}

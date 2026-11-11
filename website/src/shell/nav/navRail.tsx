@@ -11,21 +11,17 @@ import { isAppNavId } from '../../appNotificationBadges'
 import { NAV_ITEMS } from './navItems'
 import { isChatRoute } from './routeActive'
 import { RailBrandToggle, RailCommunityLinks } from './railChrome'
-import { NavHistoryArrows } from '../../components/NavHistoryArrows'
 import { PinnedRailGroups } from './railPins'
 import { forwardRailContextMenu, pinAtPoint } from './railPinDrop'
 import { RAIL_PIN_MIME } from '../../lib/railLayout'
 import {
-  HISTORY_ITEM, PROFILE_ITEM, REMOTE_ITEM, isTwoPlaceItem, isWindowToggle, moveItem, removeFromBars, setLayoutEditing, setSidebarMembership,
-  useHistoryPlace, useProfilePlace, useRemotePlace, useSearchPlace, useSearchStyle, useShellPlacement, useStatusPlace,
+  isWidgetItem, isWindowToggle, moveItem, removeFromBars, setLayoutEditing, setSidebarMembership, useLayoutEditing, useShellPlacement, useWidgetsIn,
 } from '../../lib/shellLayout'
-import { ShellWidget, WidgetSlot } from '../layout/shellWidgets'
+import { ShellWidget } from '../layout/shellWidgets'
+import { DragOwnedByParent } from '../layout/dragOwner'
 import { SidebarTools } from '../layout/sidebarTools'
 import { PhoneBarRows } from '../layout/phoneBarRows'
-import { SidebarGridRows } from '../layout/barGridView'
 import { forPhone, phoneBarIds, usePhoneLayout } from '../../lib/phoneLayout'
-import { SidebarStatus } from '../layout/sidebarStatus'
-import { SearchTrigger } from '../layout/searchTrigger'
 
 /** Sidebar-wide drop while editing: the groups' own drop host handles drops over
  *  them (and marks the event handled); this catches the rest of the sidebar. */
@@ -35,11 +31,12 @@ const railWideDropProps = {
     if (e.defaultPrevented || !e.dataTransfer.types.includes(RAIL_PIN_MIME)) return
     e.preventDefault()
     const id = e.dataTransfer.getData(RAIL_PIN_MIME)
-    if (isTwoPlaceItem(id) || isWindowToggle(id)) { moveItem(id, 'sidebar'); return }
+    if (isWindowToggle(id)) { moveItem(id, 'sidebar'); return }
+    // Widgets are ordinary rows now: they land where they are dropped.
+    if (isWidgetItem(id)) { if (pinAtPoint(id, e.clientY)) moveItem(id, 'sidebar'); return }
     if (id && pinAtPoint(id, e.clientY)) { removeFromBars(id); setSidebarMembership(id, true) }
   },
 }
-import { RailSettingsFlyout } from './railSettingsFlyout'
 import { defaultGroupOf } from '../../lib/railLayout'
 import { readAppNavHidden, toggleAppNavHidden } from '../../lib/appNavHidden'
 import { appPathname } from '../../lib/basePath'
@@ -69,18 +66,14 @@ export function ShellNavRail({ shell }: { shell: AppShell }) {
     setReportProblemOpen, toggleNav, effectiveCollapsed, closeMobileNav, activePath, libraryNavActive,
     discoverNavActive, isChat, navRowActive,
   } = shell
-  const searchPlace = useSearchPlace()
-  const searchStyle = useSearchStyle()
-  const statusPlace = useStatusPlace()
-  const remotePlace = useRemotePlace()
-  const historyPlace = useHistoryPlace()
-  const profilePlace = useProfilePlace()
+  // Design exploration: the widgets placed in the sidebar, drawn as rows.
+  const sidebarWidgets: string[] = useWidgetsIn('sidebar')
+  const layoutEditing = useLayoutEditing()
   const placement = useShellPlacement()
   // The phone's column: bar items join the drawer, in the phone's own order.
   const phoneLayout = usePhoneLayout()
   const phoneTop = forPhone(phoneBarIds(placement.top), phoneLayout)
   const phoneBottom = forPhone([...phoneBarIds(placement.bottom), ...phoneLayout.extra], phoneLayout)
-  const searchInHeader = !isMobile && searchPlace === 'sidebar' && searchStyle === 'icon' && !effectiveCollapsed
 
   // Render one standard nav row (used by the top-fixed mains, the Apps list,
   // and the bottom-fixed section). Active-state, mobile close, chat pin
@@ -175,29 +168,10 @@ export function ShellNavRail({ shell }: { shell: AppShell }) {
               <div className="flex-1 min-w-0 w-full [&>div]:mb-0">
                 <RailBrandToggle effectiveCollapsed={effectiveCollapsed} toggleNav={toggleNav} avatar={avatar} branding={branding} botName={botName} />
               </div>
-              {/* Back/Forward sit right after the logo row, whose collapse
-                  icon now has its own reserved room (railChrome). A divider
-                  here cost the wordmark its space. */}
-              {historyPlace === 'sidebar' && (
-                <WidgetSlot id={HISTORY_ITEM} gutter>
-                  <NavHistoryArrows vertical={effectiveCollapsed} />
-                </WidgetSlot>
-              )}
-              {/* "Show as icon": search joins the header row (expanded only;
-                  the collapsed strip keeps its own icon row below). */}
-              {searchInHeader && (
-                <SearchTrigger variant="sidebar" inHeader onOpen={commandPalette.openPalette} launcherOwned={!!slotOwners['quick-search']} />
-              )}
+              {/* Back/Forward, search and the other widgets are ordinary rows
+                  now: they sit wherever they were placed among the sidebar's
+                  rows. Only the logo and collapse toggle stay up here. */}
             </div>
-          )}
-          {/* Design exploration: search can live here instead of the top bar. */}
-          {/* Design exploration: the remote Crews switcher (Local and each
-              connected remote) under the header; an icon in the collapsed strip. */}
-          {!isMobile && remotePlace === 'sidebar' && (
-            <div className={`mb-1.5 ${effectiveCollapsed ? 'flex justify-center' : ''}`}><ShellWidget id={REMOTE_ITEM} zone="sidebar" shell={shell} collapsed={effectiveCollapsed} /></div>
-          )}
-          {!isMobile && searchPlace === 'sidebar' && !searchInHeader && (
-            <SearchTrigger variant="sidebar" collapsed={effectiveCollapsed} onOpen={commandPalette.openPalette} launcherOwned={!!slotOwners['quick-search']} />
           )}
           {/* Hairline under the expanded header (collapsed rail has none —
               the big logo alone separates well). */}
@@ -211,7 +185,7 @@ export function ShellNavRail({ shell }: { shell: AppShell }) {
             edge. overscroll-y-none kills the macOS rubber-band bounce;
             scrollbar-none + scrollbarWidth hide the scrollbar across
             Firefox, modern WebKit, and older Safari (<16). */}
-        <div className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden overscroll-y-none scrollbar-none px-2" style={{ scrollbarWidth: 'none' }}>
+        <div data-sidebar-scroll className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden overscroll-y-none scrollbar-none px-2" style={{ scrollbarWidth: 'none' }}>
           <div className="grid gap-0.5">
             {/* Layout-driven groups: the user's rail layout (lib/railLayout.ts),
                 starting from the shipped default. Static routes, Discover,
@@ -226,6 +200,10 @@ export function ShellNavRail({ shell }: { shell: AppShell }) {
             <PinnedRailGroups
               onNavigate={closeMobileNav}
               available={[
+                // Design exploration: widgets placed in the sidebar are rows
+                // like the pages, so they can sit anywhere among them. The
+                // phone drawer keeps its own fixed search and account rows.
+                ...(isMobile ? [] : sidebarWidgets),
                 ...advertisedNavItems.filter(n => n.group === 'Main').map(n => n.id),
                 'apps', 'apps-library',
                 ...sortedAppGroup.map(n => n.id),
@@ -242,6 +220,18 @@ export function ShellNavRail({ shell }: { shell: AppShell }) {
               isApp={id => !railDefaultIsStatic(id) && allAppGroup.some(a => a.id === id)}
               setAppPinned={(id, pinned) => { if (readAppNavHidden().has(id) === pinned) toggleAppNavHidden(id) }}
               renderItem={(id, label, covered) => {
+                if (isWidgetItem(id)) return (
+                  // The row drags the widget (dnd-kit), so the widget's own
+                  // native drag is off inside it. While editing, presses pass
+                  // through the widget to the row: a menu trigger ("You",
+                  // remote Crews) would otherwise take the press to open its
+                  // menu, and the row never starts dragging.
+                  <DragOwnedByParent.Provider value>
+                    <div className={`${effectiveCollapsed ? 'flex justify-center' : 'w-full [&>div]:w-full'} ${layoutEditing ? '[&_*]:pointer-events-none' : ''}`}>
+                      <ShellWidget id={id} zone="sidebar" shell={shell} collapsed={effectiveCollapsed} />
+                    </div>
+                  </DragOwnedByParent.Provider>
+                )
                 if (id === 'apps') return (
                   <NavItem
                     navId="apps"
@@ -282,35 +272,16 @@ export function ShellNavRail({ shell }: { shell: AppShell }) {
         {(() => {
           const s = NAV_ITEMS.find(n => n.id === 'settings')!
           const cap = NAV_ITEMS.find(n => n.id === 'capabilities')!
-          const updateBadge = updateAvailable ? <span title={i18nT('app.update_available')} role="status" aria-label={i18nT('app.update_available_2')} className={effectiveCollapsed ? 'absolute top-1 right-1 w-2 h-2 bg-accent rounded-full z-10' : 'absolute top-1/2 -translate-y-1/2 right-2 w-2 h-2 bg-accent rounded-full z-10'} /> : undefined
           // Desktop: Settings is the rail's only permanent row; Customize, phone
           // connect and the rail customize modal live in its hover flyout, and
           // the terminal + phone toggles live in the status bar
           // (statusbar/shellStatusBar.tsx). The phone drawer keeps every row.
           if (!isMobile) return (
             <div className="shrink-0 grid gap-0.5 px-2 pt-1 pb-2">
-              {/* Design exploration: connection, credits and notifications live
-                  here by default, so the top bar can be empty and hidden. */}
-              {/* Design exploration: terminal, phone and feedback when Edit
-                  layout puts them in the sidebar. */}
+              {/* Design exploration: terminal, phone, feedback and focus mode
+                  when Edit layout puts them in the sidebar. Status and "You"
+                  are ordinary rows now, wherever they were placed above. */}
               {placement.side.length > 0 && <SidebarTools shell={shell} collapsed={effectiveCollapsed} />}
-              {statusPlace === 'sidebar' && <SidebarStatus shell={shell} collapsed={effectiveCollapsed} />}
-              {/* The profile row starts the account area: a divider above it. */}
-              {profilePlace === 'sidebar' && (<>
-                <div aria-hidden="true" className="h-px bg-border mx-1 my-1" />
-                <WidgetSlot id={PROFILE_ITEM} gutter className="w-full [&>div]:w-full">
-                  <RailSettingsFlyout
-                    settings={{ path: s.path, label: surfaceLabel(s), icon: s.icon }}
-                    customize={{ path: cap.path, label: surfaceLabel(cap), icon: cap.icon }}
-                    collapsed={effectiveCollapsed}
-                    activePath={activePath}
-                    badge={updateBadge}
-                    phone={hasRenderableMobileConnect ? { open: () => setMobileConnectOpen(true) } : undefined}
-                    onNavigate={closeMobileNav}
-                    reportProblem={() => setReportProblemOpen(true)}
-                  />
-                </WidgetSlot>
-              </>)}
               {/* Design exploration: Star us, Report issue and Discord moved into
                   the profile menu's Help and community group. */}
             </div>
@@ -498,8 +469,8 @@ export function ShellNavRail({ shell }: { shell: AppShell }) {
             {...hiddenChromeProps(focusActive && !railPeek.open && focusChromeInert)}
             {...(focusActive ? railPeek.surfaceProps : {})}
           >
-            {/* Design exploration: the drafting grid while dragging in Edit layout. */}
-            <SidebarGridRows />
+            {/* Design exploration: the drafting grid while dragging is drawn
+                by the sidebar's row column itself (sidebarColumn.tsx). */}
             {navBody}
           </nav>
         )
