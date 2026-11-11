@@ -19,7 +19,7 @@ import { i18nT } from '../../i18n/t'
 import { RAIL_PIN_MIME } from '../../lib/railLayout'
 import {
   FEEDBACK_ITEM, HISTORY_ITEM, PHONE_ITEM, REMOTE_ITEM, SEARCH_ITEM, SHELL_ITEM_MIME, STATUS_ITEM, TERMINAL_ITEM, announceLayout, isWindowToggle, moveItem,
-  readChromeDrag, setChromeDrag, setTopSlot, topDropAt, useLayoutEditing, useSearchTopSlot, useShellPlacement, useTopSlots, useWidgetsIn,
+  readChromeDrag, setChromeDrag, setZoneSlot, zoneDropAt, useLayoutEditing, useSearchTopSlot, useShellPlacement, useZoneSlots, useWidgetsIn,
   type BarZone, type TopSlot,
 } from '../../lib/shellLayout'
 import { focusPopout as focusTerminalPopout } from '../../utils/terminalPopout'
@@ -60,11 +60,13 @@ export function BarItems({ zone, shell, slot }: { zone: BarZone; shell: AppShell
   const dispatch = useAppDispatch()
   const shellItemMeta = useBarItemMeta(shell.allAppGroup)
   const searchTopSlot = useSearchTopSlot()
-  const topSlotOf = useTopSlots()
-  const inThisSlot = (id: string) => zone !== 'top' || !slot || topSlotOf(id) === slot
-  // In the top bar, widgets draw in the right part (search only when it sits there).
+  const slotOf = useZoneSlots(zone)
+  const inThisSlot = (id: string) => !slot || slotOf(id) === slot
+  // Top bar: widgets draw in the right part (search only when it sits there).
+  // Bottom bar: every widget draws in the part it was dropped in.
   const widgets = useWidgetsIn(zone).filter(id => zone === 'bottom'
-    || ((!slot || slot === 'right') && (!TOP_NATIVE.has(id) || (id === SEARCH_ITEM && searchTopSlot === 'right'))))
+    ? inThisSlot(id)
+    : (!slot || slot === 'right') && (!TOP_NATIVE.has(id) || (id === SEARCH_ITEM && searchTopSlot === 'right')))
   const editing = useLayoutEditing()
   const navigate = useNavigate()
   const location = useLocation()
@@ -77,12 +79,6 @@ export function BarItems({ zone, shell, slot }: { zone: BarZone; shell: AppShell
     return shellItemMeta(id) !== null
   })
 
-  // Drop index: before the first item whose middle is right of the pointer.
-  const indexAt = (x: number) => {
-    const els = [...(ref.current?.querySelectorAll<HTMLElement>('[data-bar-item]') ?? [])]
-    const i = els.findIndex(el => { const r = el.getBoundingClientRect(); return r.left + r.width / 2 > x })
-    return i < 0 ? els.length : i
-  }
   // Only an item that may sit in this bar (an app, Mate or session may not).
   const accepts = (e: DragEvent) => {
     if (!e.dataTransfer.types.includes(SHELL_ITEM_MIME)) return false
@@ -98,14 +94,10 @@ export function BarItems({ zone, shell, slot }: { zone: BarZone; shell: AppShell
       e.preventDefault()
       const id = e.dataTransfer.getData(SHELL_ITEM_MIME)
       if (!id) return
-      if (zone === 'top') {
-        // Dropped on one part of the top bar: the item joins that part.
-        const t = topDropAt(e.clientX, id)
-        setTopSlot(id, slot ?? t.slot)
-        moveItem(id, zone, t.index)
-      } else {
-        moveItem(id, zone, indexAt(e.clientX))
-      }
+      // Dropped on one part of a bar: the item joins that part.
+      const t = zoneDropAt(zone, e.clientX, id)
+      setZoneSlot(zone, id, slot ?? t.slot)
+      moveItem(id, zone, t.index)
       announceLayout(i18nT('nav.layout_moved', { item: shellItemMeta(id)?.label ?? id, place: zoneLabel(zone) }))
     },
   } : {}
@@ -131,10 +123,12 @@ export function BarItems({ zone, shell, slot }: { zone: BarZone; shell: AppShell
   return (
     <div
       ref={ref}
-      role="toolbar"
-      aria-label={zoneLabel(zone)}
+      // One part of a bar: the bar itself is the named toolbar, so its three
+      // parts are not announced as three toolbars with the same name.
+      role={slot ? undefined : 'toolbar'}
+      aria-label={slot ? undefined : zoneLabel(zone)}
       data-layout-zone={zone}
-      data-top-slot={zone === 'top' ? slot ?? 'right' : undefined}
+      data-top-slot={slot ?? (zone === 'top' ? 'right' : 'left')}
       className={`flex items-center gap-1 min-w-0 rounded-md transition-colors ${over ? 'bg-accent/10' : ''} ${zone === 'top' ? 'h-8' : 'h-[22px]'}`}
       {...dropHandlers}
     >

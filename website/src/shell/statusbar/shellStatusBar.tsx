@@ -1,5 +1,5 @@
 import { i18nT } from '../../i18n/t'
-import { BarItems } from '../layout/barItems'
+import { BarItems, zoneLabel } from '../layout/barItems'
 import type { AppShell } from '../appShell'
 
 /** Grid row height of the status bar, in px. App.tsx sizes the shell's last track with it. */
@@ -15,11 +15,15 @@ export const STATUS_BAR_HEIGHT = 32
 export function ShellStatusBar({ shell }: { shell: AppShell }) {
   return (
     <div
-      aria-label={i18nT('nav.status_bar')}
+      role="toolbar"
+      aria-label={zoneLabel('bottom')}
       className="flex items-center gap-1 px-2 text-muted border-t border-border"
       style={{ gridArea: 'status', height: STATUS_BAR_HEIGHT }}
     >
-      <BarItems zone="bottom" shell={shell} />
+      {/* Left, centre and right parts: an item lands in the one it is dropped on. */}
+      <div className="flex-1 min-w-0 flex justify-start"><BarItems zone="bottom" slot="left" shell={shell} /></div>
+      <div className="flex-1 min-w-0 flex justify-center"><BarItems zone="bottom" slot="center" shell={shell} /></div>
+      <div className="flex-1 min-w-0 flex justify-end"><BarItems zone="bottom" slot="right" shell={shell} /></div>
     </div>
   )
 }

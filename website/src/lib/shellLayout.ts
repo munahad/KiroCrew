@@ -147,32 +147,41 @@ export function useSearchTopSlot(): TopSlot {
    centre or right part, set by where they are dropped (default: right, the
    group they always used to join). Search keeps its own key above. */
 const TOP_SLOTS_KEY = 'mc-top-slots'
+/** The bottom bar has the same three parts (default: left, where it always
+ *  started). Widgets placed there use them too. */
+const BOTTOM_SLOTS_KEY = 'mc-bottom-slots'
+const SLOT_KEY: Record<BarZone, string> = { top: TOP_SLOTS_KEY, bottom: BOTTOM_SLOTS_KEY }
+const SLOT_DEFAULT: Record<BarZone, TopSlot> = { top: 'right', bottom: 'left' }
 
-function readTopSlotMap(): Record<string, TopSlot> {
+function readTopSlotMap(zone: BarZone = 'top'): Record<string, TopSlot> {
   try {
-    const v = JSON.parse(safeGetItem(TOP_SLOTS_KEY) ?? '{}') as Record<string, unknown>
+    const v = JSON.parse(safeGetItem(SLOT_KEY[zone]) ?? '{}') as Record<string, unknown>
     return Object.fromEntries(Object.entries(v).filter(([, s]) => s === 'left' || s === 'center' || s === 'right')) as Record<string, TopSlot>
   } catch {
     return {}
   }
 }
 
-export function readTopSlot(id: string): TopSlot {
-  if (id === SEARCH_ITEM) return readSearchTopSlot()
-  return readTopSlotMap()[id] ?? 'right'
+/** Which part of a bar an item sits in. */
+export function readZoneSlot(zone: BarZone, id: string): TopSlot {
+  if (zone === 'top' && id === SEARCH_ITEM) return readSearchTopSlot()
+  return readTopSlotMap(zone)[id] ?? SLOT_DEFAULT[zone]
 }
 
-export function setTopSlot(id: string, slot: TopSlot): void {
-  if (id === SEARCH_ITEM) { setSearchTopSlot(slot); return }
-  const m = readTopSlotMap()
-  if (slot === 'right') delete m[id]
+export function setZoneSlot(zone: BarZone, id: string, slot: TopSlot): void {
+  if (zone === 'top' && id === SEARCH_ITEM) { setSearchTopSlot(slot); return }
+  const m = readTopSlotMap(zone)
+  if (slot === SLOT_DEFAULT[zone]) delete m[id]
   else m[id] = slot
-  safeSetItem(TOP_SLOTS_KEY, JSON.stringify(m))
+  safeSetItem(SLOT_KEY[zone], JSON.stringify(m))
   window.dispatchEvent(new Event(SEARCH_TOP_SLOT_EVENT))
 }
 
-/** Re-renders when any item's top-bar slot changes; returns the reader. */
-export function useTopSlots(): (id: string) => TopSlot {
+export const readTopSlot = (id: string) => readZoneSlot('top', id)
+export const setTopSlot = (id: string, slot: TopSlot) => setZoneSlot('top', id, slot)
+
+/** Re-renders when any item's bar slot changes; returns the reader for `zone`. */
+export function useZoneSlots(zone: BarZone): (id: string) => TopSlot {
   const [, bump] = useState(0)
   useEffect(() => {
     const sync = () => bump(n => n + 1)
@@ -183,8 +192,9 @@ export function useTopSlots(): (id: string) => TopSlot {
       window.removeEventListener('storage', sync)
     }
   }, [])
-  return readTopSlot
+  return (id: string) => readZoneSlot(zone, id)
 }
+export const useTopSlots = () => useZoneSlots('top')
 
 /**
  * A drop on the top bar at client-x `x`: which slot it lands in (thirds of the
@@ -192,9 +202,9 @@ export function useTopSlots(): (id: string) => TopSlot {
  * item left out), and where to draw the drop line. Items snap to the nearest
  * gap among the items already in that slot.
  */
-export function topDropAt(x: number, dragId: string | null): { slot: TopSlot; index: number; lineX: number | null } {
-  const { slot, lineX: slotLine } = searchTopSlotAt(x)
-  const els = [...document.querySelectorAll<HTMLElement>(`[data-layout-zone="top"][data-top-slot="${slot}"] [data-bar-item]`)]
+export function zoneDropAt(zone: BarZone, x: number, dragId: string | null): { slot: TopSlot; index: number; lineX: number | null } {
+  const { slot, lineX: slotLine } = slotAt(zone, x)
+  const els = [...document.querySelectorAll<HTMLElement>(`[data-layout-zone="${zone}"][data-top-slot="${slot}"] [data-bar-item]`)]
     .filter(el => el.dataset.barItem !== dragId)
   const rects = els.map(el => el.getBoundingClientRect())
   const i = rects.findIndex(r => r.left + r.width / 2 > x)
@@ -202,16 +212,22 @@ export function topDropAt(x: number, dragId: string | null): { slot: TopSlot; in
   let lineX = slotLine
   if (rects.length > 0) lineX = local < rects.length ? rects[local].left - 2 : rects[rects.length - 1].right + 2
   // Local position among this slot's items -> index in the whole list.
-  const list = readShellPlacement().top.filter(id => id !== dragId)
-  const inSlot = list.filter(id => readTopSlot(id) === slot)
+  const list = readShellPlacement()[zone].filter(id => id !== dragId)
+  const inSlot = list.filter(id => readZoneSlot(zone, id) === slot)
   const index = local < inSlot.length ? list.indexOf(inSlot[local]) : inSlot.length ? list.indexOf(inSlot[inSlot.length - 1]) + 1 : list.length
   return { slot, index, lineX }
 }
+export const topDropAt = (x: number, dragId: string | null) => zoneDropAt('top', x, dragId)
 
 /** The top-bar slot a drop at client-x `x` means (thirds of the bar), and the
  *  x to draw the drop line at. */
 export function searchTopSlotAt(x: number): { slot: TopSlot; lineX: number | null } {
-  const el = document.querySelector<HTMLElement>('[data-layout-outline="top"]')
+  return slotAt('top', x)
+}
+
+/** Which third of a bar a client-x falls in, and a drop-line x for an empty part. */
+function slotAt(zone: BarZone, x: number): { slot: TopSlot; lineX: number | null } {
+  const el = document.querySelector<HTMLElement>(`[data-layout-outline="${zone}"]`)
   const r = el?.getBoundingClientRect()
   if (!r || r.width === 0) return { slot: 'center', lineX: null }
   const third = r.width / 3
@@ -425,6 +441,7 @@ export function resetShellLayout(): void {
   safeRemoveItem(SEARCH_STYLE_KEY)
   safeRemoveItem(SEARCH_TOP_SLOT_KEY)
   safeRemoveItem(TOP_SLOTS_KEY)
+  safeRemoveItem(BOTTOM_SLOTS_KEY)
   window.dispatchEvent(new Event(SEARCH_TOP_SLOT_EVENT))
   window.dispatchEvent(new Event(PLACE_EVENT))
   window.dispatchEvent(new Event(SEARCH_STYLE_EVENT))

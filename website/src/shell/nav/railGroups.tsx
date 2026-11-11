@@ -15,7 +15,7 @@ import { SortableAppNavRow } from './appRail'
 import { RailContextMenu, groupTitle, type RailItemMeta } from './railCustomize'
 import { LayoutEditPanel } from '../layout/layoutEditPanel'
 import {
-  SIDEBAR_MEMBERSHIP_EVENT, announceLayout, barDropAt, barZoneAt, setTopSlot, topDropAt, moveItem, setChromeDrag, setLayoutEditing, useLayoutEditing,
+  SIDEBAR_MEMBERSHIP_EVENT, announceLayout, barZoneAt, setZoneSlot, zoneDropAt, moveItem, setChromeDrag, setLayoutEditing, useLayoutEditing,
   type SidebarMembership,
 } from '../../lib/shellLayout'
 import { shellItemMeta, zonesFor } from '../layout/shellItems'
@@ -214,8 +214,8 @@ export function RailGroups({ available, renderItem, collapsed, defaultGroup, met
     const bar = p ? barZoneAt(p.x, p.y) : null
     if (!bar || !p) return null
     const allowed = zonesFor(id).includes(bar)
-    if (bar === 'top') { const t = topDropAt(p.x, id); return { bar, allowed, index: t.index, lineX: t.lineX, slot: t.slot } }
-    return { bar, allowed, ...barDropAt(bar, p.x, id), slot: undefined }
+    const t = zoneDropAt(bar, p.x, id)
+    return { bar, allowed, index: t.index, lineX: t.lineX, slot: t.slot }
   }
   const onDragStart = useCallback((e: DragStartEvent) => {
     haptic('medium')
@@ -238,7 +238,7 @@ export function RailGroups({ available, renderItem, collapsed, defaultGroup, met
       if (!t.allowed) return
       const id = String(e.active.id)
       haptic('light')
-      if (t.slot) setTopSlot(id, t.slot)
+      setZoneSlot(t.bar, id, t.slot)
       moveItem(id, t.bar, t.index)
       announceLayout(i18nT('nav.layout_moved', { item: shellItemMeta(id)?.label ?? id, place: zoneLabel(t.bar) }))
       return
