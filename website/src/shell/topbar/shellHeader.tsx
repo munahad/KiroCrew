@@ -293,6 +293,8 @@ export function ShellHeader({ shell }: { shell: AppShell }) {
           {!isMobile && searchPlace === 'top' && searchTopSlot === 'left' && (
             <SearchTrigger variant="top" onOpen={commandPalette.openPalette} launcherOwned={!!slotOwners['quick-search']} />
           )}
+          {/* Items dropped on the left part of the top bar. */}
+          {!isMobile && <BarItems zone="top" slot="left" shell={shell} />}
           {isMobile
             ? <InstanceTabBar variant="inline" />
             : remotePlace === 'top' && <WidgetSlot id={REMOTE_ITEM}><RemoteCrewSwitcher /></WidgetSlot>}
@@ -340,6 +342,8 @@ export function ShellHeader({ shell }: { shell: AppShell }) {
           {/* Design exploration: the Command Bar trigger, drawn as a compact
               search field. It sits here unless Edit layout moved it to the
               sidebar; a spacer keeps the focus-mode toggle in place. */}
+          {/* Items dropped on the middle of the top bar. */}
+          <BarItems zone="top" slot="center" shell={shell} />
           {searchPlace === 'top' && searchTopSlot === 'center'
             ? <SearchTrigger variant="top" onOpen={commandPalette.openPalette} launcherOwned={!!slotOwners['quick-search']} />
             : <span className="flex-1 min-w-0" aria-hidden="true" />}
@@ -450,7 +454,7 @@ export function ShellHeader({ shell }: { shell: AppShell }) {
           <span ref={metricsProbeRef} className="tb-drop-metrics tb-metrics-probe" aria-hidden="true" />
 
           {/* Design exploration: items the user placed in the top bar via Edit layout. */}
-          <BarItems zone="top" shell={shell} />
+          <BarItems zone="top" slot="right" shell={shell} />
 
           {/* Theme decoration: extra aside control (e.g. a stardate / clock). */}
           {branding?.topBarAside && !(branding?.topBarHideOnMobile && isMobile) && (

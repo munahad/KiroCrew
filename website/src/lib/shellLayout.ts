@@ -142,6 +142,72 @@ export function useSearchTopSlot(): TopSlot {
   return s
 }
 
+/* ── Top-bar slots for every item ──
+   Pages, apps, mates, sessions and toggles in the top bar also sit in its left,
+   centre or right part, set by where they are dropped (default: right, the
+   group they always used to join). Search keeps its own key above. */
+const TOP_SLOTS_KEY = 'mc-top-slots'
+
+function readTopSlotMap(): Record<string, TopSlot> {
+  try {
+    const v = JSON.parse(safeGetItem(TOP_SLOTS_KEY) ?? '{}') as Record<string, unknown>
+    return Object.fromEntries(Object.entries(v).filter(([, s]) => s === 'left' || s === 'center' || s === 'right')) as Record<string, TopSlot>
+  } catch {
+    return {}
+  }
+}
+
+export function readTopSlot(id: string): TopSlot {
+  if (id === SEARCH_ITEM) return readSearchTopSlot()
+  return readTopSlotMap()[id] ?? 'right'
+}
+
+export function setTopSlot(id: string, slot: TopSlot): void {
+  if (id === SEARCH_ITEM) { setSearchTopSlot(slot); return }
+  const m = readTopSlotMap()
+  if (slot === 'right') delete m[id]
+  else m[id] = slot
+  safeSetItem(TOP_SLOTS_KEY, JSON.stringify(m))
+  window.dispatchEvent(new Event(SEARCH_TOP_SLOT_EVENT))
+}
+
+/** Re-renders when any item's top-bar slot changes; returns the reader. */
+export function useTopSlots(): (id: string) => TopSlot {
+  const [, bump] = useState(0)
+  useEffect(() => {
+    const sync = () => bump(n => n + 1)
+    window.addEventListener(SEARCH_TOP_SLOT_EVENT, sync)
+    window.addEventListener('storage', sync)
+    return () => {
+      window.removeEventListener(SEARCH_TOP_SLOT_EVENT, sync)
+      window.removeEventListener('storage', sync)
+    }
+  }, [])
+  return readTopSlot
+}
+
+/**
+ * A drop on the top bar at client-x `x`: which slot it lands in (thirds of the
+ * bar), the index in the whole top-bar list (`moveItem`'s index, the dragged
+ * item left out), and where to draw the drop line. Items snap to the nearest
+ * gap among the items already in that slot.
+ */
+export function topDropAt(x: number, dragId: string | null): { slot: TopSlot; index: number; lineX: number | null } {
+  const { slot, lineX: slotLine } = searchTopSlotAt(x)
+  const els = [...document.querySelectorAll<HTMLElement>(`[data-layout-zone="top"][data-top-slot="${slot}"] [data-bar-item]`)]
+    .filter(el => el.dataset.barItem !== dragId)
+  const rects = els.map(el => el.getBoundingClientRect())
+  const i = rects.findIndex(r => r.left + r.width / 2 > x)
+  const local = i < 0 ? rects.length : i
+  let lineX = slotLine
+  if (rects.length > 0) lineX = local < rects.length ? rects[local].left - 2 : rects[rects.length - 1].right + 2
+  // Local position among this slot's items -> index in the whole list.
+  const list = readShellPlacement().top.filter(id => id !== dragId)
+  const inSlot = list.filter(id => readTopSlot(id) === slot)
+  const index = local < inSlot.length ? list.indexOf(inSlot[local]) : inSlot.length ? list.indexOf(inSlot[inSlot.length - 1]) + 1 : list.length
+  return { slot, index, lineX }
+}
+
 /** The top-bar slot a drop at client-x `x` means (thirds of the bar), and the
  *  x to draw the drop line at. */
 export function searchTopSlotAt(x: number): { slot: TopSlot; lineX: number | null } {
@@ -358,6 +424,7 @@ export function resetShellLayout(): void {
   for (const id of WIDGET_ITEMS) safeRemoveItem(PLACE_KEY[id])
   safeRemoveItem(SEARCH_STYLE_KEY)
   safeRemoveItem(SEARCH_TOP_SLOT_KEY)
+  safeRemoveItem(TOP_SLOTS_KEY)
   window.dispatchEvent(new Event(SEARCH_TOP_SLOT_EVENT))
   window.dispatchEvent(new Event(PLACE_EVENT))
   window.dispatchEvent(new Event(SEARCH_STYLE_EVENT))

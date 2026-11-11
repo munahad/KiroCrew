@@ -19,7 +19,8 @@ import { i18nT } from '../../i18n/t'
 import { RAIL_PIN_MIME } from '../../lib/railLayout'
 import {
   FEEDBACK_ITEM, HISTORY_ITEM, PHONE_ITEM, REMOTE_ITEM, SEARCH_ITEM, SHELL_ITEM_MIME, STATUS_ITEM, TERMINAL_ITEM, announceLayout, isWindowToggle, moveItem,
-  readChromeDrag, setChromeDrag, setSearchTopSlot, useLayoutEditing, useSearchTopSlot, useShellPlacement, useWidgetsIn, type BarZone,
+  readChromeDrag, setChromeDrag, setTopSlot, topDropAt, useLayoutEditing, useSearchTopSlot, useShellPlacement, useTopSlots, useWidgetsIn,
+  type BarZone, type TopSlot,
 } from '../../lib/shellLayout'
 import { focusPopout as focusTerminalPopout } from '../../utils/terminalPopout'
 import type { AppShell } from '../appShell'
@@ -52,20 +53,25 @@ export function startItemDrag(e: DragEvent, id: string) {
   window.addEventListener('drop', clear, true)
 }
 
-export function BarItems({ zone, shell }: { zone: BarZone; shell: AppShell }) {
+/** `slot`: in the top bar, which part this group draws (left, centre or right).
+ *  Each part is its own drop target; widgets other than search draw on the right. */
+export function BarItems({ zone, shell, slot }: { zone: BarZone; shell: AppShell; slot?: TopSlot }) {
   const placement = useShellPlacement()
   const dispatch = useAppDispatch()
   const shellItemMeta = useBarItemMeta(shell.allAppGroup)
   const searchTopSlot = useSearchTopSlot()
-  // In the top bar, search draws here only when it sits in the right cluster.
-  const widgets = useWidgetsIn(zone).filter(id => zone === 'bottom' || !TOP_NATIVE.has(id) || (id === SEARCH_ITEM && searchTopSlot === 'right'))
+  const topSlotOf = useTopSlots()
+  const inThisSlot = (id: string) => zone !== 'top' || !slot || topSlotOf(id) === slot
+  // In the top bar, widgets draw in the right part (search only when it sits there).
+  const widgets = useWidgetsIn(zone).filter(id => zone === 'bottom'
+    || ((!slot || slot === 'right') && (!TOP_NATIVE.has(id) || (id === SEARCH_ITEM && searchTopSlot === 'right'))))
   const editing = useLayoutEditing()
   const navigate = useNavigate()
   const location = useLocation()
   const ref = useRef<HTMLDivElement>(null)
   const [over, setOver] = useState(false)
 
-  const ids = (zone === 'top' ? placement.top : placement.bottom).filter(id => {
+  const ids = (zone === 'top' ? placement.top : placement.bottom).filter(inThisSlot).filter(id => {
     if (id === TERMINAL_ITEM) return shell.terminalEnabled
     if (id === PHONE_ITEM) return shell.hasRenderableMobileConnect
     return shellItemMeta(id) !== null
@@ -92,9 +98,14 @@ export function BarItems({ zone, shell }: { zone: BarZone; shell: AppShell }) {
       e.preventDefault()
       const id = e.dataTransfer.getData(SHELL_ITEM_MIME)
       if (!id) return
-      // Dropped on the top bar's right cluster: search joins it there.
-      if (id === SEARCH_ITEM && zone === 'top') setSearchTopSlot('right')
-      moveItem(id, zone, indexAt(e.clientX))
+      if (zone === 'top') {
+        // Dropped on one part of the top bar: the item joins that part.
+        const t = topDropAt(e.clientX, id)
+        setTopSlot(id, slot ?? t.slot)
+        moveItem(id, zone, t.index)
+      } else {
+        moveItem(id, zone, indexAt(e.clientX))
+      }
       announceLayout(i18nT('nav.layout_moved', { item: shellItemMeta(id)?.label ?? id, place: zoneLabel(zone) }))
     },
   } : {}
@@ -123,6 +134,7 @@ export function BarItems({ zone, shell }: { zone: BarZone; shell: AppShell }) {
       role="toolbar"
       aria-label={zoneLabel(zone)}
       data-layout-zone={zone}
+      data-top-slot={zone === 'top' ? slot ?? 'right' : undefined}
       className={`flex items-center gap-1 min-w-0 rounded-md transition-colors ${over ? 'bg-accent/10' : ''} ${zone === 'top' ? 'h-8' : 'h-[22px]'}`}
       {...dropHandlers}
     >
