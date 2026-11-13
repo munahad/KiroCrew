@@ -91,6 +91,7 @@ import { useBarHasContent, useLayoutEditing, useTopBarHasContent, setLayoutEditi
 import { LayoutZoneOutlines } from './shell/layout/layoutZones'
 import { EditOptionSwitcher } from './shell/layout/editOptionSwitcher'
 import { DragOnlyBar, PageHideZone } from './shell/layout/dragOnlyEdit'
+import { LayoutItemKeyboard } from './shell/layout/keyboardMove'
 import { ShellNavRail } from './shell/nav/navRail'
 import { NavItem, NavBadge } from './shell/nav/navRow'
 
@@ -950,6 +951,7 @@ export default function App() {
       {/* Design exploration, option 1 (drag only): drop on the page to hide. */}
       {!isMobile && !focusActive && <PageHideZone />}
       {!isMobile && !focusActive && <DragOnlyBar />}
+      {!isMobile && !focusActive && <LayoutItemKeyboard />}
     </div>{/* /Local dashboard grid */}
       {/* Opened from the local Crew, so they hide with it (components/overlayRoot).
           The image viewer and the import notice render in place, fixed layers

@@ -14,27 +14,29 @@
  *
  * Desktop only: the phone keeps the panel, which is its only editor.
  */
-import { useEffect, useState, type DragEvent } from 'react'
+import { useEffect, useRef, useState, type DragEvent } from 'react'
 import { AnimatePresence, motion, useReducedMotion } from 'framer-motion'
-import { EyeOff } from 'lucide-react'
+import { ChevronDown, ChevronUp, EyeOff } from 'lucide-react'
 
 import { Btn } from '../../components/ui'
 import { OverlayPortal } from '../../components/overlayRoot'
 import { i18nT } from '../../i18n/t'
 import { useIsMobile } from '../../hooks/useIsMobile'
 import { useRailWidth } from '../../hooks/useRailWidth'
-import { useEditOption } from '../../lib/editOption'
+import { useEditOption, useGridStyle } from '../../lib/editOption'
 import {
-  MATE_PIN_PREFIX, RAIL_LAYOUT_CHANGED_EVENT, RAIL_LAYOUT_KEY, SESSION_PIN_PREFIX, isEntityPin, readRailLayout, removePin, updateRail,
+  MATE_PIN_PREFIX, RAIL_LAYOUT_CHANGED_EVENT, RAIL_LAYOUT_KEY, SESSION_PIN_PREFIX, isEntityPin, removePin, updateRail,
 } from '../../lib/railLayout'
 import {
-  HISTORY_ITEM, PROFILE_ITEM, REMOTE_ITEM, SEARCH_ITEM, SHELL_ITEM_MIME, STATUS_ITEM, announceLayout, moveItem, readChromeDrag, readShellPlacement, removeFromBars, resetShellLayout,
-  setLayoutEditing, setSidebarMembership, useChromeDrag, useLayoutEditing, zoneOf,
+  HISTORY_ITEM, PROFILE_ITEM, REMOTE_ITEM, SEARCH_ITEM, SHELL_ITEM_MIME, STATUS_ITEM, announceLayout, moveItem, readChromeDrag, removeFromBars, resetShellLayout,
+  setLayoutEditing, useChromeDrag, useLayoutAnnouncement, useLayoutEditing,
 } from '../../lib/shellLayout'
 import { clearBarCells } from '../../lib/barGrid'
 import { clearSidebarRows } from '../../lib/sidebarGrid'
 import { safeGetItem, safeRemoveItem, safeSetItem } from '../../utils/safeStorage'
 import { shellItemMeta } from './shellItems'
+import { STATUS_BAR_EDIT_HEIGHT } from '../statusbar/shellStatusBar'
+import { putBack, readHeldItem, spotOf, useHeldItem, type ItemSpot } from './keyboardMove'
 
 /** True while Edit layout is on and option 1 (drag only) is the one shown. */
 export function useDragOnlyEditing(): boolean {
@@ -58,22 +60,42 @@ const STORES: readonly [key: string, event: string][] = [
   ['mc-sidebar-rows', 'mc:sidebar-rows-changed'],
   ['mc-bar-cells-top', 'mc:bar-cells-changed'],
   ['mc-bar-cells-bottom', 'mc:bar-cells-changed'],
+  ['mc-bar-item-style', 'mc:bar-item-style-changed'],
+  ['mc-search-style', 'mc:search-style-changed'],
 ]
 
-interface Hidden { id: string; label: string; snapshot: (string | null)[]; wasInSidebar: boolean; at: number }
+/** The whole layout as stored now, to put back exactly (Undo, a cancelled
+ *  keyboard move). */
+export type LayoutSnapshot = (string | null)[]
+export function snapshotLayout(): LayoutSnapshot {
+  return STORES.map(([key]) => safeGetItem(key))
+}
+export function restoreLayout(snapshot: LayoutSnapshot): void {
+  STORES.forEach(([key], i) => {
+    const v = snapshot[i]
+    if (v === null) safeRemoveItem(key)
+    else safeSetItem(key, v)
+  })
+  for (const event of new Set(STORES.map(([, e]) => e))) window.dispatchEvent(new Event(event))
+}
 
+interface Hidden { id: string; label: string; spot: ItemSpot | null; at: number }
+
+// Every hide in this edit session, newest last. Undo (the message's button or
+// Cmd/Ctrl+Z) puts back the newest one, in its old place, and leaves every
+// other change alone, so several hides can each be undone in turn.
 const UNDO_EVENT = 'mc:drag-only-hidden'
-let lastHidden: Hidden | null = null
+let hiddenStack: Hidden[] = []
 
-function setLastHidden(h: Hidden | null): void {
-  lastHidden = h
+function setHiddenStack(next: Hidden[]): void {
+  hiddenStack = next
   window.dispatchEvent(new Event(UNDO_EVENT))
 }
 
-function useLastHidden(): Hidden | null {
-  const [h, setH] = useState(lastHidden)
+function useHiddenStack(): Hidden[] {
+  const [h, setH] = useState(hiddenStack)
   useEffect(() => {
-    const sync = () => setH(lastHidden)
+    const sync = () => setH(hiddenStack)
     window.addEventListener(UNDO_EVENT, sync)
     return () => window.removeEventListener(UNDO_EVENT, sync)
   }, [])
@@ -89,7 +111,7 @@ const WIDGET_LABEL_KEY: Record<string, string> = {
 }
 
 /** A name for the Undo message when the caller has none to hand. */
-function fallbackLabel(id: string): string {
+export function layoutItemLabel(id: string): string {
   const key = WIDGET_LABEL_KEY[id]
   if (key) return i18nT(key)
   const m = shellItemMeta(id)
@@ -99,32 +121,27 @@ function fallbackLabel(id: string): string {
 }
 
 /** Hide one item from the canvas, and offer Undo. `label`: its name as shown. */
-export function hideFromCanvas(id: string, label = fallbackLabel(id)): void {
-  const onSidebar = readRailLayout().groups.some(g => g.items.includes(id))
-  const wasInSidebar = zoneOf(id, readShellPlacement(), onSidebar) === 'sidebar'
-  const snapshot = STORES.map(([key]) => safeGetItem(key))
+export function hideFromCanvas(id: string, label = layoutItemLabel(id)): void {
+  const spot = spotOf(id)
   if (isEntityPin(id)) {
     removeFromBars(id)
     updateRail(l => removePin(l, id))
   } else {
     moveItem(id, null)
   }
-  setLastHidden({ id, label, snapshot, wasInSidebar, at: Date.now() })
+  setHiddenStack([...hiddenStack.filter(h => h.id !== id), { id, label, spot, at: Date.now() }])
   announceLayout(i18nT('nav.layout_removed', { item: label }))
 }
 
-function undoHide(h: Hidden): void {
-  STORES.forEach(([key], i) => {
-    const v = h.snapshot[i]
-    if (v === null) safeRemoveItem(key)
-    else safeSetItem(key, v)
-  })
-  for (const event of new Set(STORES.map(([, e]) => e))) window.dispatchEvent(new Event(event))
-  // An installed app keeps its sidebar pin in the Library; tell it too.
-  if (h.wasInSidebar) setSidebarMembership(h.id, true)
-  setLastHidden(null)
+/** Put back one hidden item (the newest when none is named), in its old place. */
+function undoHide(id?: string): void {
+  const h = id ? hiddenStack.find(x => x.id === id) : hiddenStack[hiddenStack.length - 1]
+  if (!h) return
+  if (h.spot) putBack(h.id, h.spot)
+  setHiddenStack(hiddenStack.filter(x => x !== h))
   announceLayout(i18nT('nav.layout_restored', { item: h.label }))
 }
+const undoLastHide = () => undoHide()
 
 /* ── Hovering the page during a sidebar drag ── */
 
@@ -164,6 +181,7 @@ export function PageHideZone() {
   const drag = useChromeDrag()
   const sidebarOver = usePageHideOver()
   const [nativeOver, setNativeOver] = useState(false)
+  const minimal = useGridStyle() === 'minimal'
   if (!on) return null
   const dragging = drag.id !== null
   const over = nativeOver || sidebarOver
@@ -187,7 +205,7 @@ export function PageHideZone() {
       data-layout-outline="page"
       style={{ gridArea: 'content', zIndex: 65, pointerEvents: dragging ? 'auto' : 'none' }}
       className={`relative m-3 flex items-center justify-center rounded-2xl border-2 border-dashed transition-[opacity,border-color,background-color] duration-150 motion-reduce:transition-none ${
-        dragging ? 'opacity-100' : 'opacity-0'} ${over ? 'border-text/70 bg-text/10' : 'border-text/30 bg-transparent'}`}
+        dragging ? 'opacity-100' : 'opacity-0'} ${over ? `${minimal ? 'border-transparent' : 'border-text/70'} bg-text/10` : `${minimal ? 'border-transparent' : 'border-text/30'} bg-transparent`}`}
       onDragOver={onDragOver}
       onDragLeave={e => { if (!e.currentTarget.contains(e.relatedTarget as Node | null)) setNativeOver(false) }}
       onDrop={onDrop}
@@ -202,67 +220,144 @@ export function PageHideZone() {
 
 /* ── Done, Reset and Undo ── */
 
-const UNDO_MS = 6000
+/** Long enough to reach by keyboard or switch; paused while pointed at or focused. */
+const UNDO_MS = 10_000
 
 /** A small floating bar over the page: what to do, Reset and Done, and the
- *  Undo message after a hide. The only controls option 1 adds. */
+ *  Undo message after a hide. The only controls option 1 adds.
+ *
+ *  Accessibility: focus moves here when edit mode opens and goes back to
+ *  where it was on Done (WCAG 2.4.3 Focus Order); every move, hide, Undo and
+ *  Reset is read out through a live region (4.1.3 Status Messages); Undo
+ *  pauses while the pointer or focus is on it, and Cmd/Ctrl+Z undoes the
+ *  last hide (2.2.1 Timing Adjustable). */
 export function DragOnlyBar() {
   const on = useDragOnlyEditing()
-  const hidden = useLastHidden()
+  const stack = useHiddenStack()
+  const hidden = stack[stack.length - 1] ?? null
+  // The message shows after each hide and fades after a while; Cmd/Ctrl+Z
+  // keeps working through the whole stack until Done.
+  const [shownAt, setShownAt] = useState<number | null>(null)
+  useEffect(() => { setShownAt(hidden ? hidden.at : null) }, [hidden])
   const railWidth = useRailWidth()
   const reduce = useReducedMotion()
+  const announcement = useLayoutAnnouncement()
+  const held = useHeldItem()
+  const barRef = useRef<HTMLDivElement>(null)
+  const returnTo = useRef<HTMLElement | null>(null)
+  const [paused, setPaused] = useState(false)
+  // The full list of hidden items, opened from "+N more". Open, it stays.
+  const [expanded, setExpanded] = useState(false)
+  useEffect(() => { if (stack.length < 2) setExpanded(false) }, [stack.length])
 
-  // Escape leaves edit mode, as in the panel.
+  // Focus the editor on open; give it back on close.
   useEffect(() => {
     if (!on) return
-    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') setLayoutEditing(false) }
+    returnTo.current = document.activeElement instanceof HTMLElement ? document.activeElement : null
+    barRef.current?.focus()
+    return () => {
+      const back = returnTo.current
+      if (back?.isConnected) back.focus()
+    }
+  }, [on])
+  // Escape leaves edit mode, unless it is cancelling a keyboard move.
+  // Cmd/Ctrl+Z undoes the last hide.
+  useEffect(() => {
+    if (!on) return
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape' && !readHeldItem() && !e.defaultPrevented) setLayoutEditing(false)
+      if ((e.metaKey || e.ctrlKey) && !e.shiftKey && e.key.toLowerCase() === 'z' && hiddenStack.length) {
+        e.preventDefault()
+        undoLastHide()
+      }
+    }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
   }, [on])
-  // Undo is offered for a few seconds, and never outlives edit mode.
+  // Undo is offered for a while, paused while in use, and never outlives edit mode.
   useEffect(() => {
-    if (!hidden) return
-    const t = window.setTimeout(() => setLastHidden(null), Math.max(0, hidden.at + UNDO_MS - Date.now()))
+    if (shownAt === null || paused || expanded) return
+    const t = window.setTimeout(() => setShownAt(null), UNDO_MS)
     return () => window.clearTimeout(t)
-  }, [hidden])
-  useEffect(() => { if (!on) setLastHidden(null) }, [on])
+  }, [shownAt, paused, expanded])
+  useEffect(() => { if (!on) setHiddenStack([]) }, [on])
 
   if (!on) return null
   const reset = () => {
     resetShellLayout(); clearBarCells(); clearSidebarRows()
-    setLastHidden(null)
+    setHiddenStack([])
     announceLayout(i18nT('nav.layout_reset_done'))
   }
+  const pause = { onPointerEnter: () => setPaused(true), onPointerLeave: () => setPaused(false), onFocus: () => setPaused(true), onBlur: () => setPaused(false) }
   return (
     <OverlayPortal>
+      {/* Read out every change (no panel, so this is option 1's own). */}
+      <div className="sr-only" aria-live="polite" aria-atomic="true">{announcement}</div>
       <div
-        className="pointer-events-none fixed bottom-6 right-0 z-[60] flex flex-col items-center gap-2 px-4"
-        style={{ left: railWidth }}
+        className="pointer-events-none fixed right-0 z-[60] flex flex-col items-center gap-2 px-4"
+        // Above the bottom bar (drawn while editing, 42px), never over it.
+        style={{ left: railWidth, bottom: STATUS_BAR_EDIT_HEIGHT + 16 }}
       >
         <AnimatePresence>
-          {hidden && (
+          {hidden && shownAt !== null && (
             <motion.div
-              key={hidden.at}
-              role="status"
+              key="undo"
               initial={reduce ? false : { opacity: 0, y: 8 }}
               animate={{ opacity: 1, y: 0 }}
               exit={reduce ? { opacity: 0 } : { opacity: 0, y: 8 }}
               transition={{ duration: 0.15 }}
-              className="pointer-events-auto flex max-w-full items-center gap-3 rounded-xl border border-border bg-bg-elevated px-3 py-2 text-[13px] text-text shadow-xl"
+              className="pointer-events-auto flex max-w-full flex-col rounded-xl border border-border bg-bg-elevated px-3 py-2 text-[13px] text-text shadow-xl"
               data-testid="drag-only-undo"
+              {...pause}
             >
-              <span className="min-w-0 truncate">{i18nT('nav.layout_hidden_item', { item: hidden.label })}</span>
-              <Btn onClick={() => undoHide(hidden)}>{i18nT('nav.layout_undo')}</Btn>
+              {/* Newest first. With more than one, "+N more" opens the
+                  whole list, so any item can be put back on its own. */}
+              {expanded && stack.length > 1 && (
+                <ul id="drag-only-hidden-list" className="m-0 mb-1 flex list-none flex-col gap-0.5 border-b border-border p-0 pb-1.5" aria-label={i18nT('nav.layout_hidden_list')}>
+                  {[...stack].reverse().map(h => (
+                    <li key={h.id} className="flex items-center gap-3">
+                      <span className="min-w-0 flex-1 truncate">{h.label}</span>
+                      <Btn onClick={() => undoHide(h.id)} aria-label={i18nT('nav.layout_put_back_item', { item: h.label })}>{i18nT('nav.layout_put_back')}</Btn>
+                    </li>
+                  ))}
+                </ul>
+              )}
+              <div className="flex items-center gap-3">
+                <span className="min-w-0 truncate">{i18nT('nav.layout_hidden_item', { item: hidden.label })}</span>
+                {stack.length > 1 && (
+                  <button
+                    type="button"
+                    aria-expanded={expanded}
+                    aria-controls="drag-only-hidden-list"
+                    onClick={() => setExpanded(v => !v)}
+                    className="inline-flex shrink-0 items-center gap-1 rounded-md border-none bg-transparent px-1.5 py-1 text-[13px] text-muted hover:bg-bg-hover hover:text-text cursor-pointer"
+                  >
+                    {i18nT('nav.layout_hidden_more', { count: stack.length - 1 })}
+                    {expanded ? <ChevronDown size={14} aria-hidden="true" /> : <ChevronUp size={14} aria-hidden="true" />}
+                  </button>
+                )}
+                {!expanded && <Btn onClick={undoLastHide}>{i18nT('nav.layout_undo')}</Btn>}
+              </div>
             </motion.div>
           )}
         </AnimatePresence>
         <div
+          ref={barRef}
+          tabIndex={-1}
           role="region"
           aria-label={i18nT('nav.rail_customize_title')}
-          className="pointer-events-auto flex max-w-full items-center gap-3 rounded-xl border border-border bg-bg-elevated py-2 pl-4 pr-2 text-text shadow-2xl"
+          aria-describedby="drag-only-kbd-hint"
+          className="pointer-events-auto flex max-w-full items-center gap-3 rounded-xl border border-border bg-bg-elevated py-2 pl-4 pr-2 text-text shadow-2xl outline-none focus-visible:ring-2 focus-visible:ring-accent"
           data-testid="drag-only-bar"
         >
-          <span className="min-w-0 truncate text-[13px] text-muted" title={i18nT('nav.layout_drag_hint')}>{i18nT('nav.layout_drag_hint')}</span>
+          <span className="flex min-w-0 flex-col">
+            <span className="truncate text-[13px] text-muted" title={i18nT('nav.layout_drag_hint')}>{i18nT('nav.layout_drag_hint')}</span>
+            {/* The keyboard path, said where keyboard users land. While an
+                item is held, it says how to finish the move. */}
+            <span id="drag-only-kbd-hint" className="truncate text-[12px] text-muted" title={i18nT(held ? 'nav.layout_kbd_held' : 'nav.layout_kbd_hint')}>
+              {i18nT(held ? 'nav.layout_kbd_held' : 'nav.layout_kbd_hint')}
+            </span>
+          </span>
           <Btn onClick={reset}>{i18nT('nav.rail_reset')}</Btn>
           <Btn primary onClick={() => setLayoutEditing(false)}>{i18nT('nav.rail_done')}</Btn>
         </div>

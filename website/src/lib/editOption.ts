@@ -46,3 +46,38 @@ export function useEditOption(): EditOption {
   }, [])
   return option
 }
+
+/**
+ * Which drag grid the prototype shows, compared from the same band:
+ *   drafting — neutral graph-paper lines in the theme's text colour.
+ *   minimal  — thin accent-colour lines, the earlier look, drawn as a full grid.
+ */
+export type GridStyle = 'drafting' | 'minimal'
+export const GRID_STYLES: readonly GridStyle[] = ['drafting', 'minimal']
+
+const GRID_KEY = 'mc-layout-grid-style'
+const GRID_EVENT = 'mc:layout-grid-style-changed'
+
+export function readGridStyle(): GridStyle {
+  return safeGetItem(GRID_KEY) === 'minimal' ? 'minimal' : 'drafting'
+}
+
+export function setGridStyle(style: GridStyle): void {
+  if (style === readGridStyle()) return
+  safeSetItem(GRID_KEY, style)
+  window.dispatchEvent(new Event(GRID_EVENT))
+}
+
+export function useGridStyle(): GridStyle {
+  const [style, setStyle] = useState(readGridStyle)
+  useEffect(() => {
+    const sync = () => setStyle(readGridStyle())
+    window.addEventListener(GRID_EVENT, sync)
+    window.addEventListener('storage', sync)
+    return () => {
+      window.removeEventListener(GRID_EVENT, sync)
+      window.removeEventListener('storage', sync)
+    }
+  }, [])
+  return style
+}

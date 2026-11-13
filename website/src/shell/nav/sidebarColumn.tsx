@@ -20,11 +20,43 @@ import {
 import {
   columnIdsOf, commitColumn, isHeaderId, placeInSidebar, pushAsideInColumn, resolveColumn, setSidebarRowCount, useSidebarRows,
 } from '../../lib/sidebarGrid'
-import { GRID_EDGE, GRID_FILL, GRID_LINE } from '../layout/barGridView'
+import { GRID_EDGE, GRID_FILL, GRID_LINE, useGridVarsClass } from '../layout/barGridView'
+import { useGridStyle } from '../../lib/editOption'
+import { registerSidebarGroups, useLayoutItemProps } from '../layout/keyboardMove'
 import { startItemDrag, zoneLabel } from '../layout/barItems'
 
 /** Row pitch before a row has been measured: a nav row plus the gap. */
 const DEFAULT_PITCH = 34
+
+/** One row of the column. While editing it is draggable, focusable and
+ *  movable by keyboard and its menu (keyboardMove.tsx); its own content is
+ *  inert, so Tab stops once per row and Enter picks it up instead of opening it. */
+function ColumnRow({ id, label, editing, faded, top, height, onDragStart, children }: {
+  id: string; label: string; editing: boolean; faded: boolean; top: number; height: number
+  onDragStart: (e: DragEvent) => void; children: ReactNode
+}) {
+  const kbd = useLayoutItemProps(id, 'sidebar', label)
+  return (
+    // While editing `kbd` makes this a focusable button with its keyboard path
+    // (Space, arrows, Delete, Shift+F10); lint cannot see the spread role.
+    // eslint-disable-next-line jsx-a11y/no-static-element-interactions
+    <div
+      {...kbd}
+      data-column-row={id}
+      draggable={editing}
+      onDragStart={editing ? onDragStart : undefined}
+      className={`absolute inset-x-0 flex items-center outline-none transition-[top] duration-150 motion-reduce:transition-none ${
+        faded ? 'opacity-40' : ''
+      } ${editing ? 'group/edit rounded-lg cursor-grab active:cursor-grabbing [&_*]:cursor-grab hover:bg-bg-hover focus-visible:ring-2 focus-visible:ring-accent data-[held]:ring-2 data-[held]:ring-accent data-[held]:bg-accent-subtle' : ''}`}
+      style={{ top, height }}
+    >
+      {editing && <GripVertical size={13} aria-hidden="true" className="absolute left-0 top-1/2 -translate-y-1/2 z-10 text-muted opacity-0 group-hover/edit:opacity-100 pointer-events-none" />}
+      <div data-column-row-content className={`w-full ${editing ? '[&_*]:pointer-events-none' : ''}`} {...(editing ? { inert: '' } : {})}>
+        {children}
+      </div>
+    </div>
+  )
+}
 
 export function SidebarColumn({ groups, renderRow, renderHeader, collapsed, labelOf, groupTitle }: {
   groups: readonly RailGroup[]
@@ -40,8 +72,11 @@ export function SidebarColumn({ groups, renderRow, renderHeader, collapsed, labe
 }) {
   const ref = useRef<HTMLDivElement>(null)
   const editing = useLayoutEditing()
+  const gridVars = useGridVarsClass()
+  const minimal = useGridStyle() === 'minimal'
   const rows = useSidebarRows()
   const ids = columnIdsOf(groups)
+  registerSidebarGroups(groups)
 
   // How many rows fit in the sidebar's scroll frame, and how tall one is.
   const [pitch, setPitch] = useState(DEFAULT_PITCH)
@@ -150,22 +185,18 @@ export function SidebarColumn({ groups, renderRow, renderHeader, collapsed, labe
     if (hover?.id === id && !ids.includes(id)) return null
     const header = isHeaderId(id) ? groupOfHeader(id) : undefined
     return (
-      // eslint-disable-next-line jsx-a11y/no-static-element-interactions -- the drag is a pointer convenience; the panel moves every row too
-      <div
+      <ColumnRow
         key={id}
-        data-column-row={id}
-        draggable={editing}
-        onDragStart={editing ? e => (header ? startHeaderDrag(e, id) : startItemDrag(e, id)) : undefined}
-        className={`absolute inset-x-0 flex items-center transition-[top] duration-150 motion-reduce:transition-none ${
-          hover?.id === id ? 'opacity-40' : ''
-        } ${editing ? 'group/edit rounded-lg cursor-grab active:cursor-grabbing [&_*]:cursor-grab hover:bg-bg-hover' : ''}`}
-        style={{ top: at[id] * pitch, height: pitch - 2 }}
+        id={id}
+        label={header ? groupTitle(header) : labelOf(id)}
+        editing={editing}
+        faded={hover?.id === id}
+        top={at[id] * pitch}
+        height={pitch - 2}
+        onDragStart={e => (header ? startHeaderDrag(e, id) : startItemDrag(e, id))}
       >
-        {editing && <GripVertical size={13} aria-hidden="true" className="absolute left-0 top-1/2 -translate-y-1/2 z-10 text-muted opacity-0 group-hover/edit:opacity-100 pointer-events-none" />}
-        <div data-column-row-content className={`w-full ${editing ? '[&_*]:pointer-events-none' : ''}`}>
-          {header ? renderHeader(header) : renderRow(id)}
-        </div>
-      </div>
+        {header ? renderHeader(header) : renderRow(id)}
+      </ColumnRow>
     )
   }
 
@@ -174,7 +205,7 @@ export function SidebarColumn({ groups, renderRow, renderHeader, collapsed, labe
     <div
       ref={ref}
       data-sidebar-column
-      className="relative"
+      className={`relative ${gridVars}`}
       style={{ height }}
       onDragOver={onDragOver}
       onDragLeave={onDragLeave}
@@ -187,7 +218,7 @@ export function SidebarColumn({ groups, renderRow, renderHeader, collapsed, labe
           aria-hidden="true"
           data-testid="sidebar-grid-rows"
           className="absolute inset-0 pointer-events-none"
-          style={{ backgroundImage: `linear-gradient(to bottom, ${GRID_LINE} 1px, transparent 1px)`, backgroundSize: `100% ${pitch}px` }}
+          style={{ backgroundImage: minimal ? undefined : `linear-gradient(to bottom, ${GRID_LINE} 1px, transparent 1px)`, backgroundSize: `100% ${pitch}px`, boxShadow: `inset 1px 0 0 ${GRID_LINE}, inset -1px 0 0 ${GRID_LINE}, inset 0 -1px 0 ${GRID_LINE}` }}
         />
       )}
       {editing && hover && (
@@ -195,7 +226,7 @@ export function SidebarColumn({ groups, renderRow, renderHeader, collapsed, labe
           aria-hidden="true"
           data-testid="sidebar-grid-target"
           className="absolute inset-x-0 pointer-events-none transition-[top] duration-100 motion-reduce:transition-none"
-          style={{ top: (hover.id ? at[hover.id] : hover.row) * pitch, height: pitch, background: GRID_FILL, boxShadow: `inset 0 0 0 1px ${GRID_EDGE}` }}
+          style={{ top: (hover.id ? at[hover.id] : hover.row) * pitch, height: pitch, background: GRID_FILL, boxShadow: minimal ? `inset 0 2px 0 ${GRID_EDGE}` : `inset 0 0 0 1px ${GRID_EDGE}` }}
         />
       )}
       {ordered.map(g => (

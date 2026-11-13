@@ -32,6 +32,7 @@ import {
   type BarZone, type ShellZone,
 } from '../../lib/shellLayout'
 import { cellAt, placeOnBar } from '../../lib/barGrid'
+import { useGridStyle } from '../../lib/editOption'
 import { shellItemMeta, zonesFor } from './shellItems'
 import { zoneLabel } from './barItems'
 
@@ -92,6 +93,9 @@ function ZoneOutline({ zone, area, dragging, nativeDrag, allowed, over, lineX }:
   }
 
   const unavailable = dragging && !allowed
+  // Minimal grid: no grey dashed outlines; each area is just its plain raised
+  // surface, and the grid itself appears only in the area being dragged over.
+  const minimal = useGridStyle() === 'minimal'
   const box = ref.current?.getBoundingClientRect()
   return (
     <div
@@ -102,12 +106,15 @@ function ZoneOutline({ zone, area, dragging, nativeDrag, allowed, over, lineX }:
       // Raised above the dimmed page (a lifted shadow and a full-strength
       // outline), so the three places you can edit stand out as the editor.
       className={`relative rounded-lg border-2 border-dashed transition-[border-color,background-color,box-shadow] ${
-        zone === 'sidebar' ? 'mx-1 mb-1' : zone === 'top' ? 'mx-1 my-0.5' : 'mx-1'
+        zone === 'sidebar' ? 'mx-1 mb-1' : 'mx-1 my-0.5'
       } ${unavailable
-        ? 'border-border bg-bg-hover/60 shadow-none'
+        ? `${minimal ? 'border-transparent' : 'border-border'} bg-bg-hover/60 shadow-none`
         : over
-          ? 'border-text/70 bg-text/5 shadow-[0_10px_28px_-6px_rgba(0,0,0,0.45)]'
-          : 'border-text/40 shadow-[0_8px_22px_-8px_rgba(0,0,0,0.4)]'}`}
+          ? `${minimal ? 'border-transparent' : 'border-text/70'} bg-text/5 ${zone === 'bottom' ? 'shadow-[0_-10px_28px_-6px_rgba(0,0,0,0.45)]' : 'shadow-[0_10px_28px_-6px_rgba(0,0,0,0.45)]'}`
+          // The lift falls toward the page: down from the top bar and the
+          // sidebar, UP from the bottom bar (below it is the window's edge,
+          // which would clip it and leave that bar looking flat).
+          : `${minimal ? 'border-transparent' : 'border-text/40'} ${zone === 'bottom' ? 'shadow-[0_-8px_22px_-8px_rgba(0,0,0,0.4)]' : 'shadow-[0_8px_22px_-8px_rgba(0,0,0,0.4)]'}`}`}
       {...(catches ? { onDragOver, onDragLeave, onDrop } : {})}
     >
       {/* Where the item will land: a line in the gap it snaps to. */}

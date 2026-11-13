@@ -1,48 +1,41 @@
 /**
- * Prototype switch between the three Edit layout approaches (design
- * exploration, not product UI).
+ * Prototype switches (design exploration, not product UI): which Edit layout
+ * approach to show, and which drag grid.
  *
  * A band ABOVE the app, in normal flow, so it pushes the whole shell down and
  * never covers any of it. It deliberately does not use Crew's tokens, font or
  * controls: reviewers must read it as a tool around the prototype, not as part
- * of the interface under review. Its fixed palette reads the same on every
- * Crew theme for the same reason.
+ * of the interface under review. Its fixed neutral palette reads the same on
+ * every Crew theme for the same reason.
  *
- * The segmented control is a native radio group (arrow keys move between
+ * Each segmented control is a native radio group (arrow keys move between
  * options, one tab stop), styled as segments.
  */
-import { i18nT } from '../../i18n/t'
-import { EDIT_OPTIONS, setEditOption, useEditOption, type EditOption } from '../../lib/editOption'
+import { useId } from 'react'
 
-const LABEL_KEY: Record<EditOption, string> = {
-  drag: 'nav.layout_option_drag',
-  panel: 'nav.layout_option_panel',
-  preview: 'nav.layout_option_preview',
-}
+import { i18nT } from '../../i18n/t'
+import {
+  EDIT_OPTIONS, GRID_STYLES, setEditOption, setGridStyle, useEditOption, useGridStyle,
+} from '../../lib/editOption'
 
 // Prototype-tool palette, intentionally outside the theme (see above).
 const INK = '#262626'
 const BAND = '#d9d9d9'
 
-export function EditOptionSwitcher() {
-  const option = useEditOption()
+function Segments<T extends string>({ label, options, value, onChange, labelOf }: {
+  label: string
+  options: readonly T[]
+  value: T
+  onChange: (v: T) => void
+  labelOf: (v: T) => string
+}) {
+  const id = useId()
   return (
-    <div
-      data-testid="edit-option-switcher"
-      className="relative z-[90] flex h-9 shrink-0 font-mono items-center justify-center gap-3 px-3"
-      style={{ background: BAND, color: INK, borderBottom: `1px solid ${INK}` }}
-    >
-      <span id="edit-option-label" className="text-[11px] font-semibold uppercase tracking-wider">
-        {i18nT('nav.layout_option_label')}
-      </span>
-      <div
-        role="radiogroup"
-        aria-labelledby="edit-option-label"
-        className="flex overflow-hidden rounded-md"
-        style={{ border: `1.5px solid ${INK}` }}
-      >
-        {EDIT_OPTIONS.map((o, i) => {
-          const on = o === option
+    <div className="flex items-center gap-2">
+      <span id={id} className="text-[11px] font-semibold uppercase tracking-wider">{label}</span>
+      <div role="radiogroup" aria-labelledby={id} className="flex overflow-hidden rounded-md" style={{ border: `1.5px solid ${INK}` }}>
+        {options.map((o, i) => {
+          const on = o === value
           return (
             <label
               key={o}
@@ -56,18 +49,36 @@ export function EditOptionSwitcher() {
             >
               <input
                 type="radio"
-                name="edit-option"
+                name={id}
                 value={o}
                 checked={on}
-                onChange={() => setEditOption(o)}
-                aria-label={i18nT(LABEL_KEY[o])}
+                onChange={() => onChange(o)}
+                aria-label={labelOf(o)}
                 className="sr-only"
               />
-              {i18nT(LABEL_KEY[o])}
+              {labelOf(o)}
             </label>
           )
         })}
       </div>
+    </div>
+  )
+}
+
+const OPTION_KEY = { drag: 'nav.layout_option_drag', panel: 'nav.layout_option_panel', preview: 'nav.layout_option_preview' } as const
+const GRID_KEY = { drafting: 'nav.layout_grid_drafting', minimal: 'nav.layout_grid_minimal' } as const
+
+export function EditOptionSwitcher() {
+  const option = useEditOption()
+  const grid = useGridStyle()
+  return (
+    <div
+      data-testid="edit-option-switcher"
+      className="relative z-[90] flex h-9 shrink-0 items-center justify-center gap-6 px-3 font-mono"
+      style={{ background: BAND, color: INK, borderBottom: `1px solid ${INK}` }}
+    >
+      <Segments label={i18nT('nav.layout_option_label')} options={EDIT_OPTIONS} value={option} onChange={setEditOption} labelOf={o => i18nT(OPTION_KEY[o])} />
+      <Segments label={i18nT('nav.layout_grid_label')} options={GRID_STYLES} value={grid} onChange={setGridStyle} labelOf={g => i18nT(GRID_KEY[g])} />
     </div>
   )
 }
