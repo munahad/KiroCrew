@@ -66,10 +66,14 @@ export function HiddenItemPicker({ items, onAdd }: {
       setPos({ left: r.left, top, width: Math.max(r.width, 260), maxHeight })
     }
     place()
-    inputRef.current?.focus()
     window.addEventListener('resize', place)
     return () => window.removeEventListener('resize', place)
   }, [open])
+  // Focus the search once the list is placed: it is hidden until then, and a
+  // hidden field cannot take focus (typing and Escape would go elsewhere).
+  const placed = pos !== null
+  useEffect(() => { if (open && placed) inputRef.current?.focus() }, [open, placed])
+  useEffect(() => { if (!open) setPos(null) }, [open])
   // A press outside closes it.
   useEffect(() => {
     if (!open) return

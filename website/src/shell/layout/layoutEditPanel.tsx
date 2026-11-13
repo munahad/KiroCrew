@@ -151,7 +151,9 @@ export function LayoutEditPanel({ groups, hidden, meta }: {
   // Escape leaves edit mode, from anywhere on the page.
   useEffect(() => {
     // Option 3's editor owns Escape (it may ask "Keep your changes?" first).
-    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape' && !(readEditOption() === 'preview' && !phoneNow())) setLayoutEditing(false) }
+    // A control that handled Escape itself (the Add an item list closing)
+    // marks it handled, and edit mode stays on.
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape' && !e.defaultPrevented && !(readEditOption() === 'preview' && !phoneNow())) setLayoutEditing(false) }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
   }, [])
@@ -667,7 +669,7 @@ export function LayoutEditPanel({ groups, hidden, meta }: {
           : (
             // Two columns side by side, one when the panel is narrow (a small
             // window or a large zoom). Each keeps the place sections inside it.
-            <li className="grid grid-cols-1 @[560px]:grid-cols-2 gap-x-4 gap-y-3">
+            <li className="grid grid-cols-1 @min-[560px]:grid-cols-2 gap-x-4 gap-y-3">
               {COLUMNS.map(col => {
                 const list = shown.filter(x => columnOf(x) === col)
                 const colId = `layout-col-${col}`
