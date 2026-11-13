@@ -28,6 +28,10 @@ import { DragOwnedByParent } from './dragOwner'
 import { useGridStyle } from '../../lib/editOption'
 import { BarStyleChooser, offersStyle } from './barStyleChooser'
 import { useLayoutItemProps } from './keyboardMove'
+import { useDragOnlyEditing } from './dragOnlyEdit'
+
+/** Items that draw their own outline (search field, Crews chip): no second one. */
+export const CHIPLESS = new Set<string>([SEARCH_ITEM, REMOTE_ITEM])
 
 /** The grid's look, by the prototype's grid switch (lib/editOption.ts).
  *  Drafting: neutral tints of the theme's text colour, a graph-paper grid in
@@ -79,7 +83,9 @@ function Measured({ onWidth, children }: { onWidth: (w: number) => void; childre
 
 /** One item's cell. While editing it is draggable, focusable and movable by
  *  keyboard and its menu (keyboardMove.tsx); a click opens its style switch. */
-function BarCell({ id, zone, label, cellRef, editing, faded, left, width, cell, onPointerEnter, onPointerLeave, onPick, children }: {
+function BarCell({ id, zone, label, cellRef, editing, chip, faded, left, width, cell, onPointerEnter, onPointerLeave, onPick, children }: {
+  /** Option 1: drawn as a small outlined chip, like option 3's drawing. */
+  chip: boolean
   id: string; zone: BarZone; label: string; cellRef: (el: HTMLDivElement | null) => void
   editing: boolean; faded: boolean; left: number; width: number; cell: number
   onPointerEnter: () => void; onPointerLeave: () => void; onPick: () => void; children: ReactNode
@@ -99,7 +105,8 @@ function BarCell({ id, zone, label, cellRef, editing, faded, left, width, cell, 
       data-bar-cell={cell}
       draggable={editing}
       onDragStart={editing ? e => startItemDrag(e, id) : undefined}
-      className={`absolute inset-y-0 flex items-center justify-center outline-none transition-[left] duration-150 motion-reduce:transition-none ${
+      className={`absolute flex items-center justify-center outline-none transition-[left] duration-150 motion-reduce:transition-none ${
+        chip ? 'inset-y-1 rounded-md border border-border bg-bg' : 'inset-y-0'} ${
         faded ? 'opacity-40' : ''
       } ${editing ? 'group/edit rounded-md cursor-grab active:cursor-grabbing [&_*]:cursor-grab hover:bg-bg-hover focus-visible:ring-2 focus-visible:ring-accent data-[held]:ring-2 data-[held]:ring-accent data-[held]:bg-accent-subtle' : ''}`}
       style={{ left, width }}
@@ -138,6 +145,7 @@ export function BarGrid({ zone, shell, renderStatus }: {
   useEffect(() => { for (const id of ids) if (px[id]) setItemSpan(zone, id, Math.max(1, Math.ceil((px[id] + 2) / cellW))) })
 
   const editing = useLayoutEditing()
+  const dragOnly = useDragOnlyEditing()
   const drag = useChromeDrag()
   const gridVars = useGridVarsClass()
   // Drafting shows every bar's cells for the whole drag. Minimal shows a
@@ -234,6 +242,7 @@ export function BarGrid({ zone, shell, renderStatus }: {
             label={id === SEARCH_ITEM ? i18nT('nav.layout_locked_search') : meta(id)?.label ?? id}
             cellRef={el => { cellEls.current[id] = el }}
             editing={editing}
+            chip={dragOnly && !CHIPLESS.has(id)}
             faded={hovering && id === drag.id}
             left={cols[id] * cellW}
             width={span(id) * cellW}

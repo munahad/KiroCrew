@@ -90,7 +90,7 @@ import { ShellStatusBar } from './shell/statusbar/shellStatusBar'
 import { useBarHasContent, useLayoutEditing, useTopBarHasContent, setLayoutEditing } from './lib/shellLayout'
 import { LayoutZoneOutlines } from './shell/layout/layoutZones'
 import { EditOptionSwitcher } from './shell/layout/editOptionSwitcher'
-import { DragOnlyBar, PageHideZone } from './shell/layout/dragOnlyEdit'
+import { DragOnlyBar, PageHideZone, useDragOnlyEditing } from './shell/layout/dragOnlyEdit'
 import { LayoutItemKeyboard } from './shell/layout/keyboardMove'
 import { ShellNavRail } from './shell/nav/navRail'
 import { NavItem, NavBadge } from './shell/nav/navRow'
@@ -340,7 +340,12 @@ export default function App() {
   // The page steps back while editing: dimmed well down and greyed, so the
   // chrome you can edit (the raised bars and sidebar) and the Edit layout
   // panel floating over the page read as the editor, not as the page.
-  const pageEditStyle: React.CSSProperties = editRoom
+  // Option 1 (drag only): the page is not shown at all while editing; a plain
+  // "Page" area stands in for it (dragOnlyEdit.tsx's PageHideZone).
+  const pageHidden = useDragOnlyEditing() && editRoom
+  const pageEditStyle: React.CSSProperties = pageHidden
+    ? { opacity: 0, transition: 'opacity 150ms ease' }
+    : editRoom
     // Washed out far enough to read as background, like the blurred page behind
     // Gary's Customize rail window, but without a blur: the browser redraws a
     // blurred page whenever it changes (a session still streaming behind the

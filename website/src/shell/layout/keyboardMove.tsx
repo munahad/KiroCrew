@@ -67,7 +67,7 @@ function refocus(id: string): void {
 /* ── Moves ── */
 
 /** Move `id` into `zone`, at its start, its end, or a given cell or row. */
-function moveInto(id: string, zone: ShellZone, at: 'start' | 'end' | number): void {
+export function moveInto(id: string, zone: ShellZone, at: 'start' | 'end' | number): void {
   if (zone === 'top' || zone === 'bottom') {
     placeOnBar(zone, id, at === 'start' ? 0 : at === 'end' ? Number.MAX_SAFE_INTEGER : at)
     return
@@ -102,7 +102,7 @@ export function putBack(id: string, spot: ItemSpot): void {
 }
 
 /** One step in a direction from `zone`; returns the zone it ended in, or null. */
-function step(id: string, zone: ShellZone, key: string): ShellZone | null {
+export function stepItem(id: string, zone: ShellZone, key: string): ShellZone | null {
   if (zone === 'top' || zone === 'bottom') {
     if (key === 'ArrowLeft' || key === 'ArrowRight') return shiftOnBar(zone, id, key === 'ArrowLeft' ? -1 : 1) ? zone : null
     if ((zone === 'top' && key === 'ArrowDown') || (zone === 'bottom' && key === 'ArrowUp')) {
@@ -127,7 +127,7 @@ function step(id: string, zone: ShellZone, key: string): ShellZone | null {
   return bar
 }
 
-const announceStep = (label: string, from: ShellZone, to: ShellZone, key: string) => {
+export const announceStep = (label: string, from: ShellZone, to: ShellZone, key: string) => {
   if (from !== to) { announceLayout(i18nT('nav.layout_moved', { item: label, place: zoneLabel(to) })); return }
   const k = { ArrowLeft: 'nav.layout_moved_left', ArrowRight: 'nav.layout_moved_right', ArrowUp: 'nav.layout_moved_up', ArrowDown: 'nav.layout_moved_down' }[key]
   if (k) announceLayout(i18nT(k, { item: label }))
@@ -184,7 +184,7 @@ export function useLayoutItemProps(id: string, zone: ShellZone, label: string) {
     }
     if (isHeld && k.startsWith('Arrow')) {
       e.preventDefault()
-      const to = step(id, zone, k)
+      const to = stepItem(id, zone, k)
       if (to) { announceStep(label, zone, to, k); refocus(id) }
     }
   }
@@ -278,7 +278,7 @@ function LayoutItemMenu() {
       : readShellPlacement().side.includes(m.id) || canShiftInSidebar(sidebarGroups, m.id, d === 'ArrowUp' ? -1 : 1)
     if (!can) continue
     items.push({ key: d, label: i18nT(dirKey[d], { item: m.label }), run: () => {
-      const to = step(m.id, m.zone, d)
+      const to = stepItem(m.id, m.zone, d)
       if (to) announceStep(m.label, m.zone, to, d)
     } })
   }

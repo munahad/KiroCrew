@@ -20,7 +20,8 @@ import {
 import {
   columnIdsOf, commitColumn, isHeaderId, placeInSidebar, pushAsideInColumn, resolveColumn, setSidebarRowCount, useSidebarRows,
 } from '../../lib/sidebarGrid'
-import { GRID_EDGE, GRID_FILL, GRID_LINE, useGridVarsClass } from '../layout/barGridView'
+import { CHIPLESS, GRID_EDGE, GRID_FILL, GRID_LINE, useGridVarsClass } from '../layout/barGridView'
+import { useDragOnlyEditing } from '../layout/dragOnlyEdit'
 import { useGridStyle } from '../../lib/editOption'
 import { registerSidebarGroups, useLayoutItemProps } from '../layout/keyboardMove'
 import { startItemDrag, zoneLabel } from '../layout/barItems'
@@ -31,8 +32,8 @@ const DEFAULT_PITCH = 34
 /** One row of the column. While editing it is draggable, focusable and
  *  movable by keyboard and its menu (keyboardMove.tsx); its own content is
  *  inert, so Tab stops once per row and Enter picks it up instead of opening it. */
-function ColumnRow({ id, label, editing, faded, top, height, onDragStart, children }: {
-  id: string; label: string; editing: boolean; faded: boolean; top: number; height: number
+function ColumnRow({ id, label, editing, chip, faded, top, height, onDragStart, children }: {
+  id: string; label: string; editing: boolean; chip: boolean; faded: boolean; top: number; height: number
   onDragStart: (e: DragEvent) => void; children: ReactNode
 }) {
   const kbd = useLayoutItemProps(id, 'sidebar', label)
@@ -46,6 +47,7 @@ function ColumnRow({ id, label, editing, faded, top, height, onDragStart, childr
       draggable={editing}
       onDragStart={editing ? onDragStart : undefined}
       className={`absolute inset-x-0 flex items-center outline-none transition-[top] duration-150 motion-reduce:transition-none ${
+        chip ? 'rounded-md border border-border bg-bg' : ''} ${
         faded ? 'opacity-40' : ''
       } ${editing ? 'group/edit rounded-lg cursor-grab active:cursor-grabbing [&_*]:cursor-grab hover:bg-bg-hover focus-visible:ring-2 focus-visible:ring-accent data-[held]:ring-2 data-[held]:ring-accent data-[held]:bg-accent-subtle' : ''}`}
       style={{ top, height }}
@@ -73,6 +75,7 @@ export function SidebarColumn({ groups, renderRow, renderHeader, collapsed, labe
   const ref = useRef<HTMLDivElement>(null)
   const editing = useLayoutEditing()
   const gridVars = useGridVarsClass()
+  const dragOnly = useDragOnlyEditing()
   const minimal = useGridStyle() === 'minimal'
   const rows = useSidebarRows()
   const ids = columnIdsOf(groups)
@@ -190,6 +193,8 @@ export function SidebarColumn({ groups, renderRow, renderHeader, collapsed, labe
         id={id}
         label={header ? groupTitle(header) : labelOf(id)}
         editing={editing}
+        // Option 1: each row an outlined chip, like option 3's drawing.
+        chip={dragOnly && !header && !CHIPLESS.has(id)}
         faded={hover?.id === id}
         top={at[id] * pitch}
         height={pitch - 2}

@@ -41,11 +41,12 @@ import { barOrder, cellOf, clearBarCells, setItemStyle, shiftOnBar, useBarCells,
 import { canShiftInSidebar, clearSidebarRows, columnIdsOf, columnOrder, shiftInSidebar, useSidebarRows } from '../../lib/sidebarGrid'
 import { useTerminalEnabled } from '../../utils/terminalRegistry'
 import { useRailWidth } from '../../hooks/useRailWidth'
-import { useIsMobile } from '../../hooks/useIsMobile'
+import { MOBILE_BREAKPOINT, useIsMobile } from '../../hooks/useIsMobile'
 import { forPhone, phoneBarIds, phoneHide, phoneShow, phoneStep, resetPhoneLayout, usePhoneLayout } from '../../lib/phoneLayout'
 import type { RailItemMeta } from '../nav/railCustomize'
 import { startItemDrag, zoneLabel } from './barItems'
-import { noteRemoved, useDisclosure } from '../../lib/editOption'
+import { noteRemoved, readEditOption, useDisclosure, useEditOption } from '../../lib/editOption'
+import { PreviewEditor } from './previewEditor'
 import { HiddenItemPicker } from './hiddenItemPicker'
 import { STATUS_BAR_EDIT_HEIGHT } from '../statusbar/shellStatusBar'
 
@@ -61,11 +62,13 @@ const APP_STORE_IDS = new Set(['apps', 'apps-library', 'projects'])
 type Category = 'all' | 'pages' | 'apps' | 'mates' | 'sessions' | 'tools'
 const CATEGORIES: Category[] = ['all', 'pages', 'apps', 'mates', 'sessions', 'tools']
 const SESSION_BROWSE_LIMIT = 20
+/** Whether the window is phone-sized right now (for listeners outside render). */
+const phoneNow = () => typeof window !== 'undefined' && !!window.matchMedia?.(`(max-width: ${MOBILE_BREAKPOINT - 1}px)`).matches
 
 
 /** `detail`: a short tag that tells apart two items with the same name (two
  *  sessions both titled "Kiro Crew Feature Request", say). Shown only then. */
-interface Candidate { id: string; category: Exclude<Category, 'all'>; meta: RailItemMeta; detail?: string }
+export interface Candidate { id: string; category: Exclude<Category, 'all'>; meta: RailItemMeta; detail?: string }
 
 function categoryOf(id: string): Exclude<Category, 'all'> {
   if (id.startsWith(MATE_PIN_PREFIX)) return 'mates'
@@ -147,13 +150,15 @@ export function LayoutEditPanel({ groups, hidden, meta }: {
 
   // Escape leaves edit mode, from anywhere on the page.
   useEffect(() => {
-    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') setLayoutEditing(false) }
+    // Option 3's editor owns Escape (it may ask "Keep your changes?" first).
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape' && !(readEditOption() === 'preview' && !phoneNow())) setLayoutEditing(false) }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
   }, [])
   // Gradual reveal (prototype band, option 2): what is not shown sits behind
   // an "Add an item" picker, and row controls show on hover or focus.
   const gradual = useDisclosure() === 'gradual' && !phone
+  const preview = useEditOption() === 'preview' && !phone
   // Hidden: edit by dragging alone, with a small bar to bring the panel back.
   // Each Edit layout starts with the panel shown.
   const [panelHidden, setPanelHidden] = useState(false)
@@ -517,6 +522,21 @@ export function LayoutEditPanel({ groups, hidden, meta }: {
   // The pane's own overlay root, so the panel hides with this Crew when a
   // remote Crew is in front.
   const live = <div role="status" aria-live="polite" className="sr-only">{announcement}</div>
+  // Option 3 (prototype band): a separate editor on a drawing of the window.
+  // The phone keeps this panel, the drawing being too small there.
+  if (preview) return (
+    <PreviewEditor
+      candidates={candidates}
+      columnOf={columnOf}
+      categoryLabel={c => categoryLabel(c)}
+      repeated={repeated}
+      groups={groups}
+      where={where}
+      place={place}
+      reset={reset}
+      announcement={announcement}
+    />
+  )
   if (panelHidden && !phone) return (
     <OverlayPortal>
       {live}

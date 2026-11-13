@@ -28,10 +28,11 @@ import { Ban } from 'lucide-react'
 
 import { i18nT } from '../../i18n/t'
 import {
-  SHELL_ITEM_MIME, announceLayout, readChromeDrag, setChromeDrag, useChromeDrag, useLayoutEditing,
+  SHELL_ITEM_MIME, announceLayout, readChromeDrag, setChromeDrag, useChromeDrag, useLayoutEditing, useShellPlacement, useWidgetsIn,
   type BarZone, type ShellZone,
 } from '../../lib/shellLayout'
-import { cellAt, placeOnBar } from '../../lib/barGrid'
+import { barOrder, cellAt, placeOnBar } from '../../lib/barGrid'
+import { hideFromCanvas, useDragOnlyEditing } from './dragOnlyEdit'
 import { useGridStyle } from '../../lib/editOption'
 import { shellItemMeta, zonesFor } from './shellItems'
 import { zoneLabel } from './barItems'
@@ -55,7 +56,11 @@ function useNativeDragging(): boolean {
   return on
 }
 
-function ZoneOutline({ zone, area, dragging, nativeDrag, allowed, over, lineX }: {
+function ZoneOutline({ zone, area, dragging, nativeDrag, allowed, over, lineX, flat, count }: {
+  /** Option 1 (drag only): a flat dashed area like option 3's drawing, not raised. */
+  flat: boolean
+  /** How many items the area holds (empty areas say so; two or more offer Remove all). */
+  count: number
   zone: ShellZone
   area: string
   /** Some item is being dragged: show names and availability. */
@@ -96,16 +101,20 @@ function ZoneOutline({ zone, area, dragging, nativeDrag, allowed, over, lineX }:
   // Minimal grid: no grey dashed outlines; each area is just its plain raised
   // surface, and the grid itself appears only in the area being dragged over.
   const minimal = useGridStyle() === 'minimal'
+  const bars = zone !== 'sidebar'
   const box = ref.current?.getBoundingClientRect()
   return (
     <div
       ref={ref}
-      aria-hidden="true"
       data-layout-outline={zone}
       style={{ gridArea: area, zIndex: 70, pointerEvents: catches ? 'auto' : 'none' }}
       // Raised above the dimmed page (a lifted shadow and a full-strength
       // outline), so the three places you can edit stand out as the editor.
-      className={`relative rounded-lg border-2 border-dashed transition-[border-color,background-color,box-shadow] ${
+      className={flat
+        // Flat: a thin light dashed outline, no lift; the drop target still lights up.
+        ? `relative rounded-lg border border-dashed transition-[border-color,background-color] ${zone === 'sidebar' ? 'mx-1 mb-1' : 'mx-1 my-0.5'} ${
+          unavailable ? 'border-border bg-bg-hover/60' : over ? 'border-text/50 bg-text/5' : 'border-text/30'}`
+        : `relative rounded-lg border-2 border-dashed transition-[border-color,background-color,box-shadow] ${
         zone === 'sidebar' ? 'mx-1 mb-1' : 'mx-1 my-0.5'
       } ${unavailable
         ? `${minimal ? 'border-transparent' : 'border-border'} bg-bg-hover/60 shadow-none`
@@ -120,11 +129,30 @@ function ZoneOutline({ zone, area, dragging, nativeDrag, allowed, over, lineX }:
       {/* Where the item will land: a line in the gap it snaps to. */}
       {over && allowed && lineX != null && box && (
         <span
+          aria-hidden="true"
           className="absolute top-1 bottom-1 w-0.5 rounded-full bg-accent pointer-events-none"
           style={{ left: lineX - box.left - 3 }}
         />
       )}
+      {flat && bars && count === 0 && !dragging && (
+        <span aria-hidden="true" className="pointer-events-none absolute inset-0 flex items-center justify-center text-[12px] text-muted">
+          {i18nT('nav.layout_preview_empty_area')}
+        </span>
+      )}
+      {flat && bars && count >= 2 && !dragging && (
+        // On the edge facing the page, clear of the bar's own items.
+        <button
+          type="button"
+          onClick={() => { for (const id of barOrder(zone as BarZone)) hideFromCanvas(id) }}
+          style={{ pointerEvents: 'auto' }}
+          className={`absolute right-3 rounded-md border border-border bg-bg-elevated px-1.5 py-px text-[11px] text-muted shadow-sm hover:text-text cursor-pointer ${
+            zone === 'top' ? 'bottom-0 translate-y-1/2' : 'top-0 -translate-y-1/2'}`}
+        >
+          {i18nT('nav.layout_preview_clear_area')}
+        </button>
+      )}
       <span
+        aria-hidden="true"
         // One rule for all three: the tag sits on the MIDDLE of the edge that
         // faces the page, away from the corners where two zones meet, so it can
         // only belong to its own zone. Shown only while an item is dragged.
@@ -150,7 +178,12 @@ export function LayoutZoneOutlines() {
   const editing = useLayoutEditing()
   const native = useNativeDragging()
   const drag = useChromeDrag()
+  const flat = useDragOnlyEditing()
+  const placement = useShellPlacement()
+  const topWidgets = useWidgetsIn('top')
+  const bottomWidgets = useWidgetsIn('bottom')
   if (!editing) return null
+  const countOf = (z: ShellZone) => (z === 'top' ? placement.top.length + topWidgets.length : z === 'bottom' ? placement.bottom.length + bottomWidgets.length : 1)
   const dragging = native || drag.id !== null
   // A native drag with no layout item (a Mate or session from another page)
   // can only be pinned to the sidebar.
@@ -162,6 +195,8 @@ export function LayoutZoneOutlines() {
     allowed: allowed(zone),
     over: zone !== 'sidebar' && drag.over === zone,
     lineX: drag.over === zone ? drag.lineX : null,
+    flat,
+    count: countOf(zone),
   })
   return (
     <>

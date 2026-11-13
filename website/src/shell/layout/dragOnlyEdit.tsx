@@ -23,7 +23,7 @@ import { OverlayPortal } from '../../components/overlayRoot'
 import { i18nT } from '../../i18n/t'
 import { useIsMobile } from '../../hooks/useIsMobile'
 import { useRailWidth } from '../../hooks/useRailWidth'
-import { noteRemoved, useEditOption, useGridStyle } from '../../lib/editOption'
+import { noteRemoved, useEditOption } from '../../lib/editOption'
 import {
   MATE_PIN_PREFIX, RAIL_LAYOUT_CHANGED_EVENT, RAIL_LAYOUT_KEY, SESSION_PIN_PREFIX, isEntityPin, removePin, updateRail,
 } from '../../lib/railLayout'
@@ -182,7 +182,6 @@ export function PageHideZone() {
   const drag = useChromeDrag()
   const sidebarOver = usePageHideOver()
   const [nativeOver, setNativeOver] = useState(false)
-  const minimal = useGridStyle() === 'minimal'
   if (!on) return null
   const dragging = drag.id !== null
   const over = nativeOver || sidebarOver
@@ -200,21 +199,26 @@ export function PageHideZone() {
     const id = e.dataTransfer.getData(SHELL_ITEM_MIME) || readChromeDrag().id
     if (id) hideFromCanvas(id)
   }
+  // A plain area stands in for the page while editing: nothing of the page
+  // shows. While an item is dragged it says "Drop here to hide".
   return (
     <div
       aria-hidden="true"
       data-layout-outline="page"
       style={{ gridArea: 'content', zIndex: 65, pointerEvents: dragging ? 'auto' : 'none' }}
-      className={`relative m-3 flex items-center justify-center rounded-2xl border-2 border-dashed transition-[opacity,border-color,background-color] duration-150 motion-reduce:transition-none ${
-        dragging ? 'opacity-100' : 'opacity-0'} ${over ? `${minimal ? 'border-transparent' : 'border-text/70'} bg-text/10` : `${minimal ? 'border-transparent' : 'border-text/30'} bg-transparent`}`}
+      className={`relative m-3 flex items-center justify-center rounded-2xl transition-colors duration-150 motion-reduce:transition-none ${over ? 'bg-text/10' : 'bg-text/5'}`}
       onDragOver={onDragOver}
       onDragLeave={e => { if (!e.currentTarget.contains(e.relatedTarget as Node | null)) setNativeOver(false) }}
       onDrop={onDrop}
     >
-      <span className={`inline-flex items-center gap-2 rounded-lg px-3 py-1.5 text-[13px] font-medium ${over ? 'bg-text text-bg' : 'bg-bg-elevated text-text border border-border'}`}>
-        <EyeOff size={15} aria-hidden="true" />
-        {i18nT('nav.layout_drop_to_hide')}
-      </span>
+      {dragging
+        ? (
+          <span className={`inline-flex items-center gap-2 rounded-lg px-3 py-1.5 text-[13px] font-medium ${over ? 'bg-text text-bg' : 'bg-bg-elevated text-text border border-border'}`}>
+            <EyeOff size={15} aria-hidden="true" />
+            {i18nT('nav.layout_drop_to_hide')}
+          </span>
+        )
+        : <span className="text-[13px] text-muted">{i18nT('nav.layout_preview_page')}</span>}
     </div>
   )
 }
