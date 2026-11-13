@@ -10510,6 +10510,8 @@
     "layout_disclosure_gradual": "단계적",
     "layout_add_item": "항목 추가",
     "layout_add_item_search": "추가할 항목 검색",
+    "layout_recently_removed": "최근에 제거됨",
+    "layout_all_items": "모든 항목",
     "layout_locked_brand": "로고 및 사이드바 토글",
     "layout_status_item": "연결·사용량·알림",
     "layout_show_as": "표시 방식",

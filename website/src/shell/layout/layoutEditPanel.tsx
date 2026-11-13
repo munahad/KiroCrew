@@ -45,7 +45,7 @@ import { useIsMobile } from '../../hooks/useIsMobile'
 import { forPhone, phoneBarIds, phoneHide, phoneShow, phoneStep, resetPhoneLayout, usePhoneLayout } from '../../lib/phoneLayout'
 import type { RailItemMeta } from '../nav/railCustomize'
 import { startItemDrag, zoneLabel } from './barItems'
-import { useDisclosure } from '../../lib/editOption'
+import { noteRemoved, useDisclosure } from '../../lib/editOption'
 import { HiddenItemPicker } from './hiddenItemPicker'
 import { STATUS_BAR_EDIT_HEIGHT } from '../statusbar/shellStatusBar'
 
@@ -305,6 +305,7 @@ export function LayoutEditPanel({ groups, hidden, meta }: {
     } else {
       moveItem(id, to === 'none' ? null : to)
     }
+    if (to === 'none') noteRemoved(id)
     announceLayout(to === 'none'
       ? i18nT('nav.layout_removed', { item: label })
       : i18nT('nav.layout_moved', { item: label, place: zoneLabel(to) }))

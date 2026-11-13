@@ -10510,6 +10510,8 @@
     "layout_disclosure_gradual": "逐步",
     "layout_add_item": "添加项目",
     "layout_add_item_search": "搜索要添加的项目",
+    "layout_recently_removed": "最近移除",
+    "layout_all_items": "所有项目",
     "layout_locked_brand": "徽标和侧边栏开关",
     "layout_status_item": "连接、用量和通知",
     "layout_show_as": "显示为",

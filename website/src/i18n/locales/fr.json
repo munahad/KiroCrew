@@ -10804,6 +10804,8 @@
     "layout_disclosure_gradual": "Progressif",
     "layout_add_item": "Ajouter un élément",
     "layout_add_item_search": "Rechercher des éléments à ajouter",
+    "layout_recently_removed": "Retirés récemment",
+    "layout_all_items": "Tous les éléments",
     "layout_locked_brand": "Logo et affichage de la barre latérale",
     "layout_status_item": "Connexion, utilisation et notifications",
     "layout_show_as": "Afficher comme",

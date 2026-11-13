@@ -10804,6 +10804,8 @@
     "layout_disclosure_gradual": "Gradual",
     "layout_add_item": "Añadir un elemento",
     "layout_add_item_search": "Buscar elementos para añadir",
+    "layout_recently_removed": "Quitados recientemente",
+    "layout_all_items": "Todos los elementos",
     "layout_locked_brand": "Logotipo y botón de la barra lateral",
     "layout_status_item": "Conexión, uso y notificaciones",
     "layout_show_as": "Mostrar como",

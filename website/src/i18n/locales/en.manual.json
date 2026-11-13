@@ -4722,6 +4722,8 @@
     "layout_disclosure_gradual": "Gradual",
     "layout_add_item": "Add an item",
     "layout_add_item_search": "Search items to add",
+    "layout_recently_removed": "Recently removed",
+    "layout_all_items": "All items",
     "layout_locked_brand": "Logo and sidebar toggle",
     "layout_status_item": "Connection, usage and notifications",
     "layout_show_as": "Show as",

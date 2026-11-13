@@ -10657,6 +10657,8 @@
     "layout_disclosure_gradual": "ধীরে ধীরে",
     "layout_add_item": "একটি আইটেম যোগ করুন",
     "layout_add_item_search": "যোগ করার জন্য আইটেম খুঁজুন",
+    "layout_recently_removed": "সম্প্রতি সরানো",
+    "layout_all_items": "সব আইটেম",
     "layout_locked_brand": "লোগো ও সাইডবার টগল",
     "layout_status_item": "সংযোগ, ব্যবহার ও নোটিফিকেশন",
     "layout_show_as": "যেভাবে দেখাবে",

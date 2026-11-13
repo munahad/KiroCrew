@@ -10951,6 +10951,8 @@
     "layout_disclosure_gradual": "Постепенно",
     "layout_add_item": "Добавить элемент",
     "layout_add_item_search": "Найти элементы для добавления",
+    "layout_recently_removed": "Недавно убранные",
+    "layout_all_items": "Все элементы",
     "layout_locked_brand": "Логотип и кнопка боковой панели",
     "layout_status_item": "Подключение, использование и уведомления",
     "layout_show_as": "Вид",

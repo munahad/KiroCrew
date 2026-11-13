@@ -12,12 +12,16 @@
  * results, Enter adds the active one, Escape closes and returns focus to the
  * button (WAI-ARIA combobox pattern with a listbox popup).
  */
-import { useEffect, useId, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from 'react'
+import { Fragment, useEffect, useId, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { ChevronDown, Plus, Search } from 'lucide-react'
 
 import { OverlayPortal } from '../../components/overlayRoot'
 import { i18nT } from '../../i18n/t'
+import { readRecentlyRemoved } from '../../lib/editOption'
 import { startItemDrag } from './barItems'
+
+/** How many recently removed items lead the list. */
+const RECENT_SHOWN = 5
 
 export interface PickerItem { id: string; label: string; icon: ReactNode; kind: string; detail?: string }
 
@@ -35,7 +39,18 @@ export function HiddenItemPicker({ items, onAdd }: {
   const listId = useId()
 
   const q = query.trim().toLowerCase()
-  const results = useMemo(() => (q ? items.filter(x => x.label.toLowerCase().includes(q)) : items), [items, q])
+  // Without a search, what was removed most recently comes first, under its
+  // own heading: it is the likeliest thing to want back.
+  const recentIds = useMemo(() => (open ? readRecentlyRemoved() : []), [open])
+  const recent = useMemo(
+    () => (q ? [] : recentIds.map(id => items.find(x => x.id === id)).filter((x): x is PickerItem => !!x).slice(0, RECENT_SHOWN)),
+    [items, q, recentIds],
+  )
+  const results = useMemo(() => {
+    if (q) return items.filter(x => x.label.toLowerCase().includes(q))
+    const first = new Set(recent.map(x => x.id))
+    return [...recent, ...items.filter(x => !first.has(x.id))]
+  }, [items, q, recent])
   useEffect(() => { setActive(0) }, [q])
 
   // Under the button, or above it when there is no room below.
@@ -131,12 +146,16 @@ export function HiddenItemPicker({ items, onAdd }: {
               {results.length === 0 && (
                 <div className="px-2 py-6 text-center text-[13px] text-muted">{i18nT('nav.rail_palette_no_results', { query: query.trim() })}</div>
               )}
-              {results.map((x, i) => (
-                // The search field owns the keyboard (combobox): Up, Down and
-                // Enter act on the active option, so options take no keys.
-                // eslint-disable-next-line jsx-a11y/click-events-have-key-events, jsx-a11y/interactive-supports-focus
+              {results.map((x, i) => (<Fragment key={x.id}>
+                {recent.length > 0 && (i === 0 || i === recent.length) && (
+                  <div role="presentation" className="px-2 pb-1 pt-2 text-[11px] font-medium uppercase tracking-wide text-muted">
+                    {i18nT(i === 0 ? 'nav.layout_recently_removed' : 'nav.layout_all_items')}
+                  </div>
+                )}
+                {/* The search field owns the keyboard (combobox): Up, Down and
+                    Enter act on the active option, so options take no keys. */}
+                {/* eslint-disable-next-line jsx-a11y/click-events-have-key-events, jsx-a11y/interactive-supports-focus */}
                 <div
-                  key={x.id}
                   id={`${listId}-${i}`}
                   data-index={i}
                   role="option"
@@ -154,7 +173,7 @@ export function HiddenItemPicker({ items, onAdd }: {
                   </span>
                   <Plus size={13} aria-hidden="true" className={`shrink-0 text-muted ${i === active ? 'opacity-100' : 'opacity-0'}`} />
                 </div>
-              ))}
+              </Fragment>))}
             </div>
           </div>
         </OverlayPortal>

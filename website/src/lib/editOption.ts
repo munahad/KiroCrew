@@ -116,3 +116,23 @@ export function useDisclosure(): DisclosureStyle {
   }, [])
   return style
 }
+
+/* ── Recently removed items (the Gradual picker lists them first) ── */
+
+const RECENT_KEY = 'mc-layout-recently-removed'
+const RECENT_MAX = 20
+
+/** Ids removed from the layout, newest first. */
+export function readRecentlyRemoved(): string[] {
+  try {
+    const v = JSON.parse(safeGetItem(RECENT_KEY) ?? '[]') as unknown
+    return Array.isArray(v) ? v.filter((x): x is string => typeof x === 'string') : []
+  } catch {
+    return []
+  }
+}
+
+/** Remember that `id` was just removed from the layout. */
+export function noteRemoved(id: string): void {
+  safeSetItem(RECENT_KEY, JSON.stringify([id, ...readRecentlyRemoved().filter(x => x !== id)].slice(0, RECENT_MAX)))
+}

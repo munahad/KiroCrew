@@ -23,7 +23,7 @@ import { OverlayPortal } from '../../components/overlayRoot'
 import { i18nT } from '../../i18n/t'
 import { useIsMobile } from '../../hooks/useIsMobile'
 import { useRailWidth } from '../../hooks/useRailWidth'
-import { useEditOption, useGridStyle } from '../../lib/editOption'
+import { noteRemoved, useEditOption, useGridStyle } from '../../lib/editOption'
 import {
   MATE_PIN_PREFIX, RAIL_LAYOUT_CHANGED_EVENT, RAIL_LAYOUT_KEY, SESSION_PIN_PREFIX, isEntityPin, removePin, updateRail,
 } from '../../lib/railLayout'
@@ -130,6 +130,7 @@ export function hideFromCanvas(id: string, label = layoutItemLabel(id)): void {
     moveItem(id, null)
   }
   setHiddenStack([...hiddenStack.filter(h => h.id !== id), { id, label, spot, at: Date.now() }])
+  noteRemoved(id)
   announceLayout(i18nT('nav.layout_removed', { item: label }))
 }
 
