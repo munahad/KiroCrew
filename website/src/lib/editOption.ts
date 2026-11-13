@@ -1,0 +1,48 @@
+/**
+ * Which Edit layout approach the prototype shows (design exploration).
+ *
+ * From the Nov 11 prototype review: three ways to edit the shell, compared in
+ * one branch behind a switch rather than in separate branches.
+ *   1. drag   — drag only, no Edit layout panel.
+ *   2. panel  — the current in-place editing with the floating panel.
+ *   3. preview — a separate edit mode on a small preview of the layout.
+ *
+ * Stored per browser so a reload keeps the option under review.
+ */
+import { useEffect, useState } from 'react'
+
+import { safeGetItem, safeSetItem } from '../utils/safeStorage'
+
+export type EditOption = 'drag' | 'panel' | 'preview'
+export const EDIT_OPTIONS: readonly EditOption[] = ['drag', 'panel', 'preview']
+
+const KEY = 'mc-layout-edit-option'
+const EVENT = 'mc:layout-edit-option-changed'
+const DEFAULT: EditOption = 'panel'
+
+const isEditOption = (v: unknown): v is EditOption => (EDIT_OPTIONS as readonly unknown[]).includes(v)
+
+export function readEditOption(): EditOption {
+  const v = safeGetItem(KEY)
+  return isEditOption(v) ? v : DEFAULT
+}
+
+export function setEditOption(option: EditOption): void {
+  if (option === readEditOption()) return
+  safeSetItem(KEY, option)
+  window.dispatchEvent(new Event(EVENT))
+}
+
+export function useEditOption(): EditOption {
+  const [option, setOption] = useState(readEditOption)
+  useEffect(() => {
+    const sync = () => setOption(readEditOption())
+    window.addEventListener(EVENT, sync)
+    window.addEventListener('storage', sync)
+    return () => {
+      window.removeEventListener(EVENT, sync)
+      window.removeEventListener('storage', sync)
+    }
+  }, [])
+  return option
+}

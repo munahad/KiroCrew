@@ -14,6 +14,7 @@ import {
 import { SortableAppNavRow } from './appRail'
 import { RailContextMenu, groupTitle, type RailItemMeta } from './railCustomize'
 import { LayoutEditPanel } from '../layout/layoutEditPanel'
+import { hideFromCanvas, pageHideZoneAt, setPageHideOver, useDragOnlyEditing } from '../layout/dragOnlyEdit'
 import {
   HISTORY_ITEM, PROFILE_ITEM, REMOTE_ITEM, SEARCH_ITEM, SIDEBAR_MEMBERSHIP_EVENT, STATUS_ITEM, announceLayout, barZoneAt, isWidgetItem, moveItem,
   setChromeDrag, setLayoutEditing, useLayoutEditing, type SidebarMembership,
@@ -186,6 +187,7 @@ export function RailGroups({ available, renderItem, collapsed, defaultGroup, met
   const [activeId, setActiveId] = useState<string | null>(null)
   // "Edit layout" edits the real canvas in place (design exploration).
   const editing = useLayoutEditing()
+  const dragOnly = useDragOnlyEditing()
   // The profile menu opens the same editor from outside this component.
   useEffect(() => {
     const open = () => setLayoutEditing(true)
@@ -260,16 +262,30 @@ export function RailGroups({ available, renderItem, collapsed, defaultGroup, met
     // Apps are sidebar-only here even when a page of the same id could sit in a bar.
     if (editing) setChromeDrag({ id: String(e.active.id), over: null, lineX: null, cell: null })
   }, [editing])
+  // Option 1 (drag only): a row dropped on the faded page is hidden.
+  const overPage = (e: DragMoveEvent | DragEndEvent) => {
+    if (!dragOnly) return false
+    const p = pointerAt(e)
+    return !!p && pageHideZoneAt(p.x, p.y)
+  }
   const onDragMove = (e: DragMoveEvent) => {
     if (!editing) return
     const t = barTarget(e)
     setChromeDrag({ over: t?.bar ?? null, lineX: null, cell: t?.allowed ? t.cell : null })
+    setPageHideOver(!t && overPage(e))
   }
-  const onDragCancel = useCallback(() => { setActiveId(null); setChromeDrag(null) }, [])
+  const onDragCancel = useCallback(() => { setActiveId(null); setChromeDrag(null); setPageHideOver(false) }, [])
   const onDragEnd = useCallback((e: DragEndEvent) => {
     setActiveId(null)
     setChromeDrag(null)
+    setPageHideOver(false)
     const t = barTarget(e)
+    if (!t && overPage(e)) {
+      const id = String(e.active.id)
+      haptic('light')
+      hideFromCanvas(id, labelOf(id) ?? meta(id)?.label)
+      return
+    }
     if (t) {
       // Over a bar that cannot take it: no move, and the item slides back.
       if (!t.allowed) return
@@ -292,7 +308,7 @@ export function RailGroups({ available, renderItem, collapsed, defaultGroup, met
     // Merge into a fresh read: another tab may have written since this render.
     writeRailLayout(applyVisibleOrder(readRailLayout(), next))
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [flat, groups, editing, isApp])
+  }, [flat, groups, editing, isApp, dragOnly])
 
   return (<>
     <RailContextMenu
@@ -382,7 +398,7 @@ export function RailGroups({ available, renderItem, collapsed, defaultGroup, met
     )}
     </div>
     </RailContextMenu>
-    {editing && (
+    {editing && !dragOnly && (
       <LayoutEditPanel
         groups={allGroups}
         hidden={hidden}

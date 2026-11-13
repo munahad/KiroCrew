@@ -89,6 +89,8 @@ import { ShellHeader } from './shell/topbar/shellHeader'
 import { ShellStatusBar } from './shell/statusbar/shellStatusBar'
 import { useBarHasContent, useLayoutEditing, useTopBarHasContent, setLayoutEditing } from './lib/shellLayout'
 import { LayoutZoneOutlines } from './shell/layout/layoutZones'
+import { EditOptionSwitcher } from './shell/layout/editOptionSwitcher'
+import { DragOnlyBar, PageHideZone } from './shell/layout/dragOnlyEdit'
 import { ShellNavRail } from './shell/nav/navRail'
 import { NavItem, NavBadge } from './shell/nav/navRow'
 
@@ -597,6 +599,9 @@ export default function App() {
     <div className="h-screen supports-[height:100dvh]:h-dvh w-full flex flex-col overflow-hidden bg-bg"
       data-testid="app-frame"
       style={topReservePx ? { paddingTop: topReservePx } : undefined}>
+      {/* Design exploration: the prototype's option switch, a band above the
+          whole app (desktop only) so it never covers the UI under review. */}
+      {!isMobile && !focusActive && <EditOptionSwitcher />}
       {/* Embedded remote panes receive their switcher model from the parent via
           this bridge (option B) — no-op in the top-level dashboard. */}
       <EmbeddedHostBridge />
@@ -942,6 +947,9 @@ export default function App() {
       {!isMobile && !focusActive && showBottomBar && <ShellStatusBar shell={shell} />}
       {/* Design exploration: full-size drop zones while editing the layout. */}
       {!isMobile && !focusActive && <LayoutZoneOutlines />}
+      {/* Design exploration, option 1 (drag only): drop on the page to hide. */}
+      {!isMobile && !focusActive && <PageHideZone />}
+      {!isMobile && !focusActive && <DragOnlyBar />}
     </div>{/* /Local dashboard grid */}
       {/* Opened from the local Crew, so they hide with it (components/overlayRoot).
           The image viewer and the import notice render in place, fixed layers
