@@ -17,7 +17,7 @@
  */
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
-import { ArrowLeftRight, Bell, ChevronDown, ChevronLeft, ChevronRight, ChevronUp, CircleUserRound, EyeOff, Fullscreen, GripVertical, PanelBottom, PanelTop, RectangleHorizontal, Square, Lightbulb, Lock, MessageSquare, MonitorSmartphone, PanelLeft, Search, Smartphone, SquareTerminal, X } from 'lucide-react'
+import { ArrowLeftRight, Bell, ChevronDown, ChevronLeft, ChevronRight, ChevronUp, CircleUserRound, EyeOff, Fullscreen, GripVertical, PanelBottom, PanelTop, RectangleHorizontal, Square, Lightbulb, Lock, MessageSquare, Minus, MonitorSmartphone, PanelLeft, Search, Smartphone, SquareTerminal, X } from 'lucide-react'
 
 import CrewAvatar from '../../components/CrewAvatar'
 import {
@@ -45,6 +45,7 @@ import { useIsMobile } from '../../hooks/useIsMobile'
 import { forPhone, phoneBarIds, phoneHide, phoneShow, phoneStep, resetPhoneLayout, usePhoneLayout } from '../../lib/phoneLayout'
 import type { RailItemMeta } from '../nav/railCustomize'
 import { startItemDrag, zoneLabel } from './barItems'
+import { STATUS_BAR_EDIT_HEIGHT } from '../statusbar/shellStatusBar'
 
 
 /** Items that never move, listed so their place reads as deliberate. */
@@ -70,6 +71,18 @@ function categoryOf(id: string): Exclude<Category, 'all'> {
   // Task Runner, Discover and Library ship in the Apps group, so they read as apps.
   return isAppNavId(id) || APP_STORE_IDS.has(id) ? 'apps' : 'pages'
 }
+/** The panel's two columns: what comes with every Crew, and what this person
+ *  added (their mates, sessions and the apps they installed), the split most
+ *  products draw between "Built-in" and what you installed. */
+type Column = 'builtin' | 'yours'
+const COLUMNS: Column[] = ['builtin', 'yours']
+const COLUMN_KEY: Record<Column, string> = { builtin: 'nav.layout_col_builtin', yours: 'nav.layout_col_yours' }
+function columnOf(x: Candidate): Column {
+  if (x.category === 'mates' || x.category === 'sessions') return 'yours'
+  if (x.category === 'apps' && !APP_STORE_IDS.has(x.id)) return 'yours'
+  return 'builtin'
+}
+
 /** Literal keys, so the catalog checks can see each one is used. */
 const CATEGORY_KEY: Record<Category, string> = {
   all: 'nav.layout_cat_all',
@@ -135,8 +148,13 @@ export function LayoutEditPanel({ groups, hidden, meta }: {
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
   }, [])
-  // Focus the panel on open so keyboard users land in the editor.
-  useEffect(() => { panelRef.current?.focus() }, [])
+  // Hidden: edit by dragging alone, with a small bar to bring the panel back.
+  // Each Edit layout starts with the panel shown.
+  const [panelHidden, setPanelHidden] = useState(false)
+  const hiddenBarRef = useRef<HTMLDivElement>(null)
+  // Focus the panel on open, and whichever of panel or bar is showing after a
+  // switch, so keyboard users always land in the editor.
+  useEffect(() => { (panelHidden ? hiddenBarRef.current : panelRef.current)?.focus() }, [panelHidden])
 
   const onSidebar = useMemo(() => new Set(groups.flatMap(g => g.items)), [groups])
 
@@ -286,109 +304,20 @@ export function LayoutEditPanel({ groups, hidden, meta }: {
       : i18nT('nav.layout_moved', { item: label, place: zoneLabel(to) }))
   }
 
-  // The pane's own overlay root, so the panel hides with this Crew when a
-  // remote Crew is in front.
-  return (
-    <OverlayPortal>
-    {/* Floats in the middle of the page area (right of the sidebar), over the
-        dimmed page, so it reads as a tool laid over the layout rather than as
-        one more part of it. The frame lets clicks through to the bars; only the
-        panel itself takes them. */}
-    {/* Sizing for every window (WCAG 1.4.10 Reflow, 1.4.4 Resize text): the
-        margin around the panel shrinks with the window (64px at most, 12px at
-        least), the panel is at most 360px wide and 560px tall and otherwise
-        fills what is left, and only its list scrolls, so the header, search and
-        Done always stay on screen, at 200% zoom too. */}
-    <div
-      className={`fixed inset-y-0 right-0 z-[60] flex items-center justify-center pointer-events-none ${phone ? 'p-safe' : 'px-[clamp(12px,5vw,64px)] py-[clamp(12px,6vh,64px)]'}`}
-      style={{ left: phone ? 0 : railWidth }}
-    >
-    <aside
-      ref={panelRef}
-      tabIndex={-1}
-      role="region"
-      aria-label={i18nT('nav.rail_customize_title')}
-      className={`pointer-events-auto min-h-0 flex flex-col bg-bg-elevated text-text outline-none overflow-hidden ${phone ? 'w-full h-full' : 'w-[360px] max-w-full h-[min(560px,100%)] rounded-2xl border border-border shadow-2xl'}`}
-      data-testid="layout-edit-panel"
-    >
-      <header className="flex items-start gap-2 px-4 pt-3 pb-2 border-b border-border">
-        <div className="flex-1 min-w-0">
-          <h2 className="m-0 text-[15px] font-semibold text-text">{i18nT('nav.rail_customize_title')}</h2>
-          {/* One line: a longer translation shortens with "…" and the full
-              hint stays in the tooltip. On the phone the line says instead
-              that changes here stay on this phone. */}
-          {phone
-            ? <p className="mt-1 mb-0 text-[12px] text-muted flex items-start gap-1.5" data-testid="layout-phone-only">
-                <Smartphone size={13} aria-hidden="true" className="shrink-0 mt-px" />
-                <span>{i18nT('nav.layout_phone_only')}</span>
-              </p>
-            : <p className="mt-1 mb-0 text-[12px] text-muted truncate" title={i18nT('nav.layout_hint')}>{i18nT('nav.layout_hint')}</p>}
-        </div>
-        <button
-          type="button"
-          onClick={() => setLayoutEditing(false)}
-          aria-label={i18nT('nav.rail_done')}
-          title={i18nT('nav.rail_done')}
-          className="w-7 h-7 flex items-center justify-center rounded-md bg-transparent border-none cursor-pointer text-muted hover:text-text hover:bg-bg-hover"
-        >
-          <X size={15} />
-        </button>
-      </header>
-
-      {/* One row: the category filter as a compact dropdown, then search. The
-          chips it replaces wrapped onto a second line and cost height. */}
-      <div className="px-4 pt-3 flex items-center gap-2">
-        <DropdownMenu modal={false}>
-          <DropdownMenuTrigger asChild>
-            <button
-              type="button"
-              aria-label={`${i18nT('nav.layout_categories')}: ${categoryLabel(category)}`}
-              className="shrink-0 h-[34px] flex items-center gap-1 pl-2.5 pr-1.5 rounded-lg border border-border bg-bg text-[13px] text-text hover:bg-bg-hover cursor-pointer data-[state=open]:bg-bg-hover"
-            >
-              {categoryLabel(category)}
-              <ChevronDown size={13} aria-hidden="true" className="text-muted" />
-            </button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="start" className="min-w-[160px]">
-            <DropdownMenuRadioGroup value={category} onValueChange={v => setCategory(v as Category)}>
-              {CATEGORIES.filter(c => c === 'all' || counts[c] > 0).map(c => (
-                <DropdownMenuRadioItem key={c} value={c}>
-                  <span className="flex-1">{categoryLabel(c)}</span>
-                  <span className="ml-3 text-muted">{counts[c]}</span>
-                </DropdownMenuRadioItem>
-              ))}
-            </DropdownMenuRadioGroup>
-          </DropdownMenuContent>
-        </DropdownMenu>
-        <label className="flex-1 min-w-0 flex items-center gap-2 px-3 py-1.5 rounded-lg border border-border bg-bg focus-within:border-accent">
-          <Search size={14} className="text-muted shrink-0" aria-hidden="true" />
-          <input
-            value={query}
-            onChange={e => setQuery(e.target.value)}
-            placeholder={i18nT('nav.rail_palette_search')}
-            aria-label={i18nT('nav.rail_palette_search')}
-            className="flex-1 min-w-0 bg-transparent border-none outline-none text-[13px] text-text placeholder:text-muted"
-          />
-        </label>
-      </div>
-
-      <ul className="m-0 mt-2 px-2 pb-2 list-none flex-1 min-h-0 overflow-y-auto">
-        {shown.length === 0 && (
-          <li className="px-2 py-8 text-center text-[13px] text-muted">{i18nT('nav.rail_palette_no_results', { query: query.trim() })}</li>
-        )}
-        {/* Grouped by where each item lives now, so the panel is a map of the
-            layout: moving an item moves its row to another section instead of
-            leaving what looks like a copy behind. Each section is a labelled
-            list, so screen readers hear the place before its items. */}
+  /** The place sections (top bar, sidebar, bottom bar, not shown) for one
+   *  list of items; `key` keeps their heading ids unique per column. */
+  const sectionsFor = (list: Candidate[], key: string) => (
+    <>
         {(phone ? PHONE_SECTIONS : SECTIONS).map(section => {
-          const rows = shown.filter(x => where(x.id) === section).sort((a, b) => orderOf(a.id, section) - orderOf(b.id, section))
+          const rows = list.filter(x => where(x.id) === section).sort((a, b) => orderOf(a.id, section) - orderOf(b.id, section))
           if (rows.length === 0) return null
-          const headingId = `layout-section-${section}`
+          const headingId = `layout-section-${key}-${section}`
+          const Heading = phone ? 'h3' : 'h4'
           return (
           <li key={section} className="mt-1 first:mt-0">
-            <h3 id={headingId} className="m-0 mt-2 mb-1 mx-2 text-[11px] font-medium uppercase tracking-wide text-muted">
+            <Heading id={headingId} className="m-0 mt-2 mb-1 mx-2 text-[11px] font-medium uppercase tracking-wide text-muted">
               {placeLabel(section)} <span className="opacity-70 normal-case">{rows.length}</span>
-            </h3>
+            </Heading>
             <ul aria-labelledby={headingId} className="m-0 p-0 list-none">
         {rows.map(x => {
           const at = where(x.id)
@@ -526,6 +455,10 @@ export function LayoutEditPanel({ groups, hidden, meta }: {
           </li>
           )
         })}
+    </>
+  )
+  const lockedRows = (
+    <>
         {/* Always-here items, after everything you can move: their place and a
             lock, never a menu. */}
         {category === 'all' && LOCKED.some(l => !q || i18nT(l.key).toLowerCase().includes(q)) && (
@@ -550,16 +483,171 @@ export function LayoutEditPanel({ groups, hidden, meta }: {
             </span>
           </li>
         ))}
+    </>
+  )
+  const reset = () => {
+    // On the phone, Reset clears the phone's own changes only.
+    if (phone) resetPhoneLayout(); else { resetShellLayout(); clearBarCells(); clearSidebarRows() }
+    announceLayout(i18nT('nav.layout_reset_done'))
+  }
+
+  // The pane's own overlay root, so the panel hides with this Crew when a
+  // remote Crew is in front.
+  const live = <div role="status" aria-live="polite" className="sr-only">{announcement}</div>
+  if (panelHidden && !phone) return (
+    <OverlayPortal>
+      {live}
+      <div className="pointer-events-none fixed right-0 z-[60] flex justify-center px-4" style={{ left: railWidth, bottom: STATUS_BAR_EDIT_HEIGHT + 16 }}>
+        <div
+          ref={hiddenBarRef}
+          tabIndex={-1}
+          role="region"
+          aria-label={i18nT('nav.rail_customize_title')}
+          className="pointer-events-auto flex max-w-full items-center gap-3 rounded-xl border border-border bg-bg-elevated py-2 pl-4 pr-2 text-text shadow-2xl outline-none focus-visible:ring-2 focus-visible:ring-accent"
+          data-testid="layout-panel-hidden-bar"
+        >
+          <span className="min-w-0 truncate text-[13px] text-muted" title={i18nT('nav.layout_panel_hidden')}>{i18nT('nav.layout_panel_hidden')}</span>
+          <Btn onClick={() => setPanelHidden(false)}>{i18nT('nav.layout_show_panel')}</Btn>
+          <Btn onClick={reset}>{i18nT('nav.rail_reset')}</Btn>
+          <Btn primary onClick={() => setLayoutEditing(false)}>{i18nT('nav.rail_done')}</Btn>
+        </div>
+      </div>
+    </OverlayPortal>
+  )
+  return (
+    <OverlayPortal>
+    {live}
+    {/* Floats in the middle of the page area (right of the sidebar), over the
+        dimmed page, so it reads as a tool laid over the layout rather than as
+        one more part of it. The frame lets clicks through to the bars; only the
+        panel itself takes them. */}
+    {/* Sizing for every window (WCAG 1.4.10 Reflow, 1.4.4 Resize text): the
+        margin around the panel shrinks with the window (64px at most, 12px at
+        least), the panel is at most 360px wide and 560px tall and otherwise
+        fills what is left, and only its list scrolls, so the header, search and
+        Done always stay on screen, at 200% zoom too. */}
+    <div
+      className={`fixed inset-y-0 right-0 z-[60] flex items-center justify-center pointer-events-none ${phone ? 'p-safe' : 'px-[clamp(12px,5vw,64px)] py-[clamp(12px,6vh,64px)]'}`}
+      style={{ left: phone ? 0 : railWidth }}
+    >
+    <aside
+      ref={panelRef}
+      tabIndex={-1}
+      role="region"
+      aria-label={i18nT('nav.rail_customize_title')}
+      className={`pointer-events-auto min-h-0 flex flex-col bg-bg-elevated text-text outline-none overflow-hidden ${phone ? 'w-full h-full' : '@container w-[640px] max-w-full h-[min(560px,100%)] rounded-2xl border border-border shadow-2xl'}`}
+      data-testid="layout-edit-panel"
+    >
+      <header className="flex items-start gap-2 px-4 pt-3 pb-2 border-b border-border">
+        <div className="flex-1 min-w-0">
+          <h2 className="m-0 text-[15px] font-semibold text-text">{i18nT('nav.rail_customize_title')}</h2>
+          {/* One line: a longer translation shortens with "…" and the full
+              hint stays in the tooltip. On the phone the line says instead
+              that changes here stay on this phone. */}
+          {phone
+            ? <p className="mt-1 mb-0 text-[12px] text-muted flex items-start gap-1.5" data-testid="layout-phone-only">
+                <Smartphone size={13} aria-hidden="true" className="shrink-0 mt-px" />
+                <span>{i18nT('nav.layout_phone_only')}</span>
+              </p>
+            : <p className="mt-1 mb-0 text-[12px] text-muted truncate" title={i18nT('nav.layout_hint')}>{i18nT('nav.layout_hint')}</p>}
+        </div>
+        {/* Hide the panel and edit by dragging alone; a small bar brings it back. */}
+        {!phone && (
+          <button
+            type="button"
+            onClick={() => setPanelHidden(true)}
+            aria-label={i18nT('nav.layout_hide_panel')}
+            title={i18nT('nav.layout_hide_panel')}
+            className="w-7 h-7 flex items-center justify-center rounded-md bg-transparent border-none cursor-pointer text-muted hover:text-text hover:bg-bg-hover"
+          >
+            <Minus size={15} />
+          </button>
+        )}
+        <button
+          type="button"
+          onClick={() => setLayoutEditing(false)}
+          aria-label={i18nT('nav.rail_done')}
+          title={i18nT('nav.rail_done')}
+          className="w-7 h-7 flex items-center justify-center rounded-md bg-transparent border-none cursor-pointer text-muted hover:text-text hover:bg-bg-hover"
+        >
+          <X size={15} />
+        </button>
+      </header>
+
+      {/* One row: the category filter as a compact dropdown, then search. The
+          chips it replaces wrapped onto a second line and cost height. */}
+      <div className="px-4 pt-3 flex items-center gap-2">
+        <DropdownMenu modal={false}>
+          <DropdownMenuTrigger asChild>
+            <button
+              type="button"
+              aria-label={`${i18nT('nav.layout_categories')}: ${categoryLabel(category)}`}
+              className="shrink-0 h-[34px] flex items-center gap-1 pl-2.5 pr-1.5 rounded-lg border border-border bg-bg text-[13px] text-text hover:bg-bg-hover cursor-pointer data-[state=open]:bg-bg-hover"
+            >
+              {categoryLabel(category)}
+              <ChevronDown size={13} aria-hidden="true" className="text-muted" />
+            </button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="start" className="min-w-[160px]">
+            <DropdownMenuRadioGroup value={category} onValueChange={v => setCategory(v as Category)}>
+              {CATEGORIES.filter(c => c === 'all' || counts[c] > 0).map(c => (
+                <DropdownMenuRadioItem key={c} value={c}>
+                  <span className="flex-1">{categoryLabel(c)}</span>
+                  <span className="ml-3 text-muted">{counts[c]}</span>
+                </DropdownMenuRadioItem>
+              ))}
+            </DropdownMenuRadioGroup>
+          </DropdownMenuContent>
+        </DropdownMenu>
+        <label className="flex-1 min-w-0 flex items-center gap-2 px-3 py-1.5 rounded-lg border border-border bg-bg focus-within:border-accent">
+          <Search size={14} className="text-muted shrink-0" aria-hidden="true" />
+          <input
+            value={query}
+            onChange={e => setQuery(e.target.value)}
+            placeholder={i18nT('nav.rail_palette_search')}
+            aria-label={i18nT('nav.rail_palette_search')}
+            className="flex-1 min-w-0 bg-transparent border-none outline-none text-[13px] text-text placeholder:text-muted"
+          />
+        </label>
+      </div>
+
+      <ul className="m-0 mt-2 px-2 pb-2 list-none flex-1 min-h-0 overflow-y-auto">
+        {shown.length === 0 && (
+          <li className="px-2 py-8 text-center text-[13px] text-muted">{i18nT('nav.rail_palette_no_results', { query: query.trim() })}</li>
+        )}
+        {/* Grouped by where each item lives now, so the panel is a map of the
+            layout: moving an item moves its row to another section instead of
+            leaving what looks like a copy behind. Each section is a labelled
+            list, so screen readers hear the place before its items. */}
+        {phone
+          ? <>{sectionsFor(shown, 'all')}{lockedRows}</>
+          : (
+            // Two columns side by side, one when the panel is narrow (a small
+            // window or a large zoom). Each keeps the place sections inside it.
+            <li className="grid grid-cols-1 @[560px]:grid-cols-2 gap-x-4 gap-y-3">
+              {COLUMNS.map(col => {
+                const list = shown.filter(x => columnOf(x) === col)
+                const colId = `layout-col-${col}`
+                return (
+                  <section key={col} aria-labelledby={colId} className="min-w-0">
+                    <h3 id={colId} className="m-0 mx-2 mt-1 text-[13px] font-semibold text-text">
+                      {i18nT(COLUMN_KEY[col])} <span className="font-normal text-muted">{list.length}</span>
+                    </h3>
+                    {list.length === 0
+                      ? <p className="mx-2 my-2 text-[12px] text-muted">{i18nT(col === 'yours' ? 'nav.layout_col_yours_empty' : 'nav.layout_col_builtin_empty')}</p>
+                      : <ul className="m-0 p-0 list-none">{sectionsFor(list, col)}</ul>}
+                    {col === 'builtin' && <ul className="m-0 p-0 list-none">{lockedRows}</ul>}
+                  </section>
+                )
+              })}
+            </li>
+          )}
       </ul>
 
       <footer className="flex items-center justify-between gap-2 px-4 py-3 border-t border-border">
-        {/* On the phone, Reset clears the phone's own changes only. */}
-        <Btn onClick={() => { if (phone) resetPhoneLayout(); else { resetShellLayout(); clearBarCells(); clearSidebarRows() } announceLayout(i18nT('nav.layout_reset_done')) }}>{i18nT('nav.rail_reset')}</Btn>
+        <Btn onClick={reset}>{i18nT('nav.rail_reset')}</Btn>
         <Btn primary onClick={() => setLayoutEditing(false)}>{i18nT('nav.rail_done')}</Btn>
       </footer>
-
-      {/* Moves, read out to screen readers. */}
-      <div role="status" aria-live="polite" className="sr-only">{announcement}</div>
     </aside>
     </div>
     </OverlayPortal>
