@@ -9,6 +9,7 @@ import { useMayLeaveForNavigation, useIsCurrentUrl } from '../../components/Navi
 import { motion } from 'framer-motion'
 import { useNavShortcutHint } from '../../hooks/useNavShortcutHint'
 import { i18nT } from '../../i18n/t'
+import { useLayoutEditing } from '../../lib/shellLayout'
 import { forwardUiLocation } from '../../uiLocations/uiLocation'
 import type { UiLocationId } from '../../uiLocations/descriptors'
 import type { AppRunState } from '../../appRunState'
@@ -226,7 +227,7 @@ export function NavBadge({ navId, collapsed, appBadges, runState }: { navId: str
  *  right-edge geometry in a real browser — the one check that can see the
  *  badge-over-chord overlap this row's unit tests can only pin structurally
  *  (happy-dom computes no layout). Same seam `UpdateOverlay` is exported on. */
-export const NavItem = forwardRef(function NavItem({ path, label, icon, active, collapsed, badge, onClickOverride, onClick, navId, pressed, touch, replace, caption, 'data-ui-location': uiLocationId }: {
+export const NavItem = forwardRef(function NavItem({ path, label, icon, active: activeProp, collapsed, badge: badgeProp, onClickOverride, onClick, navId, pressed, touch, replace, caption, 'data-ui-location': uiLocationId }: {
   path: string; label: string; icon: React.ReactNode; active: boolean; collapsed: boolean; badge?: React.ReactNode; onClickOverride?: () => void; onClick?: () => void; navId?: string
   /** Set on rows that TOGGLE a surface rather than navigate (e.g. the docked
    *  terminal). `active` only paints the row; without aria-pressed a screen
@@ -258,6 +259,12 @@ export const NavItem = forwardRef(function NavItem({ path, label, icon, active, 
   // >4,000px of it). The desktop rail is framer-free motion-wise, so it keeps
   // the row-reorder glide that `layout` buys there.
   const isMobileRow = useIsMobile()
+  // Design exploration: while editing the layout a row moves instead of
+  // opening its page, so "you are here" and badges have nothing to say and
+  // would make one row look special. Every row looks the same until Done.
+  const editing = useLayoutEditing()
+  const active = activeProp && !editing
+  const badge = editing ? null : badgeProp
   const iconEl = <span className={`app-icon-nav w-4 h-4 flex items-center justify-center shrink-0 transition-opacity ${active ? 'opacity-100 text-accent is-lit' : 'opacity-70'}`}>{icon}</span>
   const { tip, tipOn, rowRef, showTip, hideTip, pointerProps: tipPointerProps } = useNavTip<HTMLDivElement>(collapsed)
   // Derived from the shortcut registry by route, so a row with a bound panel

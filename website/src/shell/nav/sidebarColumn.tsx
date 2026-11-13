@@ -52,8 +52,14 @@ export function SidebarColumn({ groups, renderRow, renderHeader, collapsed, labe
     if (!el || !parent) return
     const measure = () => {
       setFrame(parent.clientHeight)
-      const row = el.querySelector<HTMLElement>('[data-column-row] [data-rail-item], [data-column-row] > *')
-      const h = row?.getBoundingClientRect().height
+      // Measure the TALLEST row's content, never the drag grip that edit mode
+      // adds as each row's first child (13px). The first row is often a short
+      // widget (Back/Forward), and spacing every row by it leaves the taller
+      // ones (the Crews chip, search, pages) touching.
+      const heights = [...el.querySelectorAll<HTMLElement>('[data-column-row] [data-rail-item]')]
+        .map(r => r.getBoundingClientRect().height)
+      const content = el.querySelector<HTMLElement>('[data-column-row] > [data-column-row-content]')
+      const h = heights.length ? Math.max(...heights) : content?.getBoundingClientRect().height
       if (h && h > 0) setPitch(Math.round(h) + 2)
     }
     measure()
@@ -156,7 +162,7 @@ export function SidebarColumn({ groups, renderRow, renderHeader, collapsed, labe
         style={{ top: at[id] * pitch, height: pitch - 2 }}
       >
         {editing && <GripVertical size={13} aria-hidden="true" className="absolute left-0 top-1/2 -translate-y-1/2 z-10 text-muted opacity-0 group-hover/edit:opacity-100 pointer-events-none" />}
-        <div className={`w-full ${editing ? '[&_*]:pointer-events-none' : ''}`}>
+        <div data-column-row-content className={`w-full ${editing ? '[&_*]:pointer-events-none' : ''}`}>
           {header ? renderHeader(header) : renderRow(id)}
         </div>
       </div>

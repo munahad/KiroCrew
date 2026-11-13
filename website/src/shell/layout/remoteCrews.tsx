@@ -51,8 +51,12 @@ function useCrews() {
       state: inst.status?.state,
     })),
   ], [instances, warm])
-  const disabled = embedded || isInstancesDisabledError(query.error)
-  return { rows, activeId, selectInstance, disabled }
+  // Remote Crews turned off on this Crew: the list is Local alone, plus "Add
+  // remote crew". The switcher still shows (design exploration: it is a
+  // default shell item, so a drop must always draw it); only a remote pane
+  // embedded in another Crew's window, which has its own switcher, hides it.
+  const remotesOff = isInstancesDisabledError(query.error)
+  return { rows, activeId, selectInstance, disabled: embedded, remotesOff }
 }
 
 const dotCls = (state?: string) =>
