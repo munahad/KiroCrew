@@ -6,7 +6,8 @@
  * Toolbar and Sketch toolbar editor patterns and the rest of this prototype:
  *  - Built in and Yours tabs (option 2's split), with search.
  *  - Each row says where its item is, and clicking that shows or hides it.
- *  - Chips in the drawing carry real icons; click one for its controls.
+ *  - Chips in the drawing carry real icons; click one for its controls. No
+ *    grid: a drop line alone shows where an item will land.
  *  - Changes apply on Done; Cancel puts back the layout as it was when the
  *    editor opened; leaving with changes asks "Keep your changes?".
  *
@@ -31,7 +32,6 @@ import {
   type ShellZone,
 } from '../../lib/shellLayout'
 import { columnIdsOf, columnOrder, isHeaderId } from '../../lib/sidebarGrid'
-import { useGridStyle } from '../../lib/editOption'
 import { zoneLabel, startItemDrag } from './barItems'
 import { offersStyle } from './barStyleChooser'
 import { restoreLayout, snapshotLayout } from './dragOnlyEdit'
@@ -68,7 +68,6 @@ export function PreviewEditor({ candidates, columnOf, categoryLabel, repeated, g
   const dialogRef = useRef<HTMLDivElement>(null)
   const styleOf = useItemStyle()
   const searchStyle = useSearchStyle()
-  const minimal = useGridStyle() === 'minimal'
 
   // The layout as it was on open: Cancel and Discard put it back.
   const initial = useRef(snapshotLayout())
@@ -260,9 +259,7 @@ export function PreviewEditor({ candidates, columnOf, categoryLabel, repeated, g
         {...zoneDrop(zone)}
         className={`relative flex min-w-0 gap-1 rounded-lg border-2 border-dashed p-1.5 transition-colors ${
           vertical ? 'h-full flex-col' : 'h-full items-center'
-        } ${over?.zone === zone ? 'border-accent bg-accent-subtle/40' : 'border-text/30'} ${
-          !minimal && over?.zone === zone ? (vertical ? 'bg-[linear-gradient(to_bottom,var(--border)_1px,transparent_1px)] bg-[length:100%_26px]' : 'bg-[linear-gradient(to_right,var(--border)_1px,transparent_1px)] bg-[length:26px_100%]') : ''
-        }`}
+        } ${over?.zone === zone ? 'border-accent bg-accent-subtle/40' : 'border-text/30'}`}
       >
         {out}
         {ids.length === 0 && at < 0 && (

@@ -82,10 +82,10 @@ export function EditOptionSwitcher() {
     >
       <Segments label={i18nT('nav.layout_option_label')} options={EDIT_OPTIONS} value={option} onChange={setEditOption} labelOf={o => i18nT(OPTION_KEY[o])} />
       {/* The second switch belongs to the option under review: the panel
-          compares how it reveals its items; the others compare grids. */}
-      {option === 'panel'
-        ? <Segments label={i18nT('nav.layout_disclosure_label')} options={DISCLOSURE_STYLES} value={disclosure} onChange={setDisclosure} labelOf={d => i18nT(DISCLOSURE_KEY[d])} />
-        : <Segments label={i18nT('nav.layout_grid_label')} options={GRID_STYLES} value={grid} onChange={setGridStyle} labelOf={g => i18nT(GRID_KEY[g])} />}
+          compares how it reveals its items, drag only compares grids, and
+          the preview (its own drawing, no grid) has none. */}
+      {option === 'panel' && <Segments label={i18nT('nav.layout_disclosure_label')} options={DISCLOSURE_STYLES} value={disclosure} onChange={setDisclosure} labelOf={d => i18nT(DISCLOSURE_KEY[d])} />}
+      {option === 'drag' && <Segments label={i18nT('nav.layout_grid_label')} options={GRID_STYLES} value={grid} onChange={setGridStyle} labelOf={g => i18nT(GRID_KEY[g])} />}
     </div>
   )
 }
