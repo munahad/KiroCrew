@@ -81,3 +81,38 @@ export function useGridStyle(): GridStyle {
   }, [])
   return style
 }
+
+/**
+ * How the option 2 panel shows its items, compared from the same band:
+ *   all     — everything listed up front (the current panel).
+ *   gradual — fewer options at first, more revealed as the person uses it.
+ */
+export type DisclosureStyle = 'all' | 'gradual'
+export const DISCLOSURE_STYLES: readonly DisclosureStyle[] = ['all', 'gradual']
+
+const DISCLOSURE_KEY = 'mc-layout-disclosure'
+const DISCLOSURE_EVENT = 'mc:layout-disclosure-changed'
+
+export function readDisclosure(): DisclosureStyle {
+  return safeGetItem(DISCLOSURE_KEY) === 'gradual' ? 'gradual' : 'all'
+}
+
+export function setDisclosure(style: DisclosureStyle): void {
+  if (style === readDisclosure()) return
+  safeSetItem(DISCLOSURE_KEY, style)
+  window.dispatchEvent(new Event(DISCLOSURE_EVENT))
+}
+
+export function useDisclosure(): DisclosureStyle {
+  const [style, setStyle] = useState(readDisclosure)
+  useEffect(() => {
+    const sync = () => setStyle(readDisclosure())
+    window.addEventListener(DISCLOSURE_EVENT, sync)
+    window.addEventListener('storage', sync)
+    return () => {
+      window.removeEventListener(DISCLOSURE_EVENT, sync)
+      window.removeEventListener('storage', sync)
+    }
+  }, [])
+  return style
+}

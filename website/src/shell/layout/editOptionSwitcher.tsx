@@ -15,7 +15,8 @@ import { useId } from 'react'
 
 import { i18nT } from '../../i18n/t'
 import {
-  EDIT_OPTIONS, GRID_STYLES, setEditOption, setGridStyle, useEditOption, useGridStyle,
+  DISCLOSURE_STYLES, EDIT_OPTIONS, GRID_STYLES, setDisclosure, setEditOption, setGridStyle, useDisclosure, useEditOption,
+  useGridStyle,
 } from '../../lib/editOption'
 
 // Prototype-tool palette, intentionally outside the theme (see above).
@@ -67,10 +68,12 @@ function Segments<T extends string>({ label, options, value, onChange, labelOf }
 
 const OPTION_KEY = { drag: 'nav.layout_option_drag', panel: 'nav.layout_option_panel', preview: 'nav.layout_option_preview' } as const
 const GRID_KEY = { drafting: 'nav.layout_grid_drafting', minimal: 'nav.layout_grid_minimal' } as const
+const DISCLOSURE_KEY = { all: 'nav.layout_disclosure_all', gradual: 'nav.layout_disclosure_gradual' } as const
 
 export function EditOptionSwitcher() {
   const option = useEditOption()
   const grid = useGridStyle()
+  const disclosure = useDisclosure()
   return (
     <div
       data-testid="edit-option-switcher"
@@ -78,7 +81,11 @@ export function EditOptionSwitcher() {
       style={{ background: BAND, color: INK, borderBottom: `1px solid ${INK}` }}
     >
       <Segments label={i18nT('nav.layout_option_label')} options={EDIT_OPTIONS} value={option} onChange={setEditOption} labelOf={o => i18nT(OPTION_KEY[o])} />
-      <Segments label={i18nT('nav.layout_grid_label')} options={GRID_STYLES} value={grid} onChange={setGridStyle} labelOf={g => i18nT(GRID_KEY[g])} />
+      {/* The second switch belongs to the option under review: the panel
+          compares how it reveals its items; the others compare grids. */}
+      {option === 'panel'
+        ? <Segments label={i18nT('nav.layout_disclosure_label')} options={DISCLOSURE_STYLES} value={disclosure} onChange={setDisclosure} labelOf={d => i18nT(DISCLOSURE_KEY[d])} />
+        : <Segments label={i18nT('nav.layout_grid_label')} options={GRID_STYLES} value={grid} onChange={setGridStyle} labelOf={g => i18nT(GRID_KEY[g])} />}
     </div>
   )
 }

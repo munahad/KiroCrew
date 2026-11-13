@@ -45,6 +45,8 @@ import { useIsMobile } from '../../hooks/useIsMobile'
 import { forPhone, phoneBarIds, phoneHide, phoneShow, phoneStep, resetPhoneLayout, usePhoneLayout } from '../../lib/phoneLayout'
 import type { RailItemMeta } from '../nav/railCustomize'
 import { startItemDrag, zoneLabel } from './barItems'
+import { useDisclosure } from '../../lib/editOption'
+import { HiddenItemPicker } from './hiddenItemPicker'
 import { STATUS_BAR_EDIT_HEIGHT } from '../statusbar/shellStatusBar'
 
 
@@ -59,6 +61,7 @@ const APP_STORE_IDS = new Set(['apps', 'apps-library', 'projects'])
 type Category = 'all' | 'pages' | 'apps' | 'mates' | 'sessions' | 'tools'
 const CATEGORIES: Category[] = ['all', 'pages', 'apps', 'mates', 'sessions', 'tools']
 const SESSION_BROWSE_LIMIT = 20
+
 
 /** `detail`: a short tag that tells apart two items with the same name (two
  *  sessions both titled "Kiro Crew Feature Request", say). Shown only then. */
@@ -148,6 +151,9 @@ export function LayoutEditPanel({ groups, hidden, meta }: {
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
   }, [])
+  // Gradual reveal (prototype band, option 2): what is not shown sits behind
+  // an "Add an item" picker, and row controls show on hover or focus.
+  const gradual = useDisclosure() === 'gradual' && !phone
   // Hidden: edit by dragging alone, with a small bar to bring the panel back.
   // Each Edit layout starts with the panel shown.
   const [panelHidden, setPanelHidden] = useState(false)
@@ -313,6 +319,17 @@ export function LayoutEditPanel({ groups, hidden, meta }: {
           if (rows.length === 0) return null
           const headingId = `layout-section-${key}-${section}`
           const Heading = phone ? 'h3' : 'h4'
+          // Gradual: what is not shown is one "Add an item" button opening a
+          // searchable list, instead of a long section. A search in the
+          // panel itself still lists every match in place.
+          if (gradual && !q && section === 'none') return (
+            <li key={section} className="mt-2">
+              <HiddenItemPicker
+                items={rows.map(x => ({ id: x.id, label: x.meta.label, icon: x.meta.icon, kind: categoryLabel(x.category), detail: x.detail && repeated.has(x.meta.label) ? x.detail : undefined }))}
+                onAdd={(id, label) => place(id, 'sidebar', label)}
+              />
+            </li>
+          )
           return (
           <li key={section} className="mt-1 first:mt-0">
             <Heading id={headingId} className="m-0 mt-2 mb-1 mx-2 text-[11px] font-medium uppercase tracking-wide text-muted">
@@ -341,6 +358,10 @@ export function LayoutEditPanel({ groups, hidden, meta }: {
                   {categoryLabel(x.category)}{x.detail && repeated.has(x.meta.label) ? ` · ${x.detail}` : ''}
                 </span>
               </span>
+              {/* Gradual: the row's controls show on hover or keyboard focus,
+                  so at rest a row is its icon and name. They stay in the tab
+                  order, only faded out. */}
+              <span className={`shrink-0 flex items-center gap-2 ${gradual ? 'opacity-0 transition-opacity duration-100 group-hover/row:opacity-100 group-focus-within/row:opacity-100 motion-reduce:transition-none' : ''}`}>
               {/* A placed item in a bar: icon and label (as dropped) or the icon
                   only, the user's choice, never a rule the bar applies. Same
                   two-icon toggle as search's. */}
@@ -447,6 +468,7 @@ export function LayoutEditPanel({ groups, hidden, meta }: {
                   </DropdownMenuRadioGroup>
                 </DropdownMenuContent>
               </DropdownMenu>
+              </span>
               </div>
             </li>
           )
