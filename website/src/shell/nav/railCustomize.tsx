@@ -1,5 +1,5 @@
 import { useRef, useState, type ReactNode } from 'react'
-import { FolderPlus, Pencil, PinOff, RotateCcw, Settings2 } from 'lucide-react'
+import { ArrowDown, ArrowUp, FolderPlus, Pencil, PinOff, RotateCcw, Settings2 } from 'lucide-react'
 
 import {
   ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuSeparator,
@@ -7,6 +7,7 @@ import {
 } from '../../components/ui/context-menu'
 import { i18nT } from '../../i18n/t'
 import { FALLBACK_GROUP_ID, addGroup, commitRail, moveToGroup, type RailGroup } from '../../lib/railLayout'
+import { canShiftInSidebar, shiftInSidebar } from '../../lib/sidebarGrid'
 
 /** What the menu and the modal need to draw a row they do not render themselves. */
 export interface RailItemMeta { label: string; icon: ReactNode }
@@ -88,6 +89,13 @@ export function RailContextMenu({ groups, onUnpin, onCustomize, onRename, onRese
               <ContextMenuItem onSelect={() => onResetName(target)}><RotateCcw size={14} />{i18nT('nav.rail_reset_name')}</ContextMenuItem>
             )}
             <ContextMenuItem onSelect={() => onUnpin(target)}><PinOff size={14} />{i18nT('nav.rail_unpin')}</ContextMenuItem>
+            {/* Design exploration: reorder without opening Edit layout. Hidden at the top or bottom. */}
+            {canShiftInSidebar(groups, target, -1) && (
+              <ContextMenuItem onSelect={() => shiftInSidebar(groups, target, -1)}><ArrowUp size={14} />{i18nT('nav.rail_move_up')}</ContextMenuItem>
+            )}
+            {canShiftInSidebar(groups, target, 1) && (
+              <ContextMenuItem onSelect={() => shiftInSidebar(groups, target, 1)}><ArrowDown size={14} />{i18nT('nav.rail_move_down')}</ContextMenuItem>
+            )}
             <ContextMenuSub>
               <ContextMenuSubTrigger>{i18nT('nav.rail_move_to')}</ContextMenuSubTrigger>
               <ContextMenuSubContent>

@@ -15,12 +15,17 @@
  * Every step is read out (4.1.3), and focus follows the item across areas.
  *
  * The item menu (right-click, Shift+F10 or the Menu key) offers the same
- * moves by name, plus Icon only / Icon and label in a bar, and Hide.
+ * moves by name, plus Icon only / Icon and label in a bar, and Remove. In
+ * option 2 (edit panel) each item also shows a "⋯" More button on hover or
+ * keyboard focus that opens the same menu.
  */
 import { useEffect, useLayoutEffect, useRef, useState, type KeyboardEvent, type MouseEvent } from 'react'
+import { MoreHorizontal } from 'lucide-react'
 
 import { OverlayPortal } from '../../components/overlayRoot'
+import { useIsMobile } from '../../hooks/useIsMobile'
 import { i18nT } from '../../i18n/t'
+import { useEditOption } from '../../lib/editOption'
 import { cellOf, placeOnBar, setItemStyle, shiftOnBar, useItemStyle } from '../../lib/barGrid'
 import { insertPin, type RailGroup, updateRail } from '../../lib/railLayout'
 import {
@@ -143,6 +148,45 @@ function setMenu(m: MenuAt | null): void {
   window.dispatchEvent(new Event(MENU_EVENT))
 }
 
+/** Open the item menu under (or, in the bottom bar, above) an element. */
+function openItemMenu(id: string, label: string, zone: ShellZone, el: HTMLElement): void {
+  const r = el.getBoundingClientRect()
+  setMenu({ id, label, zone, x: r.left, y: zone === 'bottom' ? r.top : r.bottom })
+}
+
+/**
+ * The "⋯" More button on a placed item, option 2 only (desktop): shows on
+ * hover or keyboard focus of the item and opens the item menu. It repeats
+ * the right-click and Shift+F10 menu for the mouse, so it is left out of the
+ * accessibility tree and the Tab order (the item itself carries the keyboard
+ * path and its hint); a nested button inside the item's button would be read
+ * twice.
+ */
+export function ItemMoreButton({ id, zone, label, corner = false }: { id: string; zone: ShellZone; label: string; corner?: boolean }) {
+  const editing = useLayoutEditing()
+  const option = useEditOption()
+  const phone = useIsMobile()
+  if (!editing || option !== 'panel' || phone || isHeaderId(id)) return null
+  return (
+    <button
+      type="button"
+      tabIndex={-1}
+      aria-hidden="true"
+      draggable={false}
+      title={i18nT('nav.layout_item_more')}
+      data-testid="layout-item-more"
+      onPointerDown={e => { e.stopPropagation() }}
+      onMouseDown={e => { e.preventDefault(); e.stopPropagation() }}
+      onDragStart={e => { e.preventDefault(); e.stopPropagation() }}
+      onClick={e => { e.preventDefault(); e.stopPropagation(); openItemMenu(id, label, zone, e.currentTarget) }}
+      className={`absolute z-20 flex h-[18px] w-[18px] items-center justify-center rounded-md border border-border bg-bg-elevated text-muted shadow-sm !cursor-pointer hover:text-text hover:border-border-strong opacity-0 group-hover/edit:opacity-100 group-focus-visible/edit:opacity-100 group-data-[held]/edit:opacity-0 transition-opacity duration-100 motion-reduce:transition-none [&_*]:!cursor-pointer ${
+        corner ? '-right-1.5 -top-1.5' : 'right-1 top-1/2 -translate-y-1/2'}`}
+    >
+      <MoreHorizontal size={12} aria-hidden="true" />
+    </button>
+  )
+}
+
 /**
  * Attributes that make one placed item movable by keyboard and menu. Spread
  * on the element that holds the item in its area (a bar cell, a sidebar row).
@@ -262,13 +306,6 @@ function LayoutItemMenu() {
   const close = (back = true) => { setMenu(null); if (back) refocus(m.id) }
   const inBar = m.zone === 'top' || m.zone === 'bottom'
   const items: { key: string; label: string; run: () => void }[] = []
-  for (const z of ['top', 'sidebar', 'bottom'] as const) {
-    if (z === m.zone || isHeaderId(m.id)) continue
-    items.push({ key: `to-${z}`, label: i18nT('nav.layout_kbd_move_to', { place: zoneLabel(z) }), run: () => {
-      moveInto(m.id, z, 'end')
-      announceLayout(i18nT('nav.layout_moved', { item: m.label, place: zoneLabel(z) }))
-    } })
-  }
   const dirKey = { ArrowLeft: 'nav.layout_move_left', ArrowRight: 'nav.layout_move_right', ArrowUp: 'nav.layout_move_up', ArrowDown: 'nav.layout_move_down' } as const
   const horizontal = (d: string) => d === 'ArrowLeft' || d === 'ArrowRight'
   const dirs = (Object.keys(dirKey) as (keyof typeof dirKey)[]).filter(d => horizontal(d) === inBar)
@@ -280,6 +317,13 @@ function LayoutItemMenu() {
     items.push({ key: d, label: i18nT(dirKey[d], { item: m.label }), run: () => {
       const to = stepItem(m.id, m.zone, d)
       if (to) announceStep(m.label, m.zone, to, d)
+    } })
+  }
+  for (const z of ['top', 'sidebar', 'bottom'] as const) {
+    if (z === m.zone || isHeaderId(m.id)) continue
+    items.push({ key: `to-${z}`, label: i18nT('nav.layout_kbd_move_to', { place: zoneLabel(z) }), run: () => {
+      moveInto(m.id, z, 'end')
+      announceLayout(i18nT('nav.layout_moved', { item: m.label, place: zoneLabel(z) }))
     } })
   }
   if (inBar && offersStyle(m.id)) {
@@ -294,7 +338,7 @@ function LayoutItemMenu() {
       }
     } })
   }
-  if (!isHeaderId(m.id)) items.push({ key: 'hide', label: i18nT('nav.layout_kbd_hide'), run: () => hideFromCanvas(m.id, m.label) })
+  if (!isHeaderId(m.id)) items.push({ key: 'hide', label: i18nT('nav.layout_kbd_remove'), run: () => hideFromCanvas(m.id, m.label) })
 
   const onKey = (e: KeyboardEvent<HTMLDivElement>) => {
     const list = [...(ref.current?.querySelectorAll<HTMLElement>('[role="menuitem"]') ?? [])]

@@ -46,6 +46,17 @@ export function useDragOnlyEditing(): boolean {
   return editing && option === 'drag' && !phone
 }
 
+/** True while the page is replaced by a plain "Page" area: options 1 (drag
+ *  only) and 2 (edit panel) on desktop. Nothing of the page shows behind the
+ *  editor, so page parts such as the chat's Sessions list do not read as
+ *  areas that can be edited. Option 3 covers the page with its own backdrop. */
+export function usePageStandIn(): boolean {
+  const editing = useLayoutEditing()
+  const option = useEditOption()
+  const phone = useIsMobile()
+  return editing && (option === 'drag' || option === 'panel') && !phone
+}
+
 /* ── Undo ── */
 
 // Every store a hide can write, with the event each one's readers listen to.
@@ -179,9 +190,8 @@ export function pageHideZoneAt(x: number, y: number): boolean {
  *  Place inside the desktop shell grid, beside the zone outlines. */
 export function PageHideZone() {
   const dragOnly = useDragOnlyEditing()
-  // Option 2 too: drop an item on the page to hide it, from the layout itself
-  // rather than only from the panel's menu. There the page stays visible (faded)
-  // and the drop target shows only while something is dragged, under the panel.
+  // Option 2 shows the same plain area, but it is not a drop target: there an
+  // item is removed from its "⋯" More menu or the panel, not by dropping it.
   const editing = useLayoutEditing()
   const option = useEditOption()
   const phone = useIsMobile()
@@ -191,18 +201,19 @@ export function PageHideZone() {
   const sidebarOver = usePageHideOver()
   const [nativeOver, setNativeOver] = useState(false)
   if (!on) return null
-  const dragging = drag.id !== null
+  // Only option 1 hides by dropping on the page.
+  const dragging = drag.id !== null && !panelMode
   const over = nativeOver || sidebarOver
 
   const onDragOver = (e: DragEvent) => {
-    if (!e.dataTransfer.types.includes(SHELL_ITEM_MIME)) return
+    if (panelMode || !e.dataTransfer.types.includes(SHELL_ITEM_MIME)) return
     e.preventDefault()
     e.dataTransfer.dropEffect = 'move'
     setNativeOver(true)
   }
   const onDrop = (e: DragEvent) => {
     setNativeOver(false)
-    if (!e.dataTransfer.types.includes(SHELL_ITEM_MIME)) return
+    if (panelMode || !e.dataTransfer.types.includes(SHELL_ITEM_MIME)) return
     e.preventDefault()
     const id = e.dataTransfer.getData(SHELL_ITEM_MIME) || readChromeDrag().id
     if (id) hideFromCanvas(id)
@@ -215,7 +226,7 @@ export function PageHideZone() {
       data-layout-outline="page"
       style={{ gridArea: 'content', zIndex: panelMode ? 55 : 65, pointerEvents: dragging ? 'auto' : 'none' }}
       className={`relative m-3 flex items-center justify-center rounded-2xl transition-[background-color,opacity] duration-150 motion-reduce:transition-none ${
-        panelMode && !dragging ? 'opacity-0' : 'opacity-100'} ${over ? 'bg-text/10' : panelMode ? 'bg-text/[0.03]' : 'bg-text/5'}`}
+        'opacity-100'} ${over ? 'bg-text/10' : 'bg-text/5'}`}
       onDragOver={onDragOver}
       onDragLeave={e => { if (!e.currentTarget.contains(e.relatedTarget as Node | null)) setNativeOver(false) }}
       onDrop={onDrop}
@@ -227,7 +238,7 @@ export function PageHideZone() {
             {i18nT('nav.layout_drop_to_hide')}
           </span>
         )
-        : panelMode ? null : <span className="text-[13px] text-muted">{i18nT('nav.layout_preview_page')}</span>}
+        : <span className="text-[13px] text-muted">{i18nT('nav.layout_preview_page')}</span>}
     </div>
   )
 }

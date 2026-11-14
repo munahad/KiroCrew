@@ -16,7 +16,7 @@ import { useId } from 'react'
 import { i18nT } from '../../i18n/t'
 import {
   DISCLOSURE_STYLES, EDIT_OPTIONS, GRID_STYLES, setDisclosure, setEditOption, setGridStyle, useDisclosure, useEditOption,
-  useGridStyle,
+  useGridChoice,
 } from '../../lib/editOption'
 
 // Prototype-tool palette, intentionally outside the theme (see above).
@@ -72,7 +72,7 @@ const DISCLOSURE_KEY = { all: 'nav.layout_disclosure_all', gradual: 'nav.layout_
 
 export function EditOptionSwitcher() {
   const option = useEditOption()
-  const grid = useGridStyle()
+  const grid = useGridChoice()
   const disclosure = useDisclosure()
   return (
     <div

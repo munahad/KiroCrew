@@ -23,7 +23,7 @@ import {
 import { CHIPLESS, GRID_EDGE, GRID_FILL, GRID_LINE, useGridVarsClass } from '../layout/barGridView'
 import { useDragOnlyEditing } from '../layout/dragOnlyEdit'
 import { useGridStyle } from '../../lib/editOption'
-import { registerSidebarGroups, useLayoutItemProps } from '../layout/keyboardMove'
+import { ItemMoreButton, registerSidebarGroups, useLayoutItemProps } from '../layout/keyboardMove'
 import { startItemDrag, zoneLabel } from '../layout/barItems'
 
 /** Row pitch before a row has been measured: a nav row plus the gap. */
@@ -56,6 +56,7 @@ function ColumnRow({ id, label, editing, chip, faded, top, height, onDragStart, 
       <div data-column-row-content className={`w-full ${editing ? '[&_*]:pointer-events-none' : ''}`} {...(editing ? { inert: '' } : {})}>
         {children}
       </div>
+      {editing && <ItemMoreButton id={id} zone="sidebar" label={label} />}
     </div>
   )
 }

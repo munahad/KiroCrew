@@ -90,7 +90,7 @@ import { ShellStatusBar } from './shell/statusbar/shellStatusBar'
 import { useBarHasContent, useLayoutEditing, useTopBarHasContent, setLayoutEditing } from './lib/shellLayout'
 import { LayoutZoneOutlines } from './shell/layout/layoutZones'
 import { EditOptionSwitcher } from './shell/layout/editOptionSwitcher'
-import { DragOnlyBar, PageHideZone, useDragOnlyEditing } from './shell/layout/dragOnlyEdit'
+import { DragOnlyBar, PageHideZone, usePageStandIn } from './shell/layout/dragOnlyEdit'
 import { LayoutItemKeyboard } from './shell/layout/keyboardMove'
 import { ShellNavRail } from './shell/nav/navRail'
 import { NavItem, NavBadge } from './shell/nav/navRow'
@@ -340,9 +340,10 @@ export default function App() {
   // The page steps back while editing: dimmed well down and greyed, so the
   // chrome you can edit (the raised bars and sidebar) and the Edit layout
   // panel floating over the page read as the editor, not as the page.
-  // Option 1 (drag only): the page is not shown at all while editing; a plain
-  // "Page" area stands in for it (dragOnlyEdit.tsx's PageHideZone).
-  const pageHidden = useDragOnlyEditing() && editRoom
+  // Options 1 (drag only) and 2 (edit panel): the page is not shown at all
+  // while editing; a plain "Page" area stands in for it (dragOnlyEdit.tsx's
+  // PageHideZone), so page parts like the Sessions list don't look editable.
+  const pageHidden = usePageStandIn() && editRoom
   const pageEditStyle: React.CSSProperties = pageHidden
     ? { opacity: 0, transition: 'opacity 150ms ease' }
     : editRoom

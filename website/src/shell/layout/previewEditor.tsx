@@ -5,9 +5,14 @@
  * zones, Close, Cancel and Done. Built on further with the macOS Customize
  * Toolbar and Sketch toolbar editor patterns and the rest of this prototype:
  *  - Built in and Yours tabs (option 2's split), with search.
- *  - Each row says where its item is, and clicking that shows or hides it.
- *  - Chips in the drawing carry real icons; click one for its controls. No
- *    grid: a drop line alone shows where an item will land.
+ *  - The list mirrors the drawing: grouped by area (Top bar, Sidebar, Bottom
+ *    bar, Not shown) in the drawing's order, so a moved chip's row moves too.
+ *    Each placed row has Move up / Move down and Hide; a Not shown row, Show.
+ *    Hovering a row or a chip highlights both.
+ *  - Chips in the drawing carry real icons. A chip's "⋯" menu (also on click)
+ *    moves it, switches Icon only / Icon and label in a bar, and removes it.
+ *    No grid: a drop line alone shows where an item will land. Dropping on
+ *    the page does not hide (removing is a menu choice).
  *  - Changes apply on Done; Cancel puts back the layout as it was when the
  *    editor opened; leaving with changes asks "Keep your changes?".
  *
@@ -20,7 +25,7 @@
  * hides with Delete; every change is read out (WCAG 2.1.1, 2.5.7, 4.1.3).
  */
 import { useEffect, useMemo, useRef, useState, type DragEvent, type KeyboardEvent, type ReactNode } from 'react'
-import { ChevronDown, ChevronLeft, ChevronRight, ChevronUp, EyeOff, Search, X } from 'lucide-react'
+import { ChevronDown, ChevronUp, EyeOff, MoreHorizontal, Plus, Search, X } from 'lucide-react'
 
 import { Btn } from '../../components/ui'
 import { OverlayPortal } from '../../components/overlayRoot'
@@ -40,13 +45,10 @@ import type { Candidate } from './layoutEditPanel'
 
 type Place = ShellZone | 'none'
 
-/** The selected chip's move buttons: left and right in a bar, up and down in the sidebar. */
-const MOVES = {
-  ArrowLeft: { Icon: ChevronLeft, key: 'nav.layout_move_left', horizontal: true },
-  ArrowRight: { Icon: ChevronRight, key: 'nav.layout_move_right', horizontal: true },
-  ArrowUp: { Icon: ChevronUp, key: 'nav.layout_move_up', horizontal: false },
-  ArrowDown: { Icon: ChevronDown, key: 'nav.layout_move_down', horizontal: false },
-} as const
+/** The list's order runs top to bottom; in a bar "earlier" is to the left. */
+const earlierKey = (zone: ShellZone) => (zone === 'sidebar' ? 'ArrowUp' : 'ArrowLeft')
+const laterKey = (zone: ShellZone) => (zone === 'sidebar' ? 'ArrowDown' : 'ArrowRight')
+const ZONES: readonly ShellZone[] = ['top', 'sidebar', 'bottom']
 type Tab = 'builtin' | 'yours'
 type Category = Candidate['category']
 
@@ -64,6 +66,10 @@ export function PreviewEditor({ candidates, columnOf, categoryLabel, repeated, g
   const [tab, setTab] = useState<Tab>('builtin')
   const [query, setQuery] = useState('')
   const [selected, setSelected] = useState<string | null>(null)
+  // The item under the pointer, in the list or the drawing: both light up.
+  const [hot, setHot] = useState<string | null>(null)
+  // A chip's "⋯" menu, placed under the chip.
+  const [menu, setMenu] = useState<{ id: string; x: number; y: number } | null>(null)
   const [confirming, setConfirming] = useState(false)
   const dialogRef = useRef<HTMLDivElement>(null)
   const styleOf = useItemStyle()
@@ -111,8 +117,21 @@ export function PreviewEditor({ candidates, columnOf, categoryLabel, repeated, g
   const hide = (id: string) => {
     place(id, 'none', labelOf(id))
     if (selected === id) setSelected(null)
+    if (menu?.id === id) setMenu(null)
   }
   const toggle = (id: string) => (where(id) === 'none' ? place(id, 'sidebar', labelOf(id)) : hide(id))
+  const canStep = (id: string, earlier: boolean) => {
+    const z = where(id)
+    if (z === 'none') return false
+    const order = inZone(z)
+    const i = order.indexOf(id)
+    return i >= 0 && (earlier ? i > 0 : i < order.length - 1)
+  }
+  const openMenu = (id: string, el: HTMLElement) => {
+    const r = el.getBoundingClientRect()
+    setSelected(id)
+    setMenu({ id, x: r.left, y: r.bottom + 4 })
+  }
   const step = (id: string, key: string) => {
     const from = where(id)
     if (from === 'none') return
@@ -141,6 +160,7 @@ export function PreviewEditor({ candidates, columnOf, categoryLabel, repeated, g
       e.preventDefault()
       e.stopPropagation()
       if (confirming) setConfirming(false)
+      else if (menu) { const id = menu.id; setMenu(null); dialogRef.current?.querySelector<HTMLElement>(`[data-preview-chip="${CSS.escape(id)}"]`)?.focus() }
       else if (selected) setSelected(null)
       else leave()
       return
@@ -163,7 +183,7 @@ export function PreviewEditor({ candidates, columnOf, categoryLabel, repeated, g
 
   /* ── The drawing: drop targets ── */
 
-  const [over, setOver] = useState<{ zone: ShellZone | 'page'; index: number } | null>(null)
+  const [over, setOver] = useState<{ zone: ShellZone; index: number } | null>(null)
   const indexAt = (e: DragEvent, zone: ShellZone) => {
     const chips = [...(e.currentTarget as HTMLElement).querySelectorAll<HTMLElement>('[data-preview-chip]')]
     const vertical = zone === 'sidebar'
@@ -191,20 +211,6 @@ export function PreviewEditor({ candidates, columnOf, categoryLabel, repeated, g
       if (id) dropAt(id, zone, index)
     },
   })
-  const pageDrop = {
-    onDragOver: (e: DragEvent) => {
-      if (!e.dataTransfer.types.includes(SHELL_ITEM_MIME)) return
-      e.preventDefault()
-      e.dataTransfer.dropEffect = 'move'
-      if (over?.zone !== 'page') setOver({ zone: 'page', index: 0 })
-    },
-    onDrop: (e: DragEvent) => {
-      e.preventDefault()
-      const id = e.dataTransfer.getData(SHELL_ITEM_MIME)
-      setOver(null)
-      if (id) hide(id)
-    },
-  }
   useEffect(() => {
     const clear = () => setOver(null)
     window.addEventListener('dragend', clear)
@@ -215,30 +221,52 @@ export function PreviewEditor({ candidates, columnOf, categoryLabel, repeated, g
     const x = byId.get(id)
     if (!x) return null
     const compact = zone !== 'sidebar' && iconOnly(id)
-    const on = selected === id
+    const on = selected === id || menu?.id === id
+    const lit = hot === id
     return (
-      <button
+      <span
         key={id}
-        type="button"
-        data-preview-chip={id}
-        draggable
-        onDragStart={e => startItemDrag(e, id)}
-        onClick={() => setSelected(on ? null : id)}
-        onKeyDown={e => {
-          if (e.key.startsWith('Arrow')) { e.preventDefault(); step(id, e.key) }
-          else if (e.key === 'Delete' || e.key === 'Backspace') { e.preventDefault(); hide(id) }
-        }}
-        aria-pressed={on}
-        aria-label={x.meta.label}
-        aria-describedby="preview-chip-hint"
-        title={x.meta.label}
-        className={`flex min-w-0 shrink-0 items-center gap-1.5 rounded-md border px-1.5 text-[11px] cursor-grab active:cursor-grabbing ${
-          zone === 'sidebar' ? 'h-6 w-full' : 'h-6 max-w-[120px]'
-        } ${on ? 'border-accent bg-accent-subtle text-text-strong' : 'border-border bg-bg text-text hover:bg-bg-hover'}`}
+        className={`group/chip relative flex min-w-0 shrink-0 ${zone === 'sidebar' ? 'w-full' : 'max-w-[132px]'}`}
+        onPointerEnter={() => setHot(id)}
+        onPointerLeave={() => setHot(h => (h === id ? null : h))}
       >
-        <span className="flex h-3.5 w-3.5 shrink-0 items-center justify-center [&_svg]:h-3.5 [&_svg]:w-3.5">{x.meta.icon}</span>
-        {!compact && <span className="min-w-0 truncate">{x.meta.label}</span>}
-      </button>
+        <button
+          type="button"
+          data-preview-chip={id}
+          draggable
+          onDragStart={e => { setMenu(null); startItemDrag(e, id) }}
+          onClick={e => (menu?.id === id ? setMenu(null) : openMenu(id, e.currentTarget))}
+          onKeyDown={e => {
+            if (e.key.startsWith('Arrow')) { e.preventDefault(); step(id, e.key) }
+            else if (e.key === 'Delete' || e.key === 'Backspace') { e.preventDefault(); hide(id) }
+          }}
+          aria-haspopup="menu"
+          aria-expanded={menu?.id === id}
+          aria-label={x.meta.label}
+          aria-describedby="preview-chip-hint"
+          title={x.meta.label}
+          className={`flex h-6 min-w-0 flex-1 items-center gap-1.5 rounded-md border px-1.5 pr-5 text-[11px] cursor-grab active:cursor-grabbing ${
+            on ? 'border-accent bg-accent-subtle text-text-strong' : lit ? 'border-accent/60 bg-bg-hover text-text' : 'border-border bg-bg text-text hover:bg-bg-hover'}`}
+        >
+          <span className="flex h-3.5 w-3.5 shrink-0 items-center justify-center [&_svg]:h-3.5 [&_svg]:w-3.5">{x.meta.icon}</span>
+          {!compact && <span className="min-w-0 truncate">{x.meta.label}</span>}
+        </button>
+        {/* The "⋯" More button: the same menu as a click on the chip. Left out
+            of the Tab order and the accessibility tree (the chip opens it). */}
+        <button
+          type="button"
+          tabIndex={-1}
+          aria-hidden="true"
+          draggable={false}
+          title={i18nT('nav.layout_item_more')}
+          data-testid="preview-chip-more"
+          onClick={e => { e.stopPropagation(); if (menu?.id === id) setMenu(null); else openMenu(id, e.currentTarget.previousElementSibling as HTMLElement) }}
+          className={`absolute right-0.5 top-1/2 flex h-4 w-4 -translate-y-1/2 items-center justify-center rounded border-none bg-transparent text-muted hover:text-text cursor-pointer ${
+            on || lit ? 'opacity-100' : 'opacity-0 group-hover/chip:opacity-100 group-focus-within/chip:opacity-100'}`}
+        >
+          <MoreHorizontal size={12} aria-hidden="true" />
+        </button>
+      </span>
     )
   }
   const line = (vertical: boolean) => (
@@ -280,9 +308,8 @@ export function PreviewEditor({ candidates, columnOf, categoryLabel, repeated, g
 
   // The drawing keeps the window's own proportions.
   const ratio = typeof window !== 'undefined' ? Math.min(1.9, Math.max(1.2, window.innerWidth / window.innerHeight)) : 1.6
-  const sel = selected ? byId.get(selected) : undefined
-  const selAt = selected ? where(selected) : 'none'
-  const selInBar = selAt === 'top' || selAt === 'bottom'
+  const menuItem = menu ? byId.get(menu.id) : undefined
+  const menuAt = menu ? where(menu.id) : 'none'
 
   return (
     <OverlayPortal>
@@ -352,47 +379,86 @@ export function PreviewEditor({ candidates, columnOf, categoryLabel, repeated, g
                   className="min-w-0 flex-1 border-none bg-transparent text-[13px] text-text outline-none placeholder:text-muted"
                 />
               </label>
-              <ul role="tabpanel" className="m-0 min-h-0 flex-1 list-none overflow-y-auto p-0">
+              <div role="tabpanel" className="min-h-0 flex-1 overflow-y-auto" data-testid="preview-list">
                 {rows.length === 0 && (
-                  <li className="px-2 py-6 text-center text-[13px] text-muted">
+                  <p className="m-0 px-2 py-6 text-center text-[13px] text-muted">
                     {q ? i18nT('nav.rail_palette_no_results', { query: query.trim() }) : i18nT('nav.layout_col_yours_empty')}
-                  </li>
+                  </p>
                 )}
-                {rows.map(x => {
-                  const at = where(x.id)
+                {/* Grouped by area in the drawing's own order, so a chip moved
+                    in the drawing moves its row here too. */}
+                {([...ZONES, 'none'] as const).map(z => {
+                  const inTab = new Set(rows.map(x => x.id))
+                  const ids = z === 'none' ? rows.filter(x => where(x.id) === 'none').map(x => x.id) : inZone(z).filter(id => inTab.has(id))
+                  if (ids.length === 0) return null
                   return (
-                    // The drag is a pointer convenience; the row's place button shows or hides it.
-                    // eslint-disable-next-line jsx-a11y/no-noninteractive-element-interactions
-                    <li
-                      key={x.id}
-                      draggable
-                      onDragStart={e => startItemDrag(e, x.id)}
-                      className="group/row flex items-center gap-2 rounded-lg px-2 py-1.5 hover:bg-bg-hover cursor-grab active:cursor-grabbing"
-                    >
-                      <span className="flex h-5 w-5 shrink-0 items-center justify-center text-muted">{x.meta.icon}</span>
-                      <span className="min-w-0 flex-1">
-                        <span className="block truncate text-[13px]">{x.meta.label}</span>
-                        <span className="block truncate text-[11px] text-muted">
-                          {categoryLabel(x.category)}{x.detail && repeated.has(x.meta.label) ? ` · ${x.detail}` : ''}
-                        </span>
-                      </span>
-                      {/* Where it is; a press shows or hides it. */}
-                      <button
-                        type="button"
-                        onClick={() => toggle(x.id)}
-                        aria-label={i18nT(at === 'none' ? 'nav.layout_preview_show_item' : 'nav.layout_preview_hide_item', { item: x.meta.label })}
-                        title={i18nT(at === 'none' ? 'nav.layout_preview_show_item' : 'nav.layout_preview_hide_item', { item: x.meta.label })}
-                        className={`inline-flex shrink-0 items-center gap-1 rounded-md border px-1.5 py-0.5 text-[11px] cursor-pointer ${
-                          at === 'none' ? 'border-dashed border-border bg-transparent text-muted hover:text-text' : 'border-border bg-bg text-text hover:bg-bg-hover'
-                        }`}
-                      >
-                        {at === 'none' && <EyeOff size={11} aria-hidden="true" />}
-                        {placeName(at)}
-                      </button>
-                    </li>
+                    <section key={z} aria-label={placeName(z)} data-preview-group={z} className="mb-2">
+                      <h3 className="m-0 px-2 pb-1 pt-1.5 text-[11px] font-medium uppercase tracking-wide text-muted">
+                        {placeName(z)} <span className="font-normal">{ids.length}</span>
+                      </h3>
+                      <ul className="m-0 list-none p-0">
+                        {ids.map(id => {
+                          const x = byId.get(id)!
+                          const lit = hot === id || menu?.id === id
+                          return (
+                            // The drag is a pointer convenience; the row's buttons move, hide or show it.
+                            // eslint-disable-next-line jsx-a11y/no-noninteractive-element-interactions
+                            <li
+                              key={id}
+                              data-preview-row={id}
+                              draggable
+                              onDragStart={e => startItemDrag(e, id)}
+                              onPointerEnter={() => setHot(id)}
+                              onPointerLeave={() => setHot(h => (h === id ? null : h))}
+                              className={`group/row flex items-center gap-2 rounded-lg px-2 py-1.5 cursor-grab active:cursor-grabbing ${lit ? 'bg-bg-hover ring-1 ring-accent/60' : 'hover:bg-bg-hover'}`}
+                            >
+                              <span className="flex h-5 w-5 shrink-0 items-center justify-center text-muted">{x.meta.icon}</span>
+                              <span className="min-w-0 flex-1">
+                                <span className="block truncate text-[13px]">{x.meta.label}</span>
+                                <span className="block truncate text-[11px] text-muted">
+                                  {categoryLabel(x.category)}{x.detail && repeated.has(x.meta.label) ? ` · ${x.detail}` : ''}
+                                </span>
+                              </span>
+                              {z !== 'none' && (
+                                <span className="flex shrink-0 items-center">
+                                  {[true, false].map(earlier => {
+                                    const ok = canStep(id, earlier)
+                                    const key = earlier ? 'nav.layout_move_up' : 'nav.layout_move_down'
+                                    const Icon = earlier ? ChevronUp : ChevronDown
+                                    return (
+                                      <button
+                                        key={String(earlier)}
+                                        type="button"
+                                        disabled={!ok}
+                                        onClick={() => step(id, earlier ? earlierKey(z) : laterKey(z))}
+                                        aria-label={i18nT(key, { item: x.meta.label })}
+                                        title={i18nT(key, { item: x.meta.label })}
+                                        className="flex h-6 w-6 items-center justify-center rounded-md border-none bg-transparent text-muted hover:bg-bg-elevated hover:text-text cursor-pointer disabled:opacity-30 disabled:cursor-default"
+                                      >
+                                        <Icon size={14} />
+                                      </button>
+                                    )
+                                  })}
+                                </span>
+                              )}
+                              {/* Hide a placed item; show one that is not shown (in the sidebar). */}
+                              <button
+                                type="button"
+                                onClick={() => toggle(id)}
+                                aria-label={i18nT(z === 'none' ? 'nav.layout_preview_show_item' : 'nav.layout_preview_hide_item', { item: x.meta.label })}
+                                title={i18nT(z === 'none' ? 'nav.layout_preview_show_item' : 'nav.layout_preview_hide_item', { item: x.meta.label })}
+                                className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md border border-border bg-bg text-muted hover:text-text cursor-pointer"
+                              >
+                                {z === 'none' ? <Plus size={13} /> : <EyeOff size={13} />}
+                              </button>
+                            </li>
+                          )
+                        })}
+                      </ul>
+                    </section>
                   )
                 })}
-              </ul>
+              </div>
             </section>
 
             {/* The drawing of the window. */}
@@ -401,67 +467,15 @@ export function PreviewEditor({ candidates, columnOf, categoryLabel, repeated, g
                 <div className="absolute inset-0 grid gap-1.5 rounded-xl border border-border bg-bg p-1.5" style={{ gridTemplateColumns: '24% 1fr', gridTemplateRows: '34px 1fr 34px' }}>
                   <div style={{ gridColumn: '1 / 3', gridRow: '1' }}>{zoneBody('top')}</div>
                   <div style={{ gridColumn: '1', gridRow: '2 / 4' }} className="min-h-0 overflow-hidden">{zoneBody('sidebar')}</div>
-                  {/* The page: a plain area; dropping here hides the item. */}
-                  <div
-                    {...pageDrop}
-                    style={{ gridColumn: '2', gridRow: '2' }}
-                    className={`flex items-center justify-center rounded-lg transition-colors ${over?.zone === 'page' ? 'bg-text/10' : 'bg-text/5'}`}
-                  >
-                    <span className="pointer-events-none flex items-center gap-1.5 text-[11px] text-muted">
-                      {over?.zone === 'page' ? <><EyeOff size={12} aria-hidden="true" />{i18nT('nav.layout_drop_to_hide')}</> : i18nT('nav.layout_preview_page')}
-                    </span>
+                  {/* The page: a plain area (removing an item is a menu choice). */}
+                  <div style={{ gridColumn: '2', gridRow: '2' }} className="flex items-center justify-center rounded-lg bg-text/5">
+                    <span className="pointer-events-none text-[11px] text-muted">{i18nT('nav.layout_preview_page')}</span>
                   </div>
                   <div style={{ gridColumn: '2', gridRow: '3' }}>{zoneBody('bottom')}</div>
                 </div>
               </div>
 
-              {/* The selected chip's controls. */}
-              <div className="mt-3 flex min-h-[36px] flex-wrap items-center gap-2" aria-live="off">
-                {sel && selAt !== 'none' ? (
-                  <>
-                    <span className="flex min-w-0 items-center gap-1.5 text-[13px]">
-                      <span className="flex h-4 w-4 items-center justify-center text-muted [&_svg]:h-4 [&_svg]:w-4">{sel.meta.icon}</span>
-                      <span className="truncate font-medium">{sel.meta.label}</span>
-                      <span className="text-muted">· {placeName(selAt)}</span>
-                    </span>
-                    <span className="flex items-center">
-                      {(Object.keys(MOVES) as (keyof typeof MOVES)[]).filter(k => MOVES[k].horizontal === selInBar).map(k => {
-                        const { Icon, key } = MOVES[k]
-                        return (
-                          <button
-                            key={k}
-                            type="button"
-                            onClick={() => step(sel.id, k)}
-                            aria-label={i18nT(key, { item: sel.meta.label })}
-                            title={i18nT(key, { item: sel.meta.label })}
-                            className="flex h-7 w-7 items-center justify-center rounded-md border-none bg-transparent text-muted hover:bg-bg-hover hover:text-text cursor-pointer"
-                          >
-                            <Icon size={15} />
-                          </button>
-                        )
-                      })}
-                    </span>
-                    {selInBar && offersStyle(sel.id) && (
-                      <span role="group" aria-label={i18nT('nav.layout_show_as')} className="flex items-center gap-0.5 rounded-lg border border-border p-0.5">
-                        {[false, true].map(icon => (
-                          <button
-                            key={String(icon)}
-                            type="button"
-                            aria-pressed={iconOnly(sel.id) === icon}
-                            onClick={() => setIconOnly(sel.id, icon)}
-                            className={`h-6 rounded-md border-none px-2 text-[12px] cursor-pointer ${iconOnly(sel.id) === icon ? 'bg-bg-hover text-text' : 'bg-transparent text-muted hover:text-text'}`}
-                          >
-                            {i18nT(icon ? 'nav.layout_search_icon' : sel.id === SEARCH_ITEM ? 'nav.layout_search_field' : 'nav.layout_style_label')}
-                          </button>
-                        ))}
-                      </span>
-                    )}
-                    <Btn onClick={() => hide(sel.id)}>{i18nT('nav.layout_kbd_hide')}</Btn>
-                  </>
-                ) : (
-                  <span className="text-[12px] text-muted">{i18nT('nav.layout_preview_select_hint')}</span>
-                )}
-              </div>
+              <p className="m-0 mt-3 text-[12px] text-muted">{i18nT('nav.layout_preview_menu_hint')}</p>
             </section>
           </div>
 
@@ -471,6 +485,53 @@ export function PreviewEditor({ candidates, columnOf, categoryLabel, repeated, g
             <Btn onClick={cancel}>{i18nT('nav.layout_preview_cancel')}</Btn>
             <Btn primary onClick={done}>{i18nT('nav.rail_done')}</Btn>
           </footer>
+
+          {menu && menuItem && menuAt !== 'none' && (
+            <>
+              <div className="fixed inset-0 z-[88]" aria-hidden="true" onPointerDown={() => setMenu(null)} />
+              <div
+                role="menu"
+                tabIndex={-1}
+                aria-label={i18nT('nav.layout_kbd_menu', { item: menuItem.meta.label })}
+                data-testid="preview-chip-menu"
+                className="fixed z-[89] min-w-[200px] max-w-[280px] rounded-lg border border-border bg-bg-elevated p-1 text-text shadow-xl"
+                style={{ left: Math.min(menu.x, window.innerWidth - 290), top: Math.min(menu.y, window.innerHeight - 220) }}
+                ref={el => { if (el && !el.contains(document.activeElement)) el.querySelector<HTMLElement>('[role="menuitem"]')?.focus() }}
+                onKeyDown={e => {
+                  const list = [...e.currentTarget.querySelectorAll<HTMLElement>('[role="menuitem"]')]
+                  const i = list.indexOf(document.activeElement as HTMLElement)
+                  if (e.key === 'ArrowDown' || e.key === 'ArrowUp') { e.preventDefault(); list[(i + (e.key === 'ArrowDown' ? 1 : list.length - 1)) % list.length]?.focus() }
+                }}
+              >
+                {(() => {
+                  const id = menu.id
+                  const label = menuItem.meta.label
+                  const inBar = menuAt === 'top' || menuAt === 'bottom'
+                  const items: { key: string; text: string; run: () => void }[] = []
+                  if (canStep(id, true)) items.push({ key: 'earlier', text: i18nT(inBar ? 'nav.layout_move_left' : 'nav.layout_move_up', { item: label }), run: () => step(id, earlierKey(menuAt)) })
+                  if (canStep(id, false)) items.push({ key: 'later', text: i18nT(inBar ? 'nav.layout_move_right' : 'nav.layout_move_down', { item: label }), run: () => step(id, laterKey(menuAt)) })
+                  for (const z of ZONES) if (z !== menuAt) items.push({ key: `to-${z}`, text: i18nT('nav.layout_kbd_move_to', { place: zoneLabel(z) }), run: () => dropAt(id, z, inZone(z).length) })
+                  if (inBar && offersStyle(id)) {
+                    const icon = iconOnly(id)
+                    items.push({ key: 'style', text: i18nT(icon ? (id === SEARCH_ITEM ? 'nav.layout_search_field' : 'nav.layout_style_label') : 'nav.layout_search_icon'), run: () => setIconOnly(id, !icon) })
+                  }
+                  items.push({ key: 'remove', text: i18nT('nav.layout_kbd_remove'), run: () => hide(id) })
+                  return items.map(x => (
+                    <button
+                      key={x.key}
+                      type="button"
+                      role="menuitem"
+                      tabIndex={-1}
+                      onClick={() => { x.run(); setMenu(null) }}
+                      className="block w-full rounded-md border-none bg-transparent px-2.5 py-1.5 text-left text-[13px] text-text cursor-pointer hover:bg-bg-hover focus-visible:bg-bg-hover outline-none"
+                    >
+                      {x.text}
+                    </button>
+                  ))
+                })()}
+              </div>
+            </>
+          )}
 
           {confirming && (
             <div className="absolute inset-0 z-10 flex items-center justify-center bg-bg/60" role="presentation">

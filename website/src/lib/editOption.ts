@@ -70,6 +70,25 @@ export function setGridStyle(style: GridStyle): void {
 
 export function useGridStyle(): GridStyle {
   const [style, setStyle] = useState(readGridStyle)
+  const option = useEditOption()
+  useEffect(() => {
+    const sync = () => setStyle(readGridStyle())
+    window.addEventListener(GRID_EVENT, sync)
+    window.addEventListener('storage', sync)
+    return () => {
+      window.removeEventListener(GRID_EVENT, sync)
+      window.removeEventListener('storage', sync)
+    }
+  }, [])
+  // The Grid switch belongs to option 1 (the band hides it for 2 and 3), so
+  // option 2 always draws the drafting grid and its dashed outlines: a Minimal
+  // choice left over from option 1 would otherwise hide the editable areas.
+  return option === 'panel' ? 'drafting' : style
+}
+
+/** The stored Grid choice, for the band's own switch. */
+export function useGridChoice(): GridStyle {
+  const [style, setStyle] = useState(readGridStyle)
   useEffect(() => {
     const sync = () => setStyle(readGridStyle())
     window.addEventListener(GRID_EVENT, sync)

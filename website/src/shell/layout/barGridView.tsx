@@ -27,7 +27,7 @@ import { SidebarStatus } from './sidebarStatus'
 import { DragOwnedByParent } from './dragOwner'
 import { useGridStyle } from '../../lib/editOption'
 import { BarStyleChooser, offersStyle } from './barStyleChooser'
-import { useLayoutItemProps } from './keyboardMove'
+import { ItemMoreButton, useLayoutItemProps } from './keyboardMove'
 import { useDragOnlyEditing } from './dragOnlyEdit'
 
 /** Items that draw their own outline (search field, Crews chip): no second one. */
@@ -113,6 +113,7 @@ function BarCell({ id, zone, label, cellRef, editing, chip, faded, left, width, 
     >
       {editing && <GripVertical size={12} aria-hidden="true" className="absolute left-0 top-1/2 -translate-y-1/2 text-muted opacity-0 group-hover/edit:opacity-100" />}
       {children}
+      {editing && <ItemMoreButton id={id} zone={zone} label={label} corner />}
     </div>
   )
 }
