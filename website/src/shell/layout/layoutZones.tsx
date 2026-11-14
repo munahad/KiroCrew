@@ -111,9 +111,10 @@ function ZoneOutline({ zone, area, dragging, nativeDrag, allowed, over, lineX, f
       // Raised above the dimmed page (a lifted shadow and a full-strength
       // outline), so the three places you can edit stand out as the editor.
       className={flat
-        // Flat: a thin light dashed outline, no lift; the drop target still lights up.
-        ? `relative rounded-lg border border-dashed transition-[border-color,background-color] ${zone === 'sidebar' ? 'mx-1 mb-1' : 'mx-1 my-0.5'} ${
-          unavailable ? 'border-border bg-bg-hover/60' : over ? 'border-text/50 bg-text/5' : 'border-text/30'}`
+        // Flat: a dashed outline as strong as option 2's (2px, 40%) so it reads
+        // in dark mode too, but no lift; the drop target still lights up.
+        ? `relative rounded-lg border-2 border-dashed transition-[border-color,background-color] ${zone === 'sidebar' ? 'mx-1 mb-1' : 'mx-1 my-0.5'} ${
+          unavailable ? 'border-border bg-bg-hover/60' : over ? 'border-text/70 bg-text/5' : 'border-text/40'}`
         : `relative rounded-lg border-2 border-dashed transition-[border-color,background-color,box-shadow] ${
         zone === 'sidebar' ? 'mx-1 mb-1' : 'mx-1 my-0.5'
       } ${unavailable
