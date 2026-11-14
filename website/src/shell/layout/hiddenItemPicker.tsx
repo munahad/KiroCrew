@@ -10,7 +10,9 @@
  *
  * Keyboard: the search field takes focus; Up and Down move through the
  * results, Enter adds the active one, Escape closes and returns focus to the
- * button (WAI-ARIA combobox pattern with a listbox popup).
+ * button (WAI-ARIA combobox pattern with a listbox popup). Clicking an item
+ * keeps focus in the search field, and while the list is open Escape closes
+ * only the list, wherever focus is.
  */
 import { Fragment, useEffect, useId, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { ChevronDown, Plus, Search } from 'lucide-react'
@@ -86,7 +88,26 @@ export function HiddenItemPicker({ items, onAdd }: {
   }, [open])
 
   const close = () => { setOpen(false); setQuery(''); buttonRef.current?.focus() }
-  const add = (x: PickerItem) => { onAdd(x.id, x.label); setQuery('') }
+  // The search field keeps focus after a click too, so typing finds the next
+  // item and Escape stays with the list (options cannot take focus).
+  const add = (x: PickerItem) => { onAdd(x.id, x.label); setQuery(''); inputRef.current?.focus() }
+
+  // While the list is open, Escape closes the list first, wherever focus is;
+  // a second Escape then leaves edit mode. Capture phase on window, so it runs
+  // before the panel's own "Escape leaves edit mode" listener.
+  useEffect(() => {
+    if (!open) return
+    const onEsc = (e: KeyboardEvent) => {
+      if (e.key !== 'Escape') return
+      e.preventDefault()
+      e.stopPropagation()
+      setOpen(false)
+      setQuery('')
+      buttonRef.current?.focus()
+    }
+    window.addEventListener('keydown', onEsc, true)
+    return () => window.removeEventListener('keydown', onEsc, true)
+  }, [open])
   const onKey = (e: React.KeyboardEvent) => {
     if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
       e.preventDefault()

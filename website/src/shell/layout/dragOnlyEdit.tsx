@@ -178,7 +178,15 @@ export function pageHideZoneAt(x: number, y: number): boolean {
 /** The faded page becomes "drop here to hide" while an item is dragged.
  *  Place inside the desktop shell grid, beside the zone outlines. */
 export function PageHideZone() {
-  const on = useDragOnlyEditing()
+  const dragOnly = useDragOnlyEditing()
+  // Option 2 too: drop an item on the page to hide it, from the layout itself
+  // rather than only from the panel's menu. There the page stays visible (faded)
+  // and the drop target shows only while something is dragged, under the panel.
+  const editing = useLayoutEditing()
+  const option = useEditOption()
+  const phone = useIsMobile()
+  const panelMode = editing && option === 'panel' && !phone
+  const on = dragOnly || panelMode
   const drag = useChromeDrag()
   const sidebarOver = usePageHideOver()
   const [nativeOver, setNativeOver] = useState(false)
@@ -205,8 +213,9 @@ export function PageHideZone() {
     <div
       aria-hidden="true"
       data-layout-outline="page"
-      style={{ gridArea: 'content', zIndex: 65, pointerEvents: dragging ? 'auto' : 'none' }}
-      className={`relative m-3 flex items-center justify-center rounded-2xl transition-colors duration-150 motion-reduce:transition-none ${over ? 'bg-text/10' : 'bg-text/5'}`}
+      style={{ gridArea: 'content', zIndex: panelMode ? 55 : 65, pointerEvents: dragging ? 'auto' : 'none' }}
+      className={`relative m-3 flex items-center justify-center rounded-2xl transition-[background-color,opacity] duration-150 motion-reduce:transition-none ${
+        panelMode && !dragging ? 'opacity-0' : 'opacity-100'} ${over ? 'bg-text/10' : panelMode ? 'bg-text/[0.03]' : 'bg-text/5'}`}
       onDragOver={onDragOver}
       onDragLeave={e => { if (!e.currentTarget.contains(e.relatedTarget as Node | null)) setNativeOver(false) }}
       onDrop={onDrop}
@@ -218,7 +227,7 @@ export function PageHideZone() {
             {i18nT('nav.layout_drop_to_hide')}
           </span>
         )
-        : <span className="text-[13px] text-muted">{i18nT('nav.layout_preview_page')}</span>}
+        : panelMode ? null : <span className="text-[13px] text-muted">{i18nT('nav.layout_preview_page')}</span>}
     </div>
   )
 }
