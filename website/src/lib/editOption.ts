@@ -71,6 +71,7 @@ export function setGridStyle(style: GridStyle): void {
 export function useGridStyle(): GridStyle {
   const [style, setStyle] = useState(readGridStyle)
   const option = useEditOption()
+  const panelStyle = usePanelStyle()
   useEffect(() => {
     const sync = () => setStyle(readGridStyle())
     window.addEventListener(GRID_EVENT, sync)
@@ -83,7 +84,9 @@ export function useGridStyle(): GridStyle {
   // The Grid switch belongs to option 1 (the band hides it for 2 and 3), so
   // option 2 always draws the drafting grid and its dashed outlines: a Minimal
   // choice left over from option 1 would otherwise hide the editable areas.
-  return option === 'panel' ? 'drafting' : style
+  // Tiles uses the minimal look on the canvas: no grid, just the landing
+  // line and the space the item takes (its area outlines stay, see layoutZones).
+  return option === 'panel' ? (panelStyle === 'tiles' ? 'minimal' : 'drafting') : style
 }
 
 /** The stored Grid choice, for the band's own switch. */
@@ -171,6 +174,14 @@ export function usePanelStyle(): PanelStyle {
     }
   }, [])
   return style
+}
+
+/** True while option 2 shows its Tiles panel: its drags mark the landing
+ *  spot with a purple line, on the canvas and in the panel alike. */
+export function useTilesPanel(): boolean {
+  const option = useEditOption()
+  const style = usePanelStyle()
+  return option === 'panel' && style === 'tiles'
 }
 
 /* ── Recently removed items (the Gradual picker lists them first) ── */

@@ -169,6 +169,7 @@ export function LayoutEditPanel({ groups, hidden, meta }: {
   const [tileOver, setTileOver] = useState<ShellZone | 'none' | null>(null)
   // Reordering inside the panel: the tile a dragged tile would land beside.
   const [tileAt, setTileAt] = useState<{ id: string; before: boolean } | null>(null)
+  const [canvasLine, setCanvasLine] = useState<{ left: number; top: number; width: number; height: number } | null>(null)
   // Tiles fill the page area between the top bar and the bottom bar, so the
   // real bars and the sidebar stay in view to drop onto (Sketch keeps its
   // toolbar visible above the palette).
@@ -186,8 +187,8 @@ export function LayoutEditPanel({ groups, hidden, meta }: {
   }, [])
   // Leaving Tiles (Done, another option) clears any item lit by a hovered tile.
   useEffect(() => () => {
-    for (const el of document.querySelectorAll<HTMLElement>('[data-column-row], [data-bar-item]')) {
-      el.style.outline = ''; el.style.outlineOffset = ''; el.style.borderRadius = ''
+    for (const el of document.querySelectorAll<HTMLElement>('[data-tile-lit]')) {
+      el.style.outline = ''; el.style.outlineOffset = ''; el.style.borderRadius = ''; delete el.dataset.tileLit
     }
   }, [])
 
@@ -417,10 +418,11 @@ export function LayoutEditPanel({ groups, hidden, meta }: {
                   {categoryLabel(x.category)}{x.detail && repeated.has(x.meta.label) ? ` · ${x.detail}` : ''}
                 </span>
               </span>
-              {/* Gradual: the row's controls show on hover or keyboard focus,
-                  so at rest a row is its icon and name. They stay in the tab
-                  order, only faded out. */}
-              <span className={`shrink-0 flex items-center gap-2 ${gradual ? 'opacity-0 transition-opacity duration-100 group-hover/row:opacity-100 group-focus-within/row:opacity-100 motion-reduce:transition-none' : ''}`}>
+              {/* Gradual: the row's controls stay visible but muted, full
+                  strength on hover or keyboard focus. Edit mode already says
+                  the person wants to change things, so the controls are not
+                  hidden (hover-only also fails on touch). */}
+              <span className={`shrink-0 flex items-center gap-2 ${gradual ? 'opacity-50 transition-opacity duration-100 group-hover/row:opacity-100 group-focus-within/row:opacity-100 motion-reduce:transition-none' : ''}`}>
               {/* A placed item in a bar: icon and label (as dropped) or the icon
                   only, the user's choice, never a rule the bar applies. Same
                   two-icon toggle as search's. */}
@@ -594,12 +596,18 @@ export function LayoutEditPanel({ groups, hidden, meta }: {
 
   /** Light up the item in the real window while its tile is hovered. */
   const lightItem = (id: string, on: boolean) => {
-    const sel = `[data-column-row="${CSS.escape(id)}"], [data-bar-item="${CSS.escape(id)}"]`
-    for (const el of document.querySelectorAll<HTMLElement>(sel)) {
-      el.style.outline = on ? '2px solid var(--accent)' : ''
-      el.style.outlineOffset = on ? '2px' : ''
-      el.style.borderRadius = on ? '8px' : ''
+    // Only one item is ever lit: clear any left over (a tile that moved under
+    // the pointer never gets its pointer-leave), then light the item's outer
+    // element only. A sidebar widget row also holds an inner element marked
+    // with the same id, which drew a second, offset outline.
+    for (const el of document.querySelectorAll<HTMLElement>('[data-tile-lit]')) {
+      el.style.outline = ''; el.style.outlineOffset = ''; el.style.borderRadius = ''; delete el.dataset.tileLit
     }
+    if (!on) return
+    const el = document.querySelector<HTMLElement>(`[data-column-row="${CSS.escape(id)}"]`)
+      ?? document.querySelector<HTMLElement>(`[data-bar-grid] [data-bar-item="${CSS.escape(id)}"]`)
+    if (!el) return
+    el.style.outline = '2px solid var(--accent)'; el.style.outlineOffset = '2px'; el.style.borderRadius = '8px'; el.dataset.tileLit = ''
   }
   const isIcon = (id: string) => (id === SEARCH_ITEM ? searchStyle === 'icon' : styleOf(id) === 'icon')
   /** A section's Show setting, as its toggle presses it. */
@@ -638,12 +646,14 @@ export function LayoutEditPanel({ groups, hidden, meta }: {
   /** Mark on the canvas where a tile dragged in the panel will land: a
    *  line on the matching side of the real item it sits beside. */
   const markCanvas = (at: { id: string; before: boolean } | null, zone: ShellZone | 'none') => {
-    for (const el of document.querySelectorAll<HTMLElement>('[data-tile-mark]')) { el.style.boxShadow = ''; delete el.dataset.tileMark }
-    if (!at || zone === 'none') return
-    const sel = `[data-column-row="${CSS.escape(at.id)}"], [data-bar-item="${CSS.escape(at.id)}"]`
-    const bar = zone === 'top' || zone === 'bottom'
-    const shadow = bar ? (at.before ? 'inset 3px 0 0 var(--accent)' : 'inset -3px 0 0 var(--accent)') : (at.before ? 'inset 0 3px 0 var(--accent)' : 'inset 0 -3px 0 var(--accent)')
-    for (const el of document.querySelectorAll<HTMLElement>(sel)) { el.style.boxShadow = shadow; el.dataset.tileMark = '' }
+    if (!at || zone === 'none') { setCanvasLine(null); return }
+    const el = document.querySelector<HTMLElement>(`[data-bar-grid] [data-bar-item="${CSS.escape(at.id)}"], [data-column-row="${CSS.escape(at.id)}"]`)
+    const r = el?.getBoundingClientRect()
+    if (!r) { setCanvasLine(null); return }
+    // A plain straight line in the gap, the same as the panel's.
+    setCanvasLine(zone === 'sidebar'
+      ? { left: r.left, top: (at.before ? r.top : r.bottom) - 1, width: r.width, height: 2 }
+      : { left: (at.before ? r.left : r.right) - 1, top: r.top, width: 2, height: r.height })
   }
   /** Drop a tile beside another: it moves to that spot in the window too. */
   const dropBeside = (id: string, target: string, before: boolean, section: ShellZone | 'none') => {
@@ -692,14 +702,13 @@ export function LayoutEditPanel({ groups, hidden, meta }: {
           e.stopPropagation()
           const id = e.dataTransfer.getData(SHELL_ITEM_MIME)
           const before = tileAt?.before ?? true
-          setTileAt(null); setTileOver(null); markCanvas(null, 'none')
+          setTileAt(null); setTileOver(null); markCanvas(null, 'none'); lightItem('', false)
           if (id) dropBeside(id, x.id, before, section)
         }}
         onPointerEnter={() => lightItem(x.id, true)}
         onPointerLeave={() => lightItem(x.id, false)}
         onClick={() => setTileMenu(open ? null : x.id)}
-        title={x.meta.label}
-        className={`group/tile relative flex flex-col items-center gap-1.5 rounded-xl px-1.5 pt-2.5 pb-2 text-center cursor-grab active:cursor-grabbing ${open ? 'bg-bg-hover ring-1 ring-accent' : 'hover:bg-bg-hover'}`}
+        className={`group/tile relative flex flex-col items-center gap-1.5 rounded-xl px-1.5 pt-7 pb-2 text-center cursor-grab active:cursor-grabbing ${open ? 'bg-bg-hover ring-1 ring-accent' : 'hover:bg-bg-hover'}`}
       >
         {tileAt?.id === x.id && (
           <span aria-hidden="true" className={`pointer-events-none absolute top-1 bottom-1 w-[3px] rounded-full bg-accent ${tileAt.before ? '-left-[3px]' : '-right-[3px]'}`} />
@@ -709,6 +718,29 @@ export function LayoutEditPanel({ groups, hidden, meta }: {
         </span>
         <span className="line-clamp-2 w-full break-words text-[12px] leading-tight text-text">{x.meta.label}</span>
         {x.detail && repeated.has(x.meta.label) && <span className="-mt-1 text-[10px] text-muted">{x.detail}</span>}
+        {/* The tile's controls in one row, top right, on hover or focus: step
+            it (left/right in a bar, up/down in the sidebar; each press moves
+            the tile and the real item one step, no menu), then its ⋯ menu. */}
+        <span className={`absolute right-1.5 top-1.5 flex items-center gap-0.5 ${open ? 'opacity-100' : 'opacity-0 group-hover/tile:opacity-100 group-focus-within/tile:opacity-100'}`}>
+        {section !== 'none' && ([-1, 1] as const).map(d => {
+          const Icon = inBar ? (d < 0 ? ChevronLeft : ChevronRight) : (d < 0 ? ChevronUp : ChevronDown)
+          const name = i18nT(d < 0 ? earlier : later, { item: x.meta.label })
+          return (
+            <button
+              key={d}
+              type="button"
+              draggable={false}
+              disabled={!canStep(x.id, d)}
+              aria-label={name}
+              title={name}
+              data-testid={`layout-tile-step-${d < 0 ? 'earlier' : 'later'}`}
+              onClick={e => { e.stopPropagation(); step(x.id, d, x.meta.label) }}
+              className="flex h-5 w-5 rounded-md items-center justify-center border-none bg-transparent text-muted hover:bg-text/10 hover:text-text cursor-pointer disabled:opacity-30 disabled:pointer-events-none"
+            >
+              <Icon size={12} aria-hidden="true" />
+            </button>
+          )
+        })}
         <DropdownMenu modal={false} open={open} onOpenChange={o => setTileMenu(o ? x.id : null)}>
           <DropdownMenuTrigger asChild>
             <button
@@ -717,14 +749,12 @@ export function LayoutEditPanel({ groups, hidden, meta }: {
               title={i18nT('nav.layout_item_more')}
               onClick={e => e.stopPropagation()}
               data-testid="layout-tile-more"
-              className={`absolute right-1 top-1 flex h-5 w-5 items-center justify-center rounded-md border border-border bg-bg-elevated text-muted hover:text-text cursor-pointer ${open ? 'opacity-100' : 'opacity-0 group-hover/tile:opacity-100 focus-visible:opacity-100'}`}
+              className="flex h-5 w-5 rounded-md items-center justify-center border-none bg-transparent text-muted hover:bg-text/10 hover:text-text cursor-pointer"
             >
               <MoreHorizontal size={12} aria-hidden="true" />
             </button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="start" className="min-w-[190px]" data-testid="layout-tile-menu">
-            {section !== 'none' && canStep(x.id, -1) && <DropdownMenuItem onSelect={() => step(x.id, -1, x.meta.label)}>{i18nT(earlier, { item: x.meta.label })}</DropdownMenuItem>}
-            {section !== 'none' && canStep(x.id, 1) && <DropdownMenuItem onSelect={() => step(x.id, 1, x.meta.label)}>{i18nT(later, { item: x.meta.label })}</DropdownMenuItem>}
             {(['top', 'sidebar', 'bottom'] as const).filter(z => z !== section).map(z => (
               <DropdownMenuItem key={z} onSelect={() => place(x.id, z, x.meta.label)}>
                 <span className="inline-flex items-center gap-2"><PlaceIcon place={z} />{i18nT('nav.layout_kbd_move_to', { place: zoneLabel(z) })}</span>
@@ -747,6 +777,7 @@ export function LayoutEditPanel({ groups, hidden, meta }: {
             )}
           </DropdownMenuContent>
         </DropdownMenu>
+        </span>
       </li>
     )
   }
@@ -755,6 +786,7 @@ export function LayoutEditPanel({ groups, hidden, meta }: {
     return (
       <OverlayPortal>
         {live}
+        {canvasLine && <span aria-hidden="true" data-testid="tiles-canvas-line" className="pointer-events-none fixed z-[9998] rounded-full bg-accent" style={canvasLine} />}
         <div
           className="pointer-events-none fixed right-0 z-[60] flex justify-center px-[clamp(12px,3vw,40px)]"
           style={{ left: railWidth, top: tileFrame?.top ?? 88, bottom: tileFrame?.bottom ?? 68 }}
@@ -820,7 +852,7 @@ export function LayoutEditPanel({ groups, hidden, meta }: {
                     aria-labelledby={headingId}
                     data-tile-section={section}
                     {...sectionDrop(section)}
-                    className={`rounded-xl border-2 border-dashed px-2 pt-1.5 pb-1 transition-colors ${tileOver === section ? 'border-accent bg-accent-subtle/40' : 'border-transparent'}`}
+                    className={`rounded-xl border-2 border-dashed px-2 pt-1.5 pb-1 transition-colors ${tileOver === section ? 'border-text/40 bg-text/5' : 'border-transparent'}`}
                   >
                     <div className="mx-1 mb-1 flex min-h-[30px] items-center gap-2">
                       <h3 id={headingId} className="m-0 flex flex-1 items-center gap-1.5 text-[12px] font-bold uppercase tracking-wide text-text">
@@ -872,10 +904,10 @@ export function LayoutEditPanel({ groups, hidden, meta }: {
                     </div>
                     <ul className="m-0 grid list-none gap-1 p-0" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(96px, 1fr))' }}>
                       {LOCKED.filter(l => !q || i18nT(l.key).toLowerCase().includes(q)).map(l => (
-                        <li key={l.key} title={i18nT('nav.layout_locked_title')} className="relative flex flex-col items-center gap-1.5 rounded-xl px-1.5 pt-2.5 pb-2 text-center">
+                        <li key={l.key} title={i18nT('nav.layout_locked_title')} className="relative flex flex-col items-center gap-1.5 rounded-xl px-1.5 pt-7 pb-2 text-center">
                           <span className="flex h-10 w-10 items-center justify-center rounded-lg border border-dashed border-border bg-bg text-muted [&_svg]:h-[18px] [&_svg]:w-[18px]">{l.icon}</span>
                           <span className="line-clamp-2 w-full break-words text-[12px] leading-tight text-text">{i18nT(l.key)}</span>
-                          <Lock size={11} aria-hidden="true" className="absolute right-1.5 top-1.5 text-muted" />
+                          <Lock size={11} aria-hidden="true" className="absolute right-2 top-2 text-muted" />
                           <span className="sr-only">{i18nT('nav.layout_locked_title')}</span>
                         </li>
                       ))}

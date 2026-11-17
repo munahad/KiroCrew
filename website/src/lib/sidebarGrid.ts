@@ -162,10 +162,19 @@ export function commitColumn(groups: readonly RailGroup[], ids: readonly string[
 export function shiftInSidebar(groups: readonly RailGroup[], id: string, delta: -1 | 1): boolean {
   const ids = columnIdsOf(groups)
   if (!ids.includes(id)) return false
-  const at = resolveColumn(ids, readSidebarRows(), rowCount)[id]
+  const all = resolveColumn(ids, readSidebarRows(), rowCount)
+  const at = all[id]
   const row = at + delta
   if (row < 0 || row >= Math.max(rowCount, ids.length)) return false
-  commitColumn(groups, ids, placeInSidebar(ids, id, row))
+  // One step swaps places with the row's item, so only those two move.
+  // (Pushing it aside instead shoved every row below along as a block.)
+  const there = ids.find(x => x !== id && all[x] === row)
+  // Keep every row where it is drawn now, except the footer rows (You, the
+  // status row), which follow the column's end rather than a stored row.
+  const drawn = Object.fromEntries(Object.entries(all).filter(([x, r]) => !FOOT.has(x) && r < Number.MAX_SAFE_INTEGER))
+  const out = { ...readSidebarRows(), ...drawn, [id]: row, ...(there ? { [there]: at } : {}) }
+  writeSidebarRows(out)
+  commitColumn(groups, ids, out)
   return true
 }
 

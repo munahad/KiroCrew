@@ -20,7 +20,7 @@
  * keyboard focus that opens the same menu.
  */
 import { useEffect, useLayoutEffect, useRef, useState, type KeyboardEvent, type MouseEvent } from 'react'
-import { MoreHorizontal } from 'lucide-react'
+import { ArrowDown, ArrowLeft, ArrowRight, ArrowUp, ChevronDown, ChevronLeft, ChevronRight, ChevronUp, MoreHorizontal } from 'lucide-react'
 
 import { OverlayPortal } from '../../components/overlayRoot'
 import { useIsMobile } from '../../hooks/useIsMobile'
@@ -140,7 +140,9 @@ export const announceStep = (label: string, from: ShellZone, to: ShellZone, key:
 
 /* ── The item menu ── */
 
-interface MenuAt { id: string; label: string; zone: ShellZone; x: number; y: number }
+/** `steps`: list Move up/down (left/right) in the menu. Off when opened from
+ *  the ⋯ button, whose arrows sit beside it. */
+interface MenuAt { id: string; label: string; zone: ShellZone; x: number; y: number; steps?: boolean }
 const MENU_EVENT = 'mc:layout-item-menu'
 let menuAt: MenuAt | null = null
 function setMenu(m: MenuAt | null): void {
@@ -151,7 +153,18 @@ function setMenu(m: MenuAt | null): void {
 /** Open the item menu under (or, in the bottom bar, above) an element. */
 function openItemMenu(id: string, label: string, zone: ShellZone, el: HTMLElement): void {
   const r = el.getBoundingClientRect()
-  setMenu({ id, label, zone, x: r.left, y: zone === 'bottom' ? r.top : r.bottom })
+  setMenu({ id, label, zone, x: r.left, y: zone === 'bottom' ? r.top : r.bottom, steps: false })
+}
+
+/** Whether a placed item can move one step in its area (never past an edge). */
+function canStepItem(id: string, zone: ShellZone, d: -1 | 1): boolean {
+  if (zone === 'top' || zone === 'bottom') {
+    const at = cellOf(zone, id)
+    return !!at && (d < 0 ? at.col > 0 : at.col < at.max)
+  }
+  const side = readShellPlacement().side
+  if (side.includes(id)) { const i = side.indexOf(id); return i + d >= 0 && i + d < side.length }
+  return canShiftInSidebar(sidebarGroups, id, d)
 }
 
 /**
@@ -166,24 +179,68 @@ export function ItemMoreButton({ id, zone, label, corner = false }: { id: string
   const editing = useLayoutEditing()
   const option = useEditOption()
   const phone = useIsMobile()
+  useHeldItem()
   if (!editing || option !== 'panel' || phone || isHeaderId(id)) return null
+  const inBar = zone === 'top' || zone === 'bottom'
+  const keys = inBar ? (['ArrowLeft', 'ArrowRight'] as const) : (['ArrowUp', 'ArrowDown'] as const)
+  const icons = inBar ? [ChevronLeft, ChevronRight] : [ChevronUp, ChevronDown]
+  const names = inBar ? ['nav.layout_move_left', 'nav.layout_move_right'] : ['nav.layout_move_up', 'nav.layout_move_down']
+  const stop = {
+    onPointerDown: (e: { stopPropagation: () => void }) => { e.stopPropagation() },
+    onMouseDown: (e: { preventDefault: () => void; stopPropagation: () => void }) => { e.preventDefault(); e.stopPropagation() },
+    onDragStart: (e: { preventDefault: () => void; stopPropagation: () => void }) => { e.preventDefault(); e.stopPropagation() },
+  }
+  const btn = 'flex h-[18px] w-[18px] items-center justify-center rounded-md border-none bg-transparent text-muted hover:bg-text/10 hover:text-text !cursor-pointer disabled:opacity-30 disabled:pointer-events-none'
+  // Bars: the pill sits just outside the cell (below the top bar's, above the
+  // bottom bar's), so a one-cell icon keeps its neighbours clear. The
+  // sidebar: inside the row, on its right.
+  const place = inBar ? (zone === 'top' ? 'right-0 top-full pt-1' : 'right-0 bottom-full pb-1') : (corner ? '-right-1.5 -top-1.5' : 'right-1 top-1/2 -translate-y-1/2')
   return (
-    <button
-      type="button"
-      tabIndex={-1}
+    // Mouse controls that repeat the item's keyboard path (Space then arrows,
+    // Shift+F10 for the menu), so they stay out of the Tab order and the
+    // accessibility tree; a button nested in the item's button would be read twice.
+    <span
       aria-hidden="true"
-      draggable={false}
-      title={i18nT('nav.layout_item_more')}
-      data-testid="layout-item-more"
-      onPointerDown={e => { e.stopPropagation() }}
-      onMouseDown={e => { e.preventDefault(); e.stopPropagation() }}
-      onDragStart={e => { e.preventDefault(); e.stopPropagation() }}
-      onClick={e => { e.preventDefault(); e.stopPropagation(); openItemMenu(id, label, zone, e.currentTarget) }}
-      className={`absolute z-20 flex h-[18px] w-[18px] items-center justify-center rounded-md border border-border bg-bg-elevated text-muted shadow-sm !cursor-pointer hover:text-text hover:border-border-strong opacity-0 group-hover/edit:opacity-100 group-focus-visible/edit:opacity-100 group-data-[held]/edit:opacity-0 transition-opacity duration-100 motion-reduce:transition-none [&_*]:!cursor-pointer ${
-        corner ? '-right-1.5 -top-1.5' : 'right-1 top-1/2 -translate-y-1/2'}`}
+      className={`absolute z-20 flex opacity-0 group-hover/edit:opacity-100 group-focus-visible/edit:opacity-100 group-data-[held]/edit:opacity-0 transition-opacity duration-100 motion-reduce:transition-none [&_*]:!cursor-pointer ${place}`}
     >
-      <MoreHorizontal size={12} aria-hidden="true" />
-    </button>
+      {/* In the sidebar the controls take the hovered row's own colour, so they
+          cover the row's trailing glyph (the Local switcher's chevron, say)
+          without looking like a separate white pill. */}
+      <span className={inBar ? 'flex items-center overflow-hidden rounded-md border border-border bg-bg-elevated shadow-sm divide-x divide-border' : 'flex items-center gap-0.5 rounded-md bg-bg-hover pl-1'}>
+        {keys.map((k, i) => {
+          const d = (i === 0 ? -1 : 1) as -1 | 1
+          const Icon = icons[i]
+          return (
+            <button
+              key={k}
+              type="button"
+              tabIndex={-1}
+              draggable={false}
+              disabled={!canStepItem(id, zone, d)}
+              title={i18nT(names[i], { item: label })}
+              data-testid={`layout-item-step-${d < 0 ? 'earlier' : 'later'}`}
+              {...stop}
+              onClick={e => { e.preventDefault(); e.stopPropagation(); const to = stepItem(id, zone, k); if (to) announceStep(label, zone, to, k) }}
+              className={btn}
+            >
+              <Icon size={12} aria-hidden="true" />
+            </button>
+          )
+        })}
+        <button
+          type="button"
+          tabIndex={-1}
+          draggable={false}
+          title={i18nT('nav.layout_item_more')}
+          data-testid="layout-item-more"
+          {...stop}
+          onClick={e => { e.preventDefault(); e.stopPropagation(); openItemMenu(id, label, zone, e.currentTarget) }}
+          className={btn}
+        >
+          <MoreHorizontal size={12} aria-hidden="true" />
+        </button>
+      </span>
+    </span>
   )
 }
 
@@ -305,16 +362,17 @@ function LayoutItemMenu() {
 
   const close = (back = true) => { setMenu(null); if (back) refocus(m.id) }
   const inBar = m.zone === 'top' || m.zone === 'bottom'
-  const items: { key: string; label: string; run: () => void }[] = []
+  const items: { key: string; label: string; run: () => void; icon?: JSX.Element }[] = []
+  const ARROW = { ArrowLeft: <ArrowLeft size={13} aria-hidden="true" />, ArrowRight: <ArrowRight size={13} aria-hidden="true" />, ArrowUp: <ArrowUp size={13} aria-hidden="true" />, ArrowDown: <ArrowDown size={13} aria-hidden="true" /> }
   const dirKey = { ArrowLeft: 'nav.layout_move_left', ArrowRight: 'nav.layout_move_right', ArrowUp: 'nav.layout_move_up', ArrowDown: 'nav.layout_move_down' } as const
   const horizontal = (d: string) => d === 'ArrowLeft' || d === 'ArrowRight'
   const dirs = (Object.keys(dirKey) as (keyof typeof dirKey)[]).filter(d => horizontal(d) === inBar)
-  for (const d of dirs) {
+  for (const d of m.steps === false ? [] : dirs) {
     const can = inBar
       ? (() => { const at = cellOf(m.zone as 'top' | 'bottom', m.id); return !!at && (d === 'ArrowLeft' ? at.col > 0 : at.col < at.max) })()
       : readShellPlacement().side.includes(m.id) || canShiftInSidebar(sidebarGroups, m.id, d === 'ArrowUp' ? -1 : 1)
     if (!can) continue
-    items.push({ key: d, label: i18nT(dirKey[d], { item: m.label }), run: () => {
+    items.push({ key: d, icon: ARROW[d], label: i18nT(dirKey[d], { item: m.label }), run: () => {
       const to = stepItem(m.id, m.zone, d)
       if (to) announceStep(m.label, m.zone, to, d)
     } })
@@ -378,7 +436,7 @@ function LayoutItemMenu() {
             onClick={() => { x.run(); close() }}
             className="block w-full rounded-md border-none bg-transparent px-2.5 py-1.5 text-left text-[13px] text-text cursor-pointer hover:bg-bg-hover focus-visible:bg-bg-hover outline-none"
           >
-            {x.label}
+            <span className="inline-flex items-center gap-2">{x.icon}{x.label}</span>
           </button>
         ))}
       </div>

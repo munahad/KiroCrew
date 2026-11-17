@@ -25,10 +25,11 @@ import { RemoteCrewSwitcher } from './remoteCrews'
 import { SearchTrigger } from './searchTrigger'
 import { SidebarStatus } from './sidebarStatus'
 import { DragOwnedByParent } from './dragOwner'
-import { useGridStyle } from '../../lib/editOption'
+import { useGridStyle, useTilesPanel } from '../../lib/editOption'
 import { BarStyleChooser, offersStyle } from './barStyleChooser'
 import { ItemMoreButton, useLayoutItemProps } from './keyboardMove'
 import { useDragOnlyEditing } from './dragOnlyEdit'
+import { useBarContextMenu } from './barContextMenu'
 
 /** Items that draw their own outline (search field, Crews chip): no second one. */
 export const CHIPLESS = new Set<string>([SEARCH_ITEM, REMOTE_ITEM])
@@ -146,12 +147,15 @@ export function BarGrid({ zone, shell, renderStatus }: {
   useEffect(() => { for (const id of ids) if (px[id]) setItemSpan(zone, id, Math.max(1, Math.ceil((px[id] + 2) / cellW))) })
 
   const editing = useLayoutEditing()
+  // Right-click (or Shift+F10) outside edit mode: move this item or open Edit layout.
+  const barMenu = useBarContextMenu(zone, editing)
   const dragOnly = useDragOnlyEditing()
   const drag = useChromeDrag()
   const gridVars = useGridVarsClass()
   // Drafting shows every bar's cells for the whole drag. Minimal shows a
   // bar's cells only while the dragged item is over that bar.
   const gridStyle = useGridStyle()
+  const tilesLine = useTilesPanel()
   const showGrid = editing && drag.id !== null && (gridStyle !== 'minimal' || drag.over === zone)
   const hovering = showGrid && drag.over === zone && drag.cell != null
   const cols = hovering
@@ -207,7 +211,10 @@ export function BarGrid({ zone, shell, renderStatus }: {
   }
 
   return (
-    <div ref={ref} data-bar-grid={zone} data-layout-zone={zone} className={`relative h-full w-full min-w-0 ${gridVars}`}>
+    // Right-click opens this bar's menu; the keyboard path is Shift+F10 on a
+    // focused item, handled by the same props.
+    <div ref={ref} data-bar-grid={zone} data-layout-zone={zone} className={`relative h-full w-full min-w-0 ${gridVars}`} {...barMenu.props}>
+      {barMenu.menu}
       {/* The cells, only while something is being dragged: neutral
           graph-paper lines, like a design tool's pixel grid. */}
       {showGrid && (
@@ -229,7 +236,7 @@ export function BarGrid({ zone, shell, renderStatus }: {
           aria-hidden="true"
           data-testid={`bar-grid-target-${zone}`}
           className="absolute inset-y-0 pointer-events-none transition-[left,width] duration-100 motion-reduce:transition-none"
-          style={{ left: cols[drag.id!] * cellW, width: span(drag.id!) * cellW, background: GRID_FILL, boxShadow: gridStyle === 'minimal' ? `inset 2px 0 0 ${GRID_EDGE}` : `inset 0 0 0 1px ${GRID_EDGE}` }}
+          style={{ left: cols[drag.id!] * cellW, width: span(drag.id!) * cellW, background: GRID_FILL, boxShadow: tilesLine ? `inset 0 0 0 1px ${GRID_EDGE}, inset 2px 0 0 var(--accent)` : gridStyle === 'minimal' ? `inset 2px 0 0 ${GRID_EDGE}` : `inset 0 0 0 1px ${GRID_EDGE}` }}
         />
       )}
       {drawn.map(id => {

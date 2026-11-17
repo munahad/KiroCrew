@@ -25,7 +25,7 @@
  * hides with Delete; every change is read out (WCAG 2.1.1, 2.5.7, 4.1.3).
  */
 import { useEffect, useMemo, useRef, useState, type DragEvent, type KeyboardEvent, type ReactNode } from 'react'
-import { ChevronDown, ChevronUp, EyeOff, MoreHorizontal, Plus, Search, X } from 'lucide-react'
+import { ArrowDown, ArrowLeft, ArrowRight, ArrowUp, ChevronDown, ChevronUp, EyeOff, MoreHorizontal, Plus, Search, X } from 'lucide-react'
 
 import { Btn } from '../../components/ui'
 import { OverlayPortal } from '../../components/overlayRoot'
@@ -507,9 +507,9 @@ export function PreviewEditor({ candidates, columnOf, categoryLabel, repeated, g
                   const id = menu.id
                   const label = menuItem.meta.label
                   const inBar = menuAt === 'top' || menuAt === 'bottom'
-                  const items: { key: string; text: string; run: () => void }[] = []
-                  if (canStep(id, true)) items.push({ key: 'earlier', text: i18nT(inBar ? 'nav.layout_move_left' : 'nav.layout_move_up', { item: label }), run: () => step(id, earlierKey(menuAt)) })
-                  if (canStep(id, false)) items.push({ key: 'later', text: i18nT(inBar ? 'nav.layout_move_right' : 'nav.layout_move_down', { item: label }), run: () => step(id, laterKey(menuAt)) })
+                  const items: { key: string; text: string; run: () => void; icon?: JSX.Element }[] = []
+                  if (canStep(id, true)) items.push({ key: 'earlier', icon: inBar ? <ArrowLeft size={13} aria-hidden="true" /> : <ArrowUp size={13} aria-hidden="true" />, text: i18nT(inBar ? 'nav.layout_move_left' : 'nav.layout_move_up', { item: label }), run: () => step(id, earlierKey(menuAt)) })
+                  if (canStep(id, false)) items.push({ key: 'later', icon: inBar ? <ArrowRight size={13} aria-hidden="true" /> : <ArrowDown size={13} aria-hidden="true" />, text: i18nT(inBar ? 'nav.layout_move_right' : 'nav.layout_move_down', { item: label }), run: () => step(id, laterKey(menuAt)) })
                   for (const z of ZONES) if (z !== menuAt) items.push({ key: `to-${z}`, text: i18nT('nav.layout_kbd_move_to', { place: zoneLabel(z) }), run: () => dropAt(id, z, inZone(z).length) })
                   if (inBar && offersStyle(id)) {
                     const icon = iconOnly(id)
@@ -525,7 +525,7 @@ export function PreviewEditor({ candidates, columnOf, categoryLabel, repeated, g
                       onClick={() => { x.run(); setMenu(null) }}
                       className="block w-full rounded-md border-none bg-transparent px-2.5 py-1.5 text-left text-[13px] text-text cursor-pointer hover:bg-bg-hover focus-visible:bg-bg-hover outline-none"
                     >
-                      {x.text}
+                      <span className="inline-flex items-center gap-2">{x.icon}{x.text}</span>
                     </button>
                   ))
                 })()}

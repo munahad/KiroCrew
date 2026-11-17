@@ -24,6 +24,7 @@ import { focusPopout as focusTerminalPopout } from '../../utils/terminalPopout'
 import { useItemStyle } from '../../lib/barGrid'
 import type { AppShell } from '../appShell'
 import { useBarItemMeta } from './shellItems'
+import { startDragGhost } from './dragGhost'
 
 export const zoneLabel = (z: BarZone | 'sidebar') =>
   i18nT(z === 'top' ? 'nav.layout_zone_top' : z === 'bottom' ? 'nav.layout_zone_bottom' : 'nav.layout_zone_sidebar')
@@ -34,6 +35,8 @@ export function startItemDrag(e: DragEvent, id: string) {
   e.dataTransfer.setData(SHELL_ITEM_MIME, id)
   e.dataTransfer.setData(RAIL_PIN_MIME, id)
   e.dataTransfer.effectAllowed = 'move'
+  // Draw the item as it will land, not the browser's picture of its row.
+  startDragGhost(e, id)
   // Tell the zone outlines what is moving (a native dragover cannot read the
   // data), so places that cannot take it show as unavailable. Cleared on drop
   // or drag end; both, since a moved source can unmount before its dragend.

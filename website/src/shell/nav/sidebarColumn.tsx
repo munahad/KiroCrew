@@ -22,7 +22,7 @@ import {
 } from '../../lib/sidebarGrid'
 import { CHIPLESS, GRID_EDGE, GRID_FILL, GRID_LINE, useGridVarsClass } from '../layout/barGridView'
 import { useDragOnlyEditing } from '../layout/dragOnlyEdit'
-import { useGridStyle } from '../../lib/editOption'
+import { useGridStyle, useTilesPanel } from '../../lib/editOption'
 import { ItemMoreButton, registerSidebarGroups, useLayoutItemProps } from '../layout/keyboardMove'
 import { startItemDrag, zoneLabel } from '../layout/barItems'
 
@@ -53,7 +53,9 @@ function ColumnRow({ id, label, editing, chip, faded, top, height, onDragStart, 
       style={{ top, height }}
     >
       {editing && <GripVertical size={13} aria-hidden="true" className="absolute left-0 top-1/2 -translate-y-1/2 z-10 text-muted opacity-0 group-hover/edit:opacity-100 pointer-events-none" />}
-      <div data-column-row-content className={`w-full ${editing ? '[&_*]:pointer-events-none' : ''}`} {...(editing ? { inert: '' } : {})}>
+      {/* While editing, the content moves right of the drag grip, so the grip
+          never touches the row's icon (the controls matter in edit mode). */}
+      <div data-column-row-content className={`w-full ${editing ? 'pl-3 [&_*]:pointer-events-none' : ''}`} {...(editing ? { inert: '' } : {})}>
         {children}
       </div>
       {editing && <ItemMoreButton id={id} zone="sidebar" label={label} />}
@@ -78,6 +80,7 @@ export function SidebarColumn({ groups, renderRow, renderHeader, collapsed, labe
   const gridVars = useGridVarsClass()
   const dragOnly = useDragOnlyEditing()
   const minimal = useGridStyle() === 'minimal'
+  const tilesLine = useTilesPanel()
   const rows = useSidebarRows()
   const ids = columnIdsOf(groups)
   registerSidebarGroups(groups)
@@ -232,7 +235,7 @@ export function SidebarColumn({ groups, renderRow, renderHeader, collapsed, labe
           aria-hidden="true"
           data-testid="sidebar-grid-target"
           className="absolute inset-x-0 pointer-events-none transition-[top] duration-100 motion-reduce:transition-none"
-          style={{ top: (hover.id ? at[hover.id] : hover.row) * pitch, height: pitch, background: GRID_FILL, boxShadow: minimal ? `inset 0 2px 0 ${GRID_EDGE}` : `inset 0 0 0 1px ${GRID_EDGE}` }}
+          style={{ top: (hover.id ? at[hover.id] : hover.row) * pitch, height: pitch, background: GRID_FILL, boxShadow: tilesLine ? `inset 0 0 0 1px ${GRID_EDGE}, inset 0 2px 0 var(--accent)` : minimal ? `inset 0 2px 0 ${GRID_EDGE}` : `inset 0 0 0 1px ${GRID_EDGE}` }}
         />
       )}
       {ordered.map(g => (

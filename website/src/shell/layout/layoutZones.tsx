@@ -33,7 +33,7 @@ import {
 } from '../../lib/shellLayout'
 import { barOrder, cellAt, placeOnBar } from '../../lib/barGrid'
 import { hideFromCanvas, useDragOnlyEditing } from './dragOnlyEdit'
-import { useGridStyle } from '../../lib/editOption'
+import { useGridStyle, useTilesPanel } from '../../lib/editOption'
 import { shellItemMeta, zonesFor } from './shellItems'
 import { zoneLabel } from './barItems'
 
@@ -100,7 +100,10 @@ function ZoneOutline({ zone, area, dragging, nativeDrag, allowed, over, lineX, f
   const unavailable = dragging && !allowed
   // Minimal grid: no grey dashed outlines; each area is just its plain raised
   // surface, and the grid itself appears only in the area being dragged over.
-  const minimal = useGridStyle() === 'minimal'
+  // Tiles keeps the dashed area outlines (they read in dark mode) while its
+  // drags use the minimal, gridless look.
+  const tiles = useTilesPanel()
+  const minimal = useGridStyle() === 'minimal' && !tiles
   const bars = zone !== 'sidebar'
   const box = ref.current?.getBoundingClientRect()
   return (

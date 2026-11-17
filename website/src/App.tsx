@@ -91,6 +91,7 @@ import { useBarHasContent, useLayoutEditing, useTopBarHasContent, setLayoutEditi
 import { LayoutZoneOutlines } from './shell/layout/layoutZones'
 import { EditOptionSwitcher } from './shell/layout/editOptionSwitcher'
 import { HoverLabels } from './shell/layout/hoverLabels'
+import { DragGhost } from './shell/layout/dragGhost'
 import { DragOnlyBar, PageHideZone, usePageStandIn } from './shell/layout/dragOnlyEdit'
 import { LayoutItemKeyboard } from './shell/layout/keyboardMove'
 import { ShellNavRail } from './shell/nav/navRail'
@@ -958,6 +959,7 @@ export default function App() {
       {/* Design exploration, option 1 (drag only): drop on the page to hide. */}
       {!isMobile && !focusActive && <PageHideZone />}
       {!isMobile && <HoverLabels />}
+      {!isMobile && <DragGhost />}
       {!isMobile && !focusActive && <DragOnlyBar />}
       {!isMobile && !focusActive && <LayoutItemKeyboard />}
     </div>{/* /Local dashboard grid */}
