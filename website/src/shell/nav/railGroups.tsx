@@ -17,9 +17,9 @@ import { LayoutEditPanel } from '../layout/layoutEditPanel'
 import { hideFromCanvas, pageHideZoneAt, setPageHideOver, useDragOnlyEditing } from '../layout/dragOnlyEdit'
 import {
   HISTORY_ITEM, PROFILE_ITEM, REMOTE_ITEM, SEARCH_ITEM, SIDEBAR_MEMBERSHIP_EVENT, STATUS_ITEM, announceLayout, barZoneAt, isWidgetItem, moveItem,
-  setChromeDrag, setLayoutEditing, useLayoutEditing, type SidebarMembership,
+  setChromeDrag, setLayoutEditing, useChromeDrag, useLayoutEditing, type SidebarMembership,
 } from '../../lib/shellLayout'
-import { cellAt, placeOnBar } from '../../lib/barGrid'
+import { cellAt, placeOnBar, styleInBar } from '../../lib/barGrid'
 
 /** Where widgets start in the sidebar: the top of its rows, and the bottom. */
 const SIDEBAR_HEAD_WIDGETS = [HISTORY_ITEM, REMOTE_ITEM, SEARCH_ITEM]
@@ -188,6 +188,7 @@ export function RailGroups({ available, renderItem, collapsed, defaultGroup, met
   // "Edit layout" edits the real canvas in place (design exploration).
   const editing = useLayoutEditing()
   const dragOnly = useDragOnlyEditing()
+  const barDrag = useChromeDrag()
   // The profile menu opens the same editor from outside this component.
   useEffect(() => {
     const open = () => setLayoutEditing(true)
@@ -393,7 +394,11 @@ export function RailGroups({ available, renderItem, collapsed, defaultGroup, met
           </div>
         ))}
       </SortableContext>
-      <DragOverlay>{activeId ? renderItem(activeId, labelOf(activeId)) : null}</DragOverlay>
+      {/* Over a bar that shows icons only, the dragged row turns into the
+          icon chip it will become, so the drop holds no surprise. */}
+      <DragOverlay>{activeId ? (barDrag.over && styleInBar(barDrag.over, activeId) === 'icon' && meta(activeId)
+        ? <span className="inline-flex h-7 w-8 items-center justify-center rounded-md border border-accent bg-bg-elevated text-text shadow-lg">{meta(activeId)!.icon}</span>
+        : renderItem(activeId, labelOf(activeId))) : null}</DragOverlay>
     </DndContext>
     )}
     </div>

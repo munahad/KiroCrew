@@ -808,6 +808,18 @@ export function useAppShell() {
       setNavCollapsed(prev => { const next = !prev; safeSetItem('mc-nav', next ? '1' : '0'); return next })
     }
   }
+  // Edit layout's Tiles panel sets the sidebar's Show setting: icon only is
+  // the collapsed sidebar, icon and label the expanded one.
+  useEffect(() => {
+    const onSet = (e: Event) => {
+      const collapsed = (e as CustomEvent<boolean>).detail
+      navAutoCollapsed.current = null
+      setNavCollapsed(collapsed)
+      safeSetItem('mc-nav', collapsed ? '1' : '0')
+    }
+    window.addEventListener('mc:nav-set-collapsed', onSet)
+    return () => window.removeEventListener('mc:nav-set-collapsed', onSet)
+  }, [])
   // Close mobile nav on route change
   useEffect(() => { if (isMobile) closeMobileNavDrawer() }, [location.pathname]) // eslint-disable-line react-hooks/exhaustive-deps
   // Escape closes the open drawer — the keyboard's dismissal path. The scrim's

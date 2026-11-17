@@ -15,13 +15,14 @@
  * Rendered by RailGroups, which owns the sidebar data the list needs, and
  * portaled to the body so it floats over the page area only.
  */
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useLayoutEffect, useMemo, useRef, useState, type DragEvent } from 'react'
 import { useQuery } from '@tanstack/react-query'
-import { ArrowLeftRight, Bell, ChevronDown, ChevronLeft, ChevronRight, ChevronUp, CircleUserRound, EyeOff, Fullscreen, GripVertical, PanelBottom, PanelTop, RectangleHorizontal, Square, Lightbulb, Lock, MessageSquare, Minus, MonitorSmartphone, PanelLeft, Search, Smartphone, SquareTerminal, X } from 'lucide-react'
+import { ArrowLeftRight, ArrowLeftToLine, Bell, Check, ChevronDown, ChevronLeft, ChevronRight, ChevronUp, CircleUserRound, EyeOff, Fullscreen, GripVertical, PanelBottom, PanelTop, RectangleHorizontal, Square, Lightbulb, Lock, MessageSquare, Minus, MonitorSmartphone, MoreHorizontal, PanelLeft, Search, Smartphone, SquareTerminal, X } from 'lucide-react'
 
 import CrewAvatar from '../../components/CrewAvatar'
 import {
-  DropdownMenu, DropdownMenuContent, DropdownMenuRadioGroup, DropdownMenuRadioItem, DropdownMenuTrigger,
+  DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuRadioGroup, DropdownMenuRadioItem, DropdownMenuSeparator,
+  DropdownMenuTrigger,
 } from '../../components/ui/dropdown-menu'
 import { OverlayPortal } from '../../components/overlayRoot'
 import { Btn } from '../../components/ui'
@@ -34,10 +35,10 @@ import {
   updateRail, type RailGroup,
 } from '../../lib/railLayout'
 import {
-  FEEDBACK_ITEM, FOCUS_ITEM, HISTORY_ITEM, PHONE_ITEM, PROFILE_ITEM, REMOTE_ITEM, SEARCH_ITEM, removeFromBars, STATUS_ITEM, TERMINAL_ITEM, isTwoPlaceItem, announceLayout, isWindowToggle, moveItem, resetShellLayout, setLayoutEditing,
+  SHELL_ITEM_MIME, FEEDBACK_ITEM, FOCUS_ITEM, HISTORY_ITEM, PHONE_ITEM, PROFILE_ITEM, REMOTE_ITEM, SEARCH_ITEM, removeFromBars, STATUS_ITEM, TERMINAL_ITEM, isTwoPlaceItem, announceLayout, isWindowToggle, moveItem, resetShellLayout, setLayoutEditing,
   moveWithinBar, setSearchStyle, useLayoutAnnouncement, useSearchStyle, useShellPlacement, zoneOf, type BarZone, type ShellZone,
 } from '../../lib/shellLayout'
-import { barOrder, cellOf, clearBarCells, setItemStyle, shiftOnBar, useBarCells, useItemStyle } from '../../lib/barGrid'
+import { barOrder, cellOf, clearBarCells, placeOnBar, setBarStyle, setItemStyle, shiftOnBar, useBarCells, useBarStyle, useItemStyle } from '../../lib/barGrid'
 import { canShiftInSidebar, clearSidebarRows, columnIdsOf, columnOrder, shiftInSidebar, useSidebarRows } from '../../lib/sidebarGrid'
 import { useTerminalEnabled } from '../../utils/terminalRegistry'
 import { useRailWidth } from '../../hooks/useRailWidth'
@@ -45,15 +46,26 @@ import { MOBILE_BREAKPOINT, useIsMobile } from '../../hooks/useIsMobile'
 import { forPhone, phoneBarIds, phoneHide, phoneShow, phoneStep, resetPhoneLayout, usePhoneLayout } from '../../lib/phoneLayout'
 import type { RailItemMeta } from '../nav/railCustomize'
 import { startItemDrag, zoneLabel } from './barItems'
-import { noteRemoved, readEditOption, useDisclosure, useEditOption } from '../../lib/editOption'
+import { noteRemoved, readEditOption, useDisclosure, useEditOption, usePanelStyle } from '../../lib/editOption'
+import { offersStyle } from './barStyleChooser'
 import { PreviewEditor } from './previewEditor'
 import { HiddenItemPicker } from './hiddenItemPicker'
+import { moveInto, spotOf } from './keyboardMove'
 import { STATUS_BAR_EDIT_HEIGHT } from '../statusbar/shellStatusBar'
 
 
 /** Items that never move, listed so their place reads as deliberate. */
+/** The Crew's logo as the sidebar header draws it (its image), or the
+ *  header's own fallback glyph before the image loads. */
+function LogoGlyph() {
+  const [src] = useState(() => document.querySelector<HTMLImageElement>('button[aria-expanded] img[aria-hidden="true"]')?.getAttribute('src') ?? null)
+  return src
+    ? <img src={src} alt="" aria-hidden="true" className="h-6 w-6 rounded-md object-contain" />
+    : <PanelLeft size={16} />
+}
 const LOCKED: { key: string; icon: JSX.Element; zone: 'sidebar' | 'top' }[] = [
-  { key: 'nav.layout_locked_brand', icon: <PanelLeft size={16} />, zone: 'sidebar' },
+  { key: 'nav.layout_locked_logo', icon: <LogoGlyph />, zone: 'sidebar' },
+  { key: 'nav.layout_locked_toggle', icon: <ArrowLeftToLine size={16} />, zone: 'sidebar' },
 ]
 
 /** Built-in surfaces that read as apps (the App Store rows and Task Runner). */
@@ -147,6 +159,37 @@ export function LayoutEditPanel({ groups, hidden, meta }: {
   const slots = useAppSelector(s => s.dashboard.slots)
   const roster = useQuery({ ...membersRosterQuery }).data
   const panelRef = useRef<HTMLElement>(null)
+  // Tiles: the menu open on one tile, and the section being dragged over.
+  const [tileMenu, setTileMenu] = useState<string | null>(null)
+  // Each section's Show setting: the bars' own (icon only to start), and for
+  // the sidebar, collapsed (icon only) or expanded (icon and label).
+  const topStyle = useBarStyle('top')
+  const bottomStyle = useBarStyle('bottom')
+  const [navCollapsed, setNavCollapsedState] = useState(() => localStorage.getItem('mc-nav') !== '0')
+  const [tileOver, setTileOver] = useState<ShellZone | 'none' | null>(null)
+  // Reordering inside the panel: the tile a dragged tile would land beside.
+  const [tileAt, setTileAt] = useState<{ id: string; before: boolean } | null>(null)
+  // Tiles fill the page area between the top bar and the bottom bar, so the
+  // real bars and the sidebar stay in view to drop onto (Sketch keeps its
+  // toolbar visible above the palette).
+  const [tileFrame, setTileFrame] = useState<{ top: number; bottom: number } | null>(null)
+  useLayoutEffect(() => {
+    const measure = () => {
+      const top = document.querySelector('[data-layout-outline="top"]')?.getBoundingClientRect()
+      const bottom = document.querySelector('[data-layout-outline="bottom"]')?.getBoundingClientRect()
+      setTileFrame({ top: (top?.bottom ?? 80) + 12, bottom: (bottom ? window.innerHeight - bottom.top : 56) + 12 })
+    }
+    measure()
+    window.addEventListener('resize', measure)
+    const t = window.setTimeout(measure, 300)
+    return () => { window.removeEventListener('resize', measure); window.clearTimeout(t) }
+  }, [])
+  // Leaving Tiles (Done, another option) clears any item lit by a hovered tile.
+  useEffect(() => () => {
+    for (const el of document.querySelectorAll<HTMLElement>('[data-column-row], [data-bar-item]')) {
+      el.style.outline = ''; el.style.outlineOffset = ''; el.style.borderRadius = ''
+    }
+  }, [])
 
   // Escape leaves edit mode, from anywhere on the page.
   useEffect(() => {
@@ -159,7 +202,11 @@ export function LayoutEditPanel({ groups, hidden, meta }: {
   }, [])
   // Gradual reveal (prototype band, option 2): what is not shown sits behind
   // an "Add an item" picker, and row controls show on hover or focus.
-  const gradual = useDisclosure() === 'gradual' && !phone
+  // Tiles (prototype band, option 2): Sketch's Customize Toolbar, a bigger
+  // panel of icon tiles grouped by place. It shows everything at once, so
+  // Reveal does not apply to it.
+  const tiles = usePanelStyle() === 'tiles' && !phone
+  const gradual = useDisclosure() === 'gradual' && !phone && !tiles
   const preview = useEditOption() === 'preview' && !phone
   // Hidden: edit by dragging alone, with a small bar to bring the panel back.
   // Each Edit layout starts with the panel shown.
@@ -309,6 +356,10 @@ export function LayoutEditPanel({ groups, hidden, meta }: {
     } else if (isEntityPin(id) && to === 'none') {
       removeFromBars(id)
       updateRail(l => removePin(l, id))
+    } else if (to === 'top' || to === 'bottom') {
+      // Into a bar at its end, through the bar's own path, so the item takes
+      // that bar's Show setting.
+      placeOnBar(to, id, Number.MAX_SAFE_INTEGER)
     } else {
       moveItem(id, to === 'none' ? null : to)
     }
@@ -539,6 +590,311 @@ export function LayoutEditPanel({ groups, hidden, meta }: {
       announcement={announcement}
     />
   )
+  /* ── Tiles (option 2, Sketch's Customize Toolbar) ── */
+
+  /** Light up the item in the real window while its tile is hovered. */
+  const lightItem = (id: string, on: boolean) => {
+    const sel = `[data-column-row="${CSS.escape(id)}"], [data-bar-item="${CSS.escape(id)}"]`
+    for (const el of document.querySelectorAll<HTMLElement>(sel)) {
+      el.style.outline = on ? '2px solid var(--accent)' : ''
+      el.style.outlineOffset = on ? '2px' : ''
+      el.style.borderRadius = on ? '8px' : ''
+    }
+  }
+  const isIcon = (id: string) => (id === SEARCH_ITEM ? searchStyle === 'icon' : styleOf(id) === 'icon')
+  /** A section's Show setting, as its toggle presses it. */
+  const sectionStyle = (section: ShellZone): 'label' | 'icon' =>
+    section === 'sidebar' ? (navCollapsed ? 'icon' : 'label') : section === 'top' ? topStyle : bottomStyle
+  const setSectionStyle = (section: ShellZone, style: 'label' | 'icon') => {
+    if (section === 'sidebar') {
+      setNavCollapsedState(style === 'icon')
+      window.dispatchEvent(new CustomEvent('mc:nav-set-collapsed', { detail: style === 'icon' }))
+    } else {
+      setBarStyle(section, style)
+      // Search keeps its own field-or-icon choice; the bar's setting sets it too.
+      if (barOrder(section).includes(SEARCH_ITEM)) setSearchStyle(style === 'icon' ? 'icon' : 'field')
+    }
+    announceLayout(i18nT(style === 'icon' ? 'nav.layout_section_now_icon' : 'nav.layout_section_now_label', { place: zoneLabel(section) }))
+  }
+  /** A section is also a drop target: drop a tile on "Top bar" to put it
+   *  there, on "Not shown" to remove it. */
+  const sectionDrop = (section: ShellZone | 'none') => ({
+    onDragOver: (e: DragEvent) => {
+      if (!e.dataTransfer.types.includes(SHELL_ITEM_MIME)) return
+      e.preventDefault()
+      e.dataTransfer.dropEffect = 'move'
+      if (tileOver !== section) setTileOver(section)
+    },
+    onDragLeave: (e: DragEvent) => { if (!e.currentTarget.contains(e.relatedTarget as Node | null)) setTileOver(null) },
+    onDrop: (e: DragEvent) => {
+      e.preventDefault()
+      setTileOver(null)
+      const id = e.dataTransfer.getData(SHELL_ITEM_MIME)
+      const x = candidates.find(c => c.id === id)
+      if (x) place(id, section, x.meta.label)
+      markCanvas(null, 'none')
+    },
+  })
+  /** Mark on the canvas where a tile dragged in the panel will land: a
+   *  line on the matching side of the real item it sits beside. */
+  const markCanvas = (at: { id: string; before: boolean } | null, zone: ShellZone | 'none') => {
+    for (const el of document.querySelectorAll<HTMLElement>('[data-tile-mark]')) { el.style.boxShadow = ''; delete el.dataset.tileMark }
+    if (!at || zone === 'none') return
+    const sel = `[data-column-row="${CSS.escape(at.id)}"], [data-bar-item="${CSS.escape(at.id)}"]`
+    const bar = zone === 'top' || zone === 'bottom'
+    const shadow = bar ? (at.before ? 'inset 3px 0 0 var(--accent)' : 'inset -3px 0 0 var(--accent)') : (at.before ? 'inset 0 3px 0 var(--accent)' : 'inset 0 -3px 0 var(--accent)')
+    for (const el of document.querySelectorAll<HTMLElement>(sel)) { el.style.boxShadow = shadow; el.dataset.tileMark = '' }
+  }
+  /** Drop a tile beside another: it moves to that spot in the window too. */
+  const dropBeside = (id: string, target: string, before: boolean, section: ShellZone | 'none') => {
+    const x = candidates.find(c => c.id === id)
+    if (!x || id === target) return
+    if (section === 'none') { place(id, 'none', x.meta.label); return }
+    const order = list0(section).filter(i => i !== id)
+    const i = order.indexOf(target) + (before ? 0 : 1)
+    const next = order[i]
+    const at = next === undefined ? 'end' as const
+      : section === 'sidebar' ? (spotOf(next)?.pos ?? 'end' as const)
+      : (cellOf(section, next)?.col ?? 'end' as const)
+    moveInto(id, section, at)
+    announceLayout(i18nT('nav.layout_moved', { item: x.meta.label, place: zoneLabel(section) }))
+  }
+  /** A section's items in the window's order. */
+  const list0 = (section: ShellZone) => candidates.filter(c => where(c.id) === section).sort((a, b) => orderOf(a.id, section) - orderOf(b.id, section)).map(c => c.id)
+  const tile = (x: Candidate, section: ShellZone | 'none') => {
+    const inBar = section === 'top' || section === 'bottom'
+    const open = tileMenu === x.id
+    const earlier = inBar ? 'nav.layout_move_left' : 'nav.layout_move_up'
+    const later = inBar ? 'nav.layout_move_right' : 'nav.layout_move_down'
+    return (
+      // The tile drags onto the bars, the sidebar or a section; a click (or
+      // its "⋯") opens its menu. The menu button is the keyboard path.
+      // eslint-disable-next-line jsx-a11y/no-noninteractive-element-interactions, jsx-a11y/click-events-have-key-events
+      <li
+        key={x.id}
+        draggable
+        data-layout-tile={x.id}
+        onDragStart={e => { setTileMenu(null); lightItem(x.id, false); startItemDrag(e, x.id) }}
+        onDragEnd={() => { setTileAt(null); markCanvas(null, 'none') }}
+        onDragOver={e => {
+          if (!e.dataTransfer.types.includes(SHELL_ITEM_MIME)) return
+          e.preventDefault()
+          e.stopPropagation()
+          e.dataTransfer.dropEffect = 'move'
+          const r = e.currentTarget.getBoundingClientRect()
+          const before = e.clientX < r.left + r.width / 2
+          if (tileAt?.id !== x.id || tileAt.before !== before) { setTileAt({ id: x.id, before }); markCanvas({ id: x.id, before }, section) }
+          if (tileOver !== section) setTileOver(section)
+        }}
+        onDragLeave={e => { if (!e.currentTarget.contains(e.relatedTarget as Node | null) && tileAt?.id === x.id) { setTileAt(null); markCanvas(null, 'none') } }}
+        onDrop={e => {
+          e.preventDefault()
+          e.stopPropagation()
+          const id = e.dataTransfer.getData(SHELL_ITEM_MIME)
+          const before = tileAt?.before ?? true
+          setTileAt(null); setTileOver(null); markCanvas(null, 'none')
+          if (id) dropBeside(id, x.id, before, section)
+        }}
+        onPointerEnter={() => lightItem(x.id, true)}
+        onPointerLeave={() => lightItem(x.id, false)}
+        onClick={() => setTileMenu(open ? null : x.id)}
+        title={x.meta.label}
+        className={`group/tile relative flex flex-col items-center gap-1.5 rounded-xl px-1.5 pt-2.5 pb-2 text-center cursor-grab active:cursor-grabbing ${open ? 'bg-bg-hover ring-1 ring-accent' : 'hover:bg-bg-hover'}`}
+      >
+        {tileAt?.id === x.id && (
+          <span aria-hidden="true" className={`pointer-events-none absolute top-1 bottom-1 w-[3px] rounded-full bg-accent ${tileAt.before ? '-left-[3px]' : '-right-[3px]'}`} />
+        )}
+        <span className={`flex h-10 w-10 items-center justify-center rounded-lg border bg-bg text-text [&_svg]:h-[18px] [&_svg]:w-[18px] ${section === 'none' ? 'border-dashed border-border text-muted' : 'border-border'}`}>
+          {x.meta.icon}
+        </span>
+        <span className="line-clamp-2 w-full break-words text-[12px] leading-tight text-text">{x.meta.label}</span>
+        {x.detail && repeated.has(x.meta.label) && <span className="-mt-1 text-[10px] text-muted">{x.detail}</span>}
+        <DropdownMenu modal={false} open={open} onOpenChange={o => setTileMenu(o ? x.id : null)}>
+          <DropdownMenuTrigger asChild>
+            <button
+              type="button"
+              aria-label={i18nT('nav.layout_kbd_menu', { item: x.meta.label })}
+              title={i18nT('nav.layout_item_more')}
+              onClick={e => e.stopPropagation()}
+              data-testid="layout-tile-more"
+              className={`absolute right-1 top-1 flex h-5 w-5 items-center justify-center rounded-md border border-border bg-bg-elevated text-muted hover:text-text cursor-pointer ${open ? 'opacity-100' : 'opacity-0 group-hover/tile:opacity-100 focus-visible:opacity-100'}`}
+            >
+              <MoreHorizontal size={12} aria-hidden="true" />
+            </button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="start" className="min-w-[190px]" data-testid="layout-tile-menu">
+            {section !== 'none' && canStep(x.id, -1) && <DropdownMenuItem onSelect={() => step(x.id, -1, x.meta.label)}>{i18nT(earlier, { item: x.meta.label })}</DropdownMenuItem>}
+            {section !== 'none' && canStep(x.id, 1) && <DropdownMenuItem onSelect={() => step(x.id, 1, x.meta.label)}>{i18nT(later, { item: x.meta.label })}</DropdownMenuItem>}
+            {(['top', 'sidebar', 'bottom'] as const).filter(z => z !== section).map(z => (
+              <DropdownMenuItem key={z} onSelect={() => place(x.id, z, x.meta.label)}>
+                <span className="inline-flex items-center gap-2"><PlaceIcon place={z} />{i18nT('nav.layout_kbd_move_to', { place: zoneLabel(z) })}</span>
+              </DropdownMenuItem>
+            ))}
+            {inBar && offersStyle(x.id) && (
+              <DropdownMenuItem onSelect={() => {
+                const icon = !isIcon(x.id)
+                if (x.id === SEARCH_ITEM) setSearchStyle(icon ? 'icon' : 'field'); else setItemStyle(x.id, icon ? 'icon' : 'label')
+                announceLayout(i18nT(icon ? 'nav.layout_now_icon' : 'nav.layout_now_label', { item: x.meta.label }))
+              }}>
+                {i18nT(isIcon(x.id) ? (x.id === SEARCH_ITEM ? 'nav.layout_search_field' : 'nav.layout_style_label') : 'nav.layout_search_icon')}
+              </DropdownMenuItem>
+            )}
+            {section !== 'none' && (
+              <>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem onSelect={() => place(x.id, 'none', x.meta.label)}>{i18nT('nav.layout_kbd_remove')}</DropdownMenuItem>
+              </>
+            )}
+          </DropdownMenuContent>
+        </DropdownMenu>
+      </li>
+    )
+  }
+  if (tiles && !panelHidden) {
+    const list = candidates.filter(matches)
+    return (
+      <OverlayPortal>
+        {live}
+        <div
+          className="pointer-events-none fixed right-0 z-[60] flex justify-center px-[clamp(12px,3vw,40px)]"
+          style={{ left: railWidth, top: tileFrame?.top ?? 88, bottom: tileFrame?.bottom ?? 68 }}
+        >
+          <aside
+            ref={panelRef}
+            tabIndex={-1}
+            role="region"
+            aria-label={i18nT('nav.rail_customize_title')}
+            className="pointer-events-auto flex h-full w-[1040px] max-w-full min-h-0 flex-col overflow-hidden rounded-2xl border border-border bg-bg-elevated text-text shadow-2xl outline-none"
+            data-testid="layout-edit-panel"
+            data-panel-style="tiles"
+          >
+            <header className="flex items-center gap-3 border-b border-border px-5 pt-3.5 pb-3">
+              <div className="min-w-0 flex-1">
+                <h2 className="m-0 text-[15px] font-semibold text-text">{i18nT('nav.rail_customize_title')}</h2>
+                <p className="m-0 mt-0.5 truncate text-[12px] text-muted" title={i18nT('nav.layout_tiles_hint')}>{i18nT('nav.layout_tiles_hint')}</p>
+              </div>
+              <label className="flex w-[260px] min-w-0 items-center gap-2 rounded-lg border border-border bg-bg px-3 py-1.5 focus-within:border-accent">
+                <Search size={14} className="shrink-0 text-muted" aria-hidden="true" />
+                <input
+                  value={query}
+                  onChange={e => setQuery(e.target.value)}
+                  placeholder={i18nT('nav.rail_palette_search')}
+                  aria-label={i18nT('nav.rail_palette_search')}
+                  className="min-w-0 flex-1 border-none bg-transparent text-[13px] text-text outline-none placeholder:text-muted"
+                />
+              </label>
+              <button
+                type="button"
+                onClick={() => setPanelHidden(true)}
+                aria-label={i18nT('nav.layout_hide_panel')}
+                title={i18nT('nav.layout_hide_panel')}
+                className="flex h-7 w-7 items-center justify-center rounded-md border-none bg-transparent text-muted hover:bg-bg-hover hover:text-text cursor-pointer"
+              >
+                <Minus size={15} />
+              </button>
+              <button
+                type="button"
+                onClick={() => setLayoutEditing(false)}
+                aria-label={i18nT('nav.rail_done')}
+                title={i18nT('nav.rail_done')}
+                className="flex h-7 w-7 items-center justify-center rounded-md border-none bg-transparent text-muted hover:bg-bg-hover hover:text-text cursor-pointer"
+              >
+                <X size={15} />
+              </button>
+            </header>
+
+            <div className="min-h-0 flex-1 overflow-y-auto px-4 py-3" data-testid="layout-tiles">
+              {list.length === 0 && <p className="m-0 py-8 text-center text-[13px] text-muted">{i18nT('nav.rail_palette_no_results', { query: query.trim() })}</p>}
+              {/* Grouped by where each item sits, in the window's own order, so
+                  a moved item's tile jumps to its new place. */}
+              {SECTIONS.map((section, si) => {
+                const items = list.filter(x => where(x.id) === section).sort((a, b) => orderOf(a.id, section) - orderOf(b.id, section))
+                if (items.length === 0 && q) return null
+                const headingId = `layout-tiles-${section}`
+                return (
+                  <div key={section}>
+                  {/* A dashed divider between sections, the same line as the
+                      areas drawn in the window. */}
+                  {si > 0 && <hr aria-hidden="true" className="mx-2 my-2 border-0 border-t-2 border-dashed border-text/30" />}
+                  <section
+                    aria-labelledby={headingId}
+                    data-tile-section={section}
+                    {...sectionDrop(section)}
+                    className={`rounded-xl border-2 border-dashed px-2 pt-1.5 pb-1 transition-colors ${tileOver === section ? 'border-accent bg-accent-subtle/40' : 'border-transparent'}`}
+                  >
+                    <div className="mx-1 mb-1 flex min-h-[30px] items-center gap-2">
+                      <h3 id={headingId} className="m-0 flex flex-1 items-center gap-1.5 text-[12px] font-bold uppercase tracking-wide text-text">
+                        <PlaceIcon place={section} />{placeLabel(section)} <span className="font-normal normal-case text-muted">{items.length}</span>
+                      </h3>
+                      {/* The section's Show setting, flush right in every
+                          section (none for Not shown, which is not on screen). */}
+                      {section !== 'none' && (
+                        <span role="group" aria-label={i18nT('nav.layout_section_show', { place: placeLabel(section) })} className="flex shrink-0 items-center gap-0.5 rounded-lg border border-border p-0.5" data-testid={`layout-section-show-${section}`}>
+                          {(['label', 'icon'] as const).map(style => {
+                            const on = sectionStyle(section) === style
+                            return (
+                              <button
+                                key={style}
+                                type="button"
+                                aria-pressed={on}
+                                onClick={() => { if (!on) setSectionStyle(section, style) }}
+                                className={`inline-flex h-6 items-center gap-1 rounded-md border-none px-2 text-[12px] cursor-pointer ${on ? 'bg-bg-hover text-text' : 'bg-transparent text-muted hover:text-text'}`}
+                              >
+                                {on && <Check size={12} aria-hidden="true" />}
+                                {i18nT(style === 'icon' ? 'nav.layout_search_icon' : 'nav.layout_style_label')}
+                              </button>
+                            )
+                          })}
+                        </span>
+                      )}
+                    </div>
+                    {items.length === 0
+                      ? <p className="m-0 mx-1 mb-2 text-[12px] text-muted">{i18nT('nav.layout_tiles_empty')}</p>
+                      : (
+                        <ul className="m-0 grid list-none gap-1 p-0" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(96px, 1fr))' }}>
+                          {items.map(x => tile(x, section))}
+                        </ul>
+                      )}
+                  </section>
+                  </div>
+                )
+              })}
+              {/* Always here: the items that never move, as a section of its
+                  own after a divider, drawn like the others but locked. */}
+              {LOCKED.some(l => !q || i18nT(l.key).toLowerCase().includes(q)) && (
+                <div>
+                  <hr aria-hidden="true" className="mx-2 my-2 border-0 border-t-2 border-dashed border-text/30" />
+                  <section aria-labelledby="layout-tiles-always" className="rounded-xl border-2 border-dashed border-transparent px-2 pt-1.5 pb-1">
+                    <div className="mx-1 mb-1 flex min-h-[30px] items-center gap-2">
+                      <h3 id="layout-tiles-always" className="m-0 flex flex-1 items-center gap-1.5 text-[12px] font-bold uppercase tracking-wide text-text">
+                        <Lock size={13} aria-hidden="true" />{i18nT('nav.layout_always_here')} <span className="font-normal normal-case text-muted">{LOCKED.length}</span>
+                      </h3>
+                    </div>
+                    <ul className="m-0 grid list-none gap-1 p-0" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(96px, 1fr))' }}>
+                      {LOCKED.filter(l => !q || i18nT(l.key).toLowerCase().includes(q)).map(l => (
+                        <li key={l.key} title={i18nT('nav.layout_locked_title')} className="relative flex flex-col items-center gap-1.5 rounded-xl px-1.5 pt-2.5 pb-2 text-center">
+                          <span className="flex h-10 w-10 items-center justify-center rounded-lg border border-dashed border-border bg-bg text-muted [&_svg]:h-[18px] [&_svg]:w-[18px]">{l.icon}</span>
+                          <span className="line-clamp-2 w-full break-words text-[12px] leading-tight text-text">{i18nT(l.key)}</span>
+                          <Lock size={11} aria-hidden="true" className="absolute right-1.5 top-1.5 text-muted" />
+                          <span className="sr-only">{i18nT('nav.layout_locked_title')}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  </section>
+                </div>
+              )}
+            </div>
+
+            <footer className="flex items-center gap-3 border-t border-border px-5 py-3">
+              <Btn onClick={reset}>{i18nT('nav.rail_reset')}</Btn>
+              <span className="flex-1" />
+              <Btn primary onClick={() => setLayoutEditing(false)}>{i18nT('nav.rail_done')}</Btn>
+            </footer>
+          </aside>
+        </div>
+      </OverlayPortal>
+    )
+  }
   if (panelHidden && !phone) return (
     <OverlayPortal>
       {live}

@@ -136,6 +136,43 @@ export function useDisclosure(): DisclosureStyle {
   return style
 }
 
+/* ── How the option 2 panel lays out its items (prototype band) ── */
+
+/**
+ *   list  — the panel as built: rows in Built in and Yours columns.
+ *   tiles — Sketch's Customize Toolbar: a bigger panel of icon tiles,
+ *           grouped by where each item sits, with one Show setting.
+ */
+export type PanelStyle = 'list' | 'tiles'
+export const PANEL_STYLES: readonly PanelStyle[] = ['list', 'tiles']
+
+const PANEL_STYLE_KEY = 'mc-layout-panel-style'
+const PANEL_STYLE_EVENT = 'mc:layout-panel-style-changed'
+
+export function readPanelStyle(): PanelStyle {
+  return safeGetItem(PANEL_STYLE_KEY) === 'tiles' ? 'tiles' : 'list'
+}
+
+export function setPanelStyle(style: PanelStyle): void {
+  if (style === readPanelStyle()) return
+  safeSetItem(PANEL_STYLE_KEY, style)
+  window.dispatchEvent(new Event(PANEL_STYLE_EVENT))
+}
+
+export function usePanelStyle(): PanelStyle {
+  const [style, setStyle] = useState(readPanelStyle)
+  useEffect(() => {
+    const sync = () => setStyle(readPanelStyle())
+    window.addEventListener(PANEL_STYLE_EVENT, sync)
+    window.addEventListener('storage', sync)
+    return () => {
+      window.removeEventListener(PANEL_STYLE_EVENT, sync)
+      window.removeEventListener('storage', sync)
+    }
+  }, [])
+  return style
+}
+
 /* ── Recently removed items (the Gradual picker lists them first) ── */
 
 const RECENT_KEY = 'mc-layout-recently-removed'

@@ -15,8 +15,8 @@ import { useId } from 'react'
 
 import { i18nT } from '../../i18n/t'
 import {
-  DISCLOSURE_STYLES, EDIT_OPTIONS, GRID_STYLES, setDisclosure, setEditOption, setGridStyle, useDisclosure, useEditOption,
-  useGridChoice,
+  DISCLOSURE_STYLES, EDIT_OPTIONS, GRID_STYLES, PANEL_STYLES, setDisclosure, setEditOption, setGridStyle, setPanelStyle,
+  useDisclosure, useEditOption, useGridChoice, usePanelStyle,
 } from '../../lib/editOption'
 
 // Prototype-tool palette, intentionally outside the theme (see above).
@@ -69,11 +69,13 @@ function Segments<T extends string>({ label, options, value, onChange, labelOf }
 const OPTION_KEY = { drag: 'nav.layout_option_drag', panel: 'nav.layout_option_panel', preview: 'nav.layout_option_preview' } as const
 const GRID_KEY = { drafting: 'nav.layout_grid_drafting', minimal: 'nav.layout_grid_minimal' } as const
 const DISCLOSURE_KEY = { all: 'nav.layout_disclosure_all', gradual: 'nav.layout_disclosure_gradual' } as const
+const PANEL_STYLE_KEY = { list: 'nav.layout_panel_style_list', tiles: 'nav.layout_panel_style_tiles' } as const
 
 export function EditOptionSwitcher() {
   const option = useEditOption()
   const grid = useGridChoice()
   const disclosure = useDisclosure()
+  const panelStyle = usePanelStyle()
   return (
     <div
       data-testid="edit-option-switcher"
@@ -84,7 +86,11 @@ export function EditOptionSwitcher() {
       {/* The second switch belongs to the option under review: the panel
           compares how it reveals its items, drag only compares grids, and
           the preview (its own drawing, no grid) has none. */}
-      {option === 'panel' && <Segments label={i18nT('nav.layout_disclosure_label')} options={DISCLOSURE_STYLES} value={disclosure} onChange={setDisclosure} labelOf={d => i18nT(DISCLOSURE_KEY[d])} />}
+      {/* Option 2 compares two panels: List (rows) and Tiles (Sketch's
+          Customize Toolbar). Reveal belongs to List only: Tiles shows
+          everything at once, as Sketch does. */}
+      {option === 'panel' && <Segments label={i18nT('nav.layout_panel_style_label')} options={PANEL_STYLES} value={panelStyle} onChange={setPanelStyle} labelOf={p => i18nT(PANEL_STYLE_KEY[p])} />}
+      {option === 'panel' && panelStyle === 'list' && <Segments label={i18nT('nav.layout_disclosure_label')} options={DISCLOSURE_STYLES} value={disclosure} onChange={setDisclosure} labelOf={d => i18nT(DISCLOSURE_KEY[d])} />}
       {option === 'drag' && <Segments label={i18nT('nav.layout_grid_label')} options={GRID_STYLES} value={grid} onChange={setGridStyle} labelOf={g => i18nT(GRID_KEY[g])} />}
     </div>
   )

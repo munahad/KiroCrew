@@ -20,7 +20,7 @@ import { useEffect, useState } from 'react'
 import { safeGetItem, safeRemoveItem, safeSetItem } from '../utils/safeStorage'
 import {
   HISTORY_ITEM, PROFILE_ITEM, REMOTE_ITEM, SEARCH_ITEM, STATUS_ITEM, WIDGET_ITEMS, moveItem, readPlace,
-  readSearchStyle, readShellPlacement, type BarZone,
+  readSearchStyle, readShellPlacement, setSearchStyle, type BarZone,
 } from './shellLayout'
 
 /** Target cell width, in px. The real width is the bar's width split evenly. */
@@ -62,6 +62,7 @@ export function clearBarCells(): void {
   safeRemoveItem(KEY.top)
   safeRemoveItem(KEY.bottom)
   safeRemoveItem(STYLE_KEY)
+  safeRemoveItem(BAR_STYLE_KEY)
   window.dispatchEvent(new Event(EVENT))
   window.dispatchEvent(new Event(STYLE_EVENT))
 }
@@ -74,19 +75,68 @@ export function clearBarCells(): void {
 export type ItemStyle = 'label' | 'icon'
 const STYLE_KEY = 'mc-bar-item-style'
 const STYLE_EVENT = 'mc:bar-item-style-changed'
+// Each bar's own Show setting (design exploration, the Tiles panel): an item
+// with no choice of its own follows its bar. The bars start as icon only.
+const BAR_STYLE_KEY = 'mc-bar-style'
+const BAR_STYLE_DEFAULT: Record<BarZone, ItemStyle> = { top: 'icon', bottom: 'icon' }
 
 function readStyles(): Record<string, ItemStyle> {
   try {
     const v = JSON.parse(safeGetItem(STYLE_KEY) ?? '{}') as Record<string, unknown>
-    return Object.fromEntries(Object.entries(v).filter(([, s]) => s === 'icon')) as Record<string, ItemStyle>
+    return Object.fromEntries(Object.entries(v).filter(([, s]) => s === 'icon' || s === 'label')) as Record<string, ItemStyle>
   } catch {
     return {}
   }
 }
 
+/** Arriving in a bar, an item drops any old choice of its own and follows
+ *  that bar's Show setting; search, which keeps its own field-or-icon style,
+ *  takes the bar's setting too. */
+export function arriveInBar(zone: BarZone, id: string): void {
+  const m = readStyles()
+  if (id in m) { delete m[id]; safeSetItem(STYLE_KEY, JSON.stringify(m)); window.dispatchEvent(new Event(STYLE_EVENT)) }
+  if (id === SEARCH_ITEM) setSearchStyle(readBarStyle(zone) === 'icon' ? 'icon' : 'field')
+}
+
+/** How an item will look in a bar: its own choice, else the bar's setting. */
+export function styleInBar(zone: BarZone, id: string): ItemStyle {
+  if (barIds(zone).includes(id)) return readStyles()[id] ?? readBarStyle(zone)
+  return readBarStyle(zone)
+}
+
+export function readBarStyle(zone: BarZone): ItemStyle {
+  try {
+    const v = (JSON.parse(safeGetItem(BAR_STYLE_KEY) ?? '{}') as Record<string, unknown>)[zone]
+    return v === 'icon' || v === 'label' ? v : BAR_STYLE_DEFAULT[zone]
+  } catch {
+    return BAR_STYLE_DEFAULT[zone]
+  }
+}
+
+/** Set a whole bar's Show setting: its items drop their own choice and follow it. */
+export function setBarStyle(zone: BarZone, style: ItemStyle): void {
+  let all: Record<string, unknown> = {}
+  try { all = JSON.parse(safeGetItem(BAR_STYLE_KEY) ?? '{}') as Record<string, unknown> } catch { all = {} }
+  all[zone] = style
+  safeSetItem(BAR_STYLE_KEY, JSON.stringify(all))
+  const m = readStyles()
+  for (const id of barIds(zone)) delete m[id]
+  safeSetItem(STYLE_KEY, JSON.stringify(m))
+  window.dispatchEvent(new Event(STYLE_EVENT))
+}
+
+/** The bar an item sits in, if any. */
+function barOf(id: string): BarZone | null {
+  if (barIds('top').includes(id)) return 'top'
+  if (barIds('bottom').includes(id)) return 'bottom'
+  return null
+}
+
 export function setItemStyle(id: string, style: ItemStyle): void {
   const m = readStyles()
-  if (style === 'label') delete m[id]
+  const bar = barOf(id)
+  // Matching its bar's setting means no choice of its own.
+  if (bar && style === readBarStyle(bar)) delete m[id]
   else m[id] = style
   safeSetItem(STYLE_KEY, JSON.stringify(m))
   window.dispatchEvent(new Event(STYLE_EVENT))
@@ -104,7 +154,27 @@ export function useItemStyle(): (id: string) => ItemStyle {
       window.removeEventListener('storage', sync)
     }
   }, [])
-  return (id: string) => m[id] ?? 'label'
+  // An item without its own choice follows its bar's setting.
+  return (id: string) => {
+    if (m[id]) return m[id]
+    const bar = barOf(id)
+    return bar ? readBarStyle(bar) : 'label'
+  }
+}
+
+/** A bar's Show setting, kept current. */
+export function useBarStyle(zone: BarZone): ItemStyle {
+  const [v, setV] = useState(() => readBarStyle(zone))
+  useEffect(() => {
+    const sync = () => setV(readBarStyle(zone))
+    window.addEventListener(STYLE_EVENT, sync)
+    window.addEventListener('storage', sync)
+    return () => {
+      window.removeEventListener(STYLE_EVENT, sync)
+      window.removeEventListener('storage', sync)
+    }
+  }, [zone])
+  return v
 }
 
 /* ── Columns and spans, as last measured on screen ── */
@@ -123,8 +193,8 @@ function guessSpan(zone: BarZone, id: string): number {
   if (id === REMOTE_ITEM) return 3
   if (id === STATUS_ITEM) return zone === 'top' ? 6 : 4
   if (id === PROFILE_ITEM) return 1
-  // Icon and label, unless switched to the icon only.
-  return readStyles()[id] === 'icon' ? 1 : 3
+  // Its own choice, else its bar's Show setting (icon only to start).
+  return (readStyles()[id] ?? readBarStyle(zone)) === 'icon' ? 1 : 3
 }
 
 export function spanOf(zone: BarZone, id: string): number {
@@ -188,7 +258,10 @@ export function pushAside(zone: BarZone, ids: readonly string[], cells: Cols, sp
  *  it, and whatever sat there moves aside. Every item's cell is saved, so the
  *  bar stays as it looks now. */
 export function placeOnBar(zone: BarZone, id: string, col: number): void {
-  if (!barIds(zone).includes(id)) moveItem(id, zone)
+  if (!barIds(zone).includes(id)) {
+    arriveInBar(zone, id)
+    moveItem(id, zone)
+  }
   const span = (x: string) => spanOf(zone, x)
   const ids = barIds(zone)
   writeCells(zone, { ...readCells(zone), ...pushAside(zone, ids, readCells(zone), span, readBarColumns(zone), id, col) })
