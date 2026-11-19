@@ -1,9 +1,10 @@
 import { afterEach, describe, expect, it } from 'vitest'
 
 import {
-  LOGO_ITEM, NOTIFY_ITEM, PROFILE_ITEM, REMOTE_ITEM, STATUS_ITEM, WIDGET_ITEMS, canRemove, isWidgetItem, moveItem, placesOf, readLogoShown,
+  HISTORY_ITEM, LOGO_ITEM, NOTIFY_ITEM, PROFILE_ITEM, REMOTE_ITEM, STATUS_ITEM, WIDGET_ITEMS, canRemove, isWidgetItem, moveItem, placesOf, readLogoShown,
   readPlace, resetShellLayout,
 } from './shellLayout'
+import { barOrder } from './barGrid'
 
 afterEach(() => { resetShellLayout(); localStorage.clear() })
 
@@ -20,14 +21,26 @@ describe('round 1 shared store rules', () => {
     expect(readPlace(PROFILE_ITEM)).toBe('sidebar')
   })
 
-  it('starts the Crews switcher in the top bar, and lets it move and be removed', () => {
+  it('starts the Crews switcher in the top bar, lets it move, and never removes it', () => {
     expect(isWidgetItem(REMOTE_ITEM)).toBe(true)
     expect(readPlace(REMOTE_ITEM)).toBe('top')
-    expect(placesOf(REMOTE_ITEM)).toEqual(['sidebar', 'top', 'bottom', 'none'])
+    expect(canRemove(REMOTE_ITEM)).toBe(false)
+    expect(placesOf(REMOTE_ITEM)).toEqual(['sidebar', 'top', 'bottom'])
     moveItem(REMOTE_ITEM, 'sidebar')
     expect(readPlace(REMOTE_ITEM)).toBe('sidebar')
+    moveItem(REMOTE_ITEM, 'bottom')
+    expect(readPlace(REMOTE_ITEM)).toBe('bottom')
     moveItem(REMOTE_ITEM, null)
-    expect(readPlace(REMOTE_ITEM)).toBe('none')
+    expect(readPlace(REMOTE_ITEM)).toBe('bottom')
+    // A 'none' stored by checkpoint 54 reads as its default spot.
+    localStorage.setItem('mc-remote-place', 'none')
+    expect(readPlace(REMOTE_ITEM)).toBe('top')
+  })
+
+  it('puts the Crews switcher back right after Back/Forward on Reset', () => {
+    moveItem(REMOTE_ITEM, 'bottom')
+    resetShellLayout()
+    expect(barOrder('top').slice(0, 2)).toEqual([HISTORY_ITEM, REMOTE_ITEM])
   })
 
   it('moves notifications on their own, apart from status', () => {

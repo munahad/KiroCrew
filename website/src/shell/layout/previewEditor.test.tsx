@@ -1,7 +1,7 @@
 /**
  * Option 3 (Drag in a preview): Remove all shows only on a bar with two or
  * more removable items, and the drawing follows the round 1 shell rules
- * (fixed Crews switcher and collapse button, an optional logo, "You" never
+ * (a fixed collapse button, a move-only Crews switcher, an optional logo, "You" never
  * removed, the bell on its own).
  */
 import { afterEach, describe, expect, it } from 'vitest'
@@ -10,7 +10,7 @@ import { act, cleanup, fireEvent, render, screen, within } from '@testing-librar
 import { i18nT } from '../../i18n/t'
 import { readEditOption, requestEditOption, setEditOption } from '../../lib/editOption'
 import {
-  LOGO_ITEM, NOTIFY_ITEM, PROFILE_ITEM, SEARCH_ITEM, STATUS_ITEM, isLayoutEditing, moveItem, readShellPlacement, setLayoutEditing, zoneOf, type ShellZone,
+  LOGO_ITEM, NOTIFY_ITEM, PROFILE_ITEM, REMOTE_ITEM, SEARCH_ITEM, STATUS_ITEM, isLayoutEditing, moveItem, readShellPlacement, setLayoutEditing, zoneOf, type ShellZone,
 } from '../../lib/shellLayout'
 import { zoneLabel } from './barItems'
 import { PreviewEditor } from './previewEditor'
@@ -19,7 +19,7 @@ import type { Candidate } from './layoutEditPanel'
 afterEach(() => { cleanup(); localStorage.clear() })
 
 const ITEMS: [string, string][] = [
-  [SEARCH_ITEM, 'Search'], [STATUS_ITEM, 'Status'], [NOTIFY_ITEM, 'Notifications'], [PROFILE_ITEM, 'You'], [LOGO_ITEM, 'Logo'],
+  [SEARCH_ITEM, 'Search'], [STATUS_ITEM, 'Status'], [NOTIFY_ITEM, 'Notifications'], [PROFILE_ITEM, 'You'], [LOGO_ITEM, 'Logo'], [REMOTE_ITEM, 'Crews'],
 ]
 const candidates: Candidate[] = ITEMS.map(([id, label]) => ({ id, category: 'tools', meta: { label, icon: <span /> } }) as Candidate)
 const where = (id: string): ShellZone | 'none' => zoneOf(id, readShellPlacement(), false) ?? 'none'
@@ -65,6 +65,13 @@ describe('PreviewEditor Remove all', () => {
     renderEditor()
     expect(removeAll('top')).toBeNull()
   })
+
+  it('does not count or remove the Crews switcher', () => {
+    renderEditor()
+    fireEvent.click(removeAll('top')!)
+    expect(where(REMOTE_ITEM)).toBe('top')
+    expect(where(SEARCH_ITEM)).toBe('none')
+  })
 })
 
 describe('PreviewEditor drawing', () => {
@@ -93,6 +100,18 @@ describe('PreviewEditor drawing', () => {
     expect(within(screen.getByTestId('preview-chip-menu')).queryByRole('menuitem', { name: i18nT('nav.layout_kbd_remove') })).toBeNull()
     const row = document.querySelector<HTMLElement>(`[data-preview-row="${PROFILE_ITEM}"]`)!
     expect(within(row).queryByRole('button', { name: i18nT('nav.layout_preview_hide_item', { item: 'You' }) })).toBeNull()
+  })
+
+  it('lets the Crews switcher move but not be removed, by menu or Delete', () => {
+    renderEditor()
+    const chip = within(zone('top')).getByRole('button', { name: 'Crews' })
+    fireEvent.click(chip)
+    const menu = screen.getByTestId('preview-chip-menu')
+    expect(within(menu).queryByRole('menuitem', { name: i18nT('nav.layout_kbd_remove') })).toBeNull()
+    fireEvent.keyDown(chip, { key: 'Delete' })
+    expect(where(REMOTE_ITEM)).toBe('top')
+    fireEvent.click(within(screen.getByTestId('preview-chip-menu')).getByRole('menuitem', { name: i18nT('nav.layout_kbd_move_to', { place: zoneLabel('bottom') }) }))
+    expect(where(REMOTE_ITEM)).toBe('bottom')
   })
 })
 

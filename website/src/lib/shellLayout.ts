@@ -62,13 +62,13 @@ export type WidgetPlace = SearchPlace
 export type WidgetItem = typeof SEARCH_ITEM | typeof STATUS_ITEM | typeof NOTIFY_ITEM | typeof REMOTE_ITEM | typeof HISTORY_ITEM | typeof PROFILE_ITEM
 export type TwoPlaceItem = WidgetItem
 /** The movable widgets. The local/remote Crews switcher starts in the top bar
- *  (checkpoint 54) and moves like the others. */
+ *  (checkpoint 54) and moves like the others, but can't be removed (55). */
 export const WIDGET_ITEMS: readonly WidgetItem[] = [SEARCH_ITEM, STATUS_ITEM, NOTIFY_ITEM, REMOTE_ITEM, HISTORY_ITEM, PROFILE_ITEM]
 export const isWidgetItem = (id: string): id is WidgetItem => (WIDGET_ITEMS as readonly string[]).includes(id)
-/** Whether an editor may offer Remove (Not shown) for an item. "You" can move
- *  between areas but is never removed: it holds Settings and Edit layout.
- *  The Crews switcher can be removed: "Switch remote..." stays in "You". */
-export const canRemove = (id: string) => id !== PROFILE_ITEM
+/** Whether an editor may offer Remove (Not shown) for an item. "You" (it holds
+ *  Settings and Edit layout) and the Crews switcher (checkpoint 55) can move
+ *  between areas but are never removed. */
+export const canRemove = (id: string) => id !== PROFILE_ITEM && id !== REMOTE_ITEM
 /** The places an editor may offer for an item, in menu order. */
 export function placesOf(id: string): (ShellZone | 'none')[] {
   if (id === LOGO_ITEM) return ['sidebar', 'none']
@@ -105,7 +105,8 @@ export const SAMPLE_BADGES: Readonly<Record<string, number>> | null = IN_TEST ? 
 
 export function readPlace(id: WidgetItem): WidgetPlace {
   const v = safeGetItem(PLACE_KEY[id])
-  // "You" is never Not shown: an older stored 'none' reads as its default.
+  // "You" and the Crews switcher are never Not shown: an older stored 'none'
+  // reads as the default place.
   if (v === 'none' && !canRemove(id)) return DEFAULT_PLACE[id]
   return v === 'top' || v === 'sidebar' || v === 'bottom' || v === 'none' ? v : DEFAULT_PLACE[id]
 }
