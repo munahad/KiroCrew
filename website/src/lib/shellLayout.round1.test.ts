@@ -20,11 +20,14 @@ describe('round 1 shared store rules', () => {
     expect(readPlace(PROFILE_ITEM)).toBe('sidebar')
   })
 
-  it('keeps the Crews switcher fixed in the sidebar', () => {
-    expect(isWidgetItem(REMOTE_ITEM)).toBe(false)
-    expect(placesOf(REMOTE_ITEM)).toEqual([])
-    moveItem(REMOTE_ITEM, 'top')
+  it('starts the Crews switcher in the top bar, and lets it move and be removed', () => {
+    expect(isWidgetItem(REMOTE_ITEM)).toBe(true)
+    expect(readPlace(REMOTE_ITEM)).toBe('top')
+    expect(placesOf(REMOTE_ITEM)).toEqual(['sidebar', 'top', 'bottom', 'none'])
+    moveItem(REMOTE_ITEM, 'sidebar')
     expect(readPlace(REMOTE_ITEM)).toBe('sidebar')
+    moveItem(REMOTE_ITEM, null)
+    expect(readPlace(REMOTE_ITEM)).toBe('none')
   })
 
   it('moves notifications on their own, apart from status', () => {

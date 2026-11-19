@@ -27,13 +27,14 @@ function renderRail(setAppPinned = vi.fn(), withProviders = false) {
 afterEach(() => { setLayoutEditing(false); localStorage.clear() })
 
 describe('RailGroups right-click', () => {
-  it('renders one flat list by default, with no group header', () => {
+  it('renders the pages untitled, then the shipped Apps label', () => {
     renderRail()
-    // Design exploration: the shipped sidebar is one flat list. Its group is
-    // still named for assistive tech, but no header is drawn.
-    expect(screen.getAllByRole('group')).toHaveLength(1)
+    // Checkpoint 54: production Crew's sidebar. The pages' group is named for
+    // assistive tech with no header; the Apps group shows its label.
+    expect(screen.getAllByRole('group')).toHaveLength(2)
     expect(screen.getByRole('group', { name: 'Main list' })).toBeTruthy()
     expect(screen.queryByText('Main list')).toBeNull()
+    expect(screen.getByRole('group', { name: 'Apps' })).toBeTruthy()
   })
 
   it('unpins a static row into the layout hidden set', async () => {

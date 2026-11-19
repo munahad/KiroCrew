@@ -56,13 +56,22 @@ export const isEntityPin = (id: string) => id.startsWith(SESSION_PIN_PREFIX) || 
 /** Native-drag MIME type a drag source sets to offer a rail pin id. */
 export const RAIL_PIN_MIME = 'application/x-kirocrew-rail-pin'
 
+/** The shipped "Apps" label's group: the one titled group (round 1). */
+export const APPS_GROUP_ID = 'apps'
+/** Two made-up pinned apps (prototype only): they show that an app is in the
+ *  sidebar only when pinned. Real installed apps start Not shown. */
+export const DEMO_APP_IDS = ['demo-app:release-notes', 'demo-app:standup-bot'] as const
+export const isDemoApp = (id: string) => (DEMO_APP_IDS as readonly string[]).includes(id)
+
 /** The shipped arrangement. Group ids double as the i18n lookup for titles. */
 export const DEFAULT_RAIL_LAYOUT: RailLayout = {
   version: RAIL_LAYOUT_VERSION,
-  // Design exploration: ONE flat list, no headers. Users create their own
-  // groups (right-click > New group); the base list itself never shows a title.
+  // Production Crew (checkpoint 54): the pages, then the shipped "Apps" label
+  // with Discover, Library and two sample pinned apps. Users cannot make
+  // sections; the Apps label is the only one.
   groups: [
-    { id: 'workspace', items: ['chat', 'members', 'schedule', 'artifacts', 'apps', 'apps-library'] },
+    { id: 'workspace', items: ['chat', 'members', 'schedule', 'artifacts'] },
+    { id: APPS_GROUP_ID, items: ['apps', 'apps-library', ...DEMO_APP_IDS] },
   ],
   hidden: [],
 }
@@ -174,10 +183,13 @@ export function applyVisibleOrder(stored: RailLayout, visible: readonly RailGrou
 }
 
 /** Round 1: no user sections. Every group's rows, in order, as ONE untitled
- *  list (the base group). Stored groups are folded into it on the next write. */
+ *  list (the base group), except the shipped Apps label's group, which keeps
+ *  its place and title. Stored groups are folded in on the next write. */
 export function flattenRailGroups(groups: readonly RailGroup[]): RailGroup[] {
   if (groups.length === 0) return []
-  return [{ id: FALLBACK_GROUP_ID, items: groups.flatMap(g => g.items) }]
+  const apps = groups.find(g => g.id === APPS_GROUP_ID)
+  const base = { id: FALLBACK_GROUP_ID, items: groups.filter(g => g !== apps).flatMap(g => g.items) }
+  return apps ? [base, { id: APPS_GROUP_ID, items: apps.items }] : [base]
 }
 
 /* ── Edits on the VISIBLE groups (what the rail draws). Pure; commit with `commitRail`. ── */

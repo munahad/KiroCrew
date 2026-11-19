@@ -9,7 +9,7 @@ import { useMayLeaveForNavigation, useIsCurrentUrl } from '../../components/Navi
 import { motion } from 'framer-motion'
 import { useNavShortcutHint } from '../../hooks/useNavShortcutHint'
 import { i18nT } from '../../i18n/t'
-import { useLayoutEditing } from '../../lib/shellLayout'
+import { SAMPLE_BADGES, useLayoutEditing } from '../../lib/shellLayout'
 import { forwardUiLocation } from '../../uiLocations/uiLocation'
 import type { UiLocationId } from '../../uiLocations/descriptors'
 import type { AppRunState } from '../../appRunState'
@@ -143,7 +143,9 @@ export function NavBadge({ navId, collapsed, appBadges, runState }: { navId: str
   const surface = getBuiltinSurface(navId)
   // selectSurfaceBadgeCount caches per-navId so this stays referentially
   // stable across renders inside a `.map()`.
-  const builtinCount = useAppSelector(selectSurfaceBadgeCount(navId))
+  const liveCount = useAppSelector(selectSurfaceBadgeCount(navId))
+  // Prototype: production's sample counts (Bots 1, Discover 1) as fixed numbers.
+  const builtinCount = SAMPLE_BADGES?.[navId] ?? liveCount
   // Dynamic-app badges live outside Redux (set via a window event or a
   // direct setAppBadges sync). Consult them whenever the surface itself
   // doesn't own a badge source — including stub surfaces that only exist to

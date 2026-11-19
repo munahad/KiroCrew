@@ -16,13 +16,13 @@ import { RailContextMenu, groupTitle, type RailItemMeta } from './railCustomize'
 import { LayoutEditPanel } from '../layout/layoutEditPanel'
 import { hideFromCanvas, pageHideZoneAt, setPageHideOver, useDragOnlyEditing } from '../layout/dragOnlyEdit'
 import {
-  HISTORY_ITEM, NOTIFY_ITEM, PROFILE_ITEM, SEARCH_ITEM, SIDEBAR_MEMBERSHIP_EVENT, STATUS_ITEM, announceLayout, barZoneAt, isWidgetItem, moveItem,
+  HISTORY_ITEM, NOTIFY_ITEM, PROFILE_ITEM, REMOTE_ITEM, SEARCH_ITEM, SIDEBAR_MEMBERSHIP_EVENT, STATUS_ITEM, announceLayout, barZoneAt, isWidgetItem, moveItem,
   setChromeDrag, setLayoutEditing, useChromeDrag, useLayoutEditing, type SidebarMembership,
 } from '../../lib/shellLayout'
 import { cellAt, placeOnBar, styleInBar } from '../../lib/barGrid'
 
 /** Where widgets start in the sidebar: the top of its rows, and the bottom. */
-const SIDEBAR_HEAD_WIDGETS = [HISTORY_ITEM, SEARCH_ITEM]
+const SIDEBAR_HEAD_WIDGETS = [HISTORY_ITEM, REMOTE_ITEM, SEARCH_ITEM]
 const SIDEBAR_FOOT_WIDGETS = [STATUS_ITEM, NOTIFY_ITEM, PROFILE_ITEM]
 import { shellItemMeta, zonesFor } from '../layout/shellItems'
 import { useIsMobile } from '../../hooks/useIsMobile'

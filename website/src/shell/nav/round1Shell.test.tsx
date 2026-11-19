@@ -9,6 +9,7 @@ import { RailHeader } from './railChrome'
 import { SidebarColumn } from './sidebarColumn'
 import { forwardBarContextMenu } from '../layout/barContextMenu'
 import { i18nT } from '../../i18n/t'
+import { TERMINAL_ITEM, moveItem } from '../../lib/shellLayout'
 
 afterEach(() => { cleanup(); localStorage.clear() })
 
@@ -47,6 +48,8 @@ describe('top bar right-click outside its item grid', () => {
 describe('SidebarColumn overflow', () => {
   it('puts rows that do not fit into More, which opens a panel', () => {
     const ids = ['a', 'b', 'c', 'd', 'e', 'f', 'g']
+    // No tool rows: the default terminal row would take a foot row.
+    moveItem(TERMINAL_ITEM, null)
     // 4 rows of the default 34px pitch fit above the 24px bottom padding.
     const frame = document.createElement('div')
     frame.setAttribute('data-sidebar-scroll', '')

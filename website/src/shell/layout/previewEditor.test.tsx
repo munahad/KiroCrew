@@ -68,10 +68,10 @@ describe('PreviewEditor Remove all', () => {
 })
 
 describe('PreviewEditor drawing', () => {
-  it('draws the Crews switcher and collapse button fixed, and the bell as its own chip', () => {
+  it('draws the collapse button fixed, no fixed Crews switcher, and the bell as its own chip', () => {
     renderEditor()
     const side = zone('sidebar')
-    expect(side.querySelector('[data-preview-fixed="crews"]')).not.toBeNull()
+    expect(side.querySelector('[data-preview-fixed="crews"]')).toBeNull()
     expect(side.querySelector('[data-preview-fixed="collapse"]')).not.toBeNull()
     expect(side.querySelector('[data-preview-fixed] button')).toBeNull()
     expect(within(zone('top')).getByRole('button', { name: 'Notifications' })).toBeTruthy()

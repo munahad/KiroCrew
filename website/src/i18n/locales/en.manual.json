@@ -4799,6 +4799,8 @@
     "layout_now_label": "{{item}} now shows its icon and label",
     "layout_now_icon": "{{item}} now shows its icon only",
     "layout_notifications_item": "Notifications",
+    "demo_app_release_notes": "Release Notes",
+    "demo_app_standup_bot": "Standup Bot",
     "sidebar_more_title": "More",
     "layout_window_hint": "Drag items to move them. Use ⋯ to remove, + to add.",
     "layout_area_add": "Add an item to {{place}}",

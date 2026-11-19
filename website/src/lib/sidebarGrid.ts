@@ -16,7 +16,7 @@ import { useEffect, useState } from 'react'
 import { safeGetItem, safeRemoveItem, safeSetItem } from '../utils/safeStorage'
 import { normalize } from './barGrid'
 import { FALLBACK_GROUP_ID, applyVisibleOrder, readRailLayout, writeRailLayout, type RailGroup } from './railLayout'
-import { NOTIFY_ITEM, PROFILE_ITEM, STATUS_ITEM } from './shellLayout'
+import { NOTIFY_ITEM, PROFILE_ITEM, STATUS_ITEM, isWindowToggle } from './shellLayout'
 
 const KEY = 'mc-sidebar-rows'
 const EVENT = 'mc:sidebar-rows-changed'
@@ -75,7 +75,8 @@ export function resolveColumn(ids: readonly string[], rows: Rows, n: number): Ro
   for (const id of ids) if (id in rows) next = Math.max(next, rows[id] + 1)
   for (const id of ids) {
     if (id in rows) want[id] = rows[id]
-    else if (FOOT.has(id)) want[id] = Number.MAX_SAFE_INTEGER
+    // A window toggle (the terminal) drawn in the column keeps to the foot too.
+    else if (FOOT.has(id) || isWindowToggle(id)) want[id] = Number.MAX_SAFE_INTEGER
     else want[id] = next++
   }
   return normalize(ids, want, one, Math.max(n, ids.length))

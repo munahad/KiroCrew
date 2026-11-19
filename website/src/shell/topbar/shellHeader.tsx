@@ -23,7 +23,7 @@ import { hiddenChromeProps } from '../focus/focusChrome'
 import { zoneLabel } from '../layout/barItems'
 import { forwardBarContextMenu } from '../layout/barContextMenu'
 import { BarGrid } from '../layout/barGridView'
-import { SEND_FEEDBACK_EVENT, useStatusPlace } from '../../lib/shellLayout'
+import { SAMPLE_BADGES, SEND_FEEDBACK_EVENT, useStatusPlace } from '../../lib/shellLayout'
 
 // Lazy, like App.tsx's update-found popup: the pill renders nothing without an update,
 // so its code rides the on-demand chunk instead of the app core.
@@ -94,6 +94,9 @@ export function NotificationsBellButton() {
   // _unread_count semantics.
   const unacked = items.filter(n => !n.acked && n.priority !== 'passive' && !n.silenced)
 
+  // Prototype: production's sample count (66) as a fixed number.
+  const shownCount = SAMPLE_BADGES?.bell ?? unacked.length
+
   // RFC Phase 4: mirror the unread count onto the desktop dock/taskbar badge.
   useEffect(() => {
     setNativeBadgeCount(unacked.length)
@@ -114,7 +117,7 @@ export function NotificationsBellButton() {
         // findings. `aria-keyshortcuts` is not in that list and is the standards
         // declaration anyway, so the non-visual route survives; the VISIBLE hint
         // stays a rail affordance, where it can be marked opaque.
-        title={unacked.length > 0 ? i18nT('app.notification_count', { count: unacked.length }) : i18nT('app.notifications')}
+        title={shownCount > 0 ? i18nT('app.notification_count', { count: shownCount }) : i18nT('app.notifications')}
         aria-label={i18nT('app.notifications')}
         {...uiLocation('shell.notifications', bellRef)}
         aria-keyshortcuts={shortcut?.ariaKeyshortcuts}
@@ -122,9 +125,9 @@ export function NotificationsBellButton() {
         aria-expanded={open}
       >
         <Bell size={15} />
-        {unacked.length > 0 && (
+        {shownCount > 0 && (
           <span className="absolute -top-1 -right-1 min-w-[16px] h-[16px] px-1 rounded-full bg-accent text-accent-fg text-[10px] font-bold flex items-center justify-center shadow-[0_0_2px_var(--accent-glow)]" aria-hidden="true">
-            {unacked.length > 99 ? '99+' : unacked.length}
+            {shownCount > 99 ? '99+' : shownCount}
           </span>
         )}
       </button>

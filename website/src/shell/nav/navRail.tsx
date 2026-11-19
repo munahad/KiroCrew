@@ -1,7 +1,7 @@
 import { surfaceLabel } from '../../surfaces/registry'
 import { railWidthFor } from '../../hooks/useRailWidth'
 import { FOCUS_INSET } from '../../hooks/useFocusMode'
-import { Coins, Compass, LayoutGrid, SquareTerminal, Smartphone, Search as SearchIcon } from 'lucide-react'
+import { CalendarCheck, Coins, Compass, LayoutGrid, Megaphone, SquareTerminal, Smartphone, Search as SearchIcon } from 'lucide-react'
 import { motion } from 'framer-motion'
 import { toggleBottomTerminal } from '../../hooks/useBottomTerminal'
 import { focusPopout as focusTerminalPopout } from '../../utils/terminalPopout'
@@ -11,7 +11,6 @@ import { isAppNavId } from '../../appNotificationBadges'
 import { NAV_ITEMS } from './navItems'
 import { isChatRoute } from './routeActive'
 import { RailBrandToggle, RailCommunityLinks, RailHeader } from './railChrome'
-import { RemoteCrewSwitcher } from '../layout/remoteCrews'
 import { PinnedRailGroups } from './railPins'
 import { forwardRailContextMenu, pinAtPoint } from './railPinDrop'
 import { RAIL_PIN_MIME } from '../../lib/railLayout'
@@ -21,6 +20,7 @@ import {
 import { ShellWidget } from '../layout/shellWidgets'
 import { DragOwnedByParent } from '../layout/dragOwner'
 import { SidebarTools } from '../layout/sidebarTools'
+import { shellItemMeta } from '../layout/shellItems'
 import { PhoneBarRows } from '../layout/phoneBarRows'
 import { phoneBarIds } from '../../lib/phoneLayout'
 
@@ -38,7 +38,7 @@ const railWideDropProps = {
     if (id && pinAtPoint(id, e.clientY)) { removeFromBars(id); setSidebarMembership(id, true) }
   },
 }
-import { defaultGroupOf } from '../../lib/railLayout'
+import { DEMO_APP_IDS, defaultGroupOf, isDemoApp } from '../../lib/railLayout'
 import { readAppNavHidden, toggleAppNavHidden } from '../../lib/appNavHidden'
 import { appPathname } from '../../lib/basePath'
 import { MOBILE_NAV_WIDTH, type AppShell } from '../appShell'
@@ -49,6 +49,10 @@ import { coversPaneProps } from '../../hooks/paneVisibility'
 /** Built-ins keep their shipped group; anything else (an installed app) joins Apps. */
 const STATIC_RAIL_IDS = new Set(['chat', 'members', 'schedule', 'artifacts', 'apps', 'apps-library'])
 const railDefaultIsStatic = (id: string) => STATIC_RAIL_IDS.has(id) || id.startsWith('capabilities-')
+/** The two made-up pinned apps' names and icons (prototype only). */
+const demoAppMeta = (id: string) => id === 'demo-app:release-notes'
+  ? { label: i18nT('nav.demo_app_release_notes'), icon: <Megaphone size={16} /> }
+  : { label: i18nT('nav.demo_app_standup_bot'), icon: <CalendarCheck size={16} /> }
 const railDefaultGroup = (id: string) => (railDefaultIsStatic(id) ? defaultGroupOf(id) : 'apps')
 
 /**
@@ -173,11 +177,6 @@ export function ShellNavRail({ shell }: { shell: AppShell }) {
               {/* Round 1: the logo is optional, and the collapse button is its
                   own control, so a collapsed sidebar can always be expanded. */}
               <RailHeader effectiveCollapsed={effectiveCollapsed} toggleNav={toggleNav} avatar={avatar} branding={branding} botName={botName} showLogo={logoShown} />
-              {/* The local/remote Crews switcher is fixed here, at the top of
-                  the sidebar; Edit layout cannot move it. */}
-              <div data-testid="sidebar-crews" className={`mb-1 ${effectiveCollapsed ? 'flex justify-center' : 'w-full'}`}>
-                <RemoteCrewSwitcher shape={effectiveCollapsed ? 'icon' : 'chip'} fill={!effectiveCollapsed} />
-              </div>
             </>
           )}
           {/* Hairline under the expanded header (collapsed rail has none —
@@ -212,7 +211,7 @@ export function ShellNavRail({ shell }: { shell: AppShell }) {
                 // phone drawer keeps its own fixed search and account rows.
                 ...(isMobile ? [] : sidebarWidgets),
                 ...advertisedNavItems.filter(n => n.group === 'Main').map(n => n.id),
-                'apps', 'apps-library',
+                'apps', 'apps-library', ...DEMO_APP_IDS,
                 ...sortedAppGroup.map(n => n.id),
               ]}
               defaultGroup={railDefaultGroup}
@@ -220,6 +219,8 @@ export function ShellNavRail({ shell }: { shell: AppShell }) {
               meta={id => {
                 if (id === 'apps') return { label: i18nT('nav.discover'), icon: <Compass size={16} /> }
                 if (id === 'apps-library') return { label: i18nT('nav.library'), icon: <LayoutGrid size={16} /> }
+                if (isDemoApp(id)) return demoAppMeta(id)
+                if (isWindowToggle(id)) return shellItemMeta(id)
                 const n = advertisedNavItems.find(x => x.id === id) ?? allAppGroup.find(x => x.id === id)
                 return n ? { label: surfaceLabel(n), icon: n.icon } : null
               }}
@@ -228,6 +229,8 @@ export function ShellNavRail({ shell }: { shell: AppShell }) {
               setAppPinned={(id, pinned) => { if (readAppNavHidden().has(id) === pinned) toggleAppNavHidden(id) }}
               renderItem={(id, label, covered, expanded = false) => {
                 const narrow = effectiveCollapsed && !expanded
+                // A window toggle in the sidebar (the terminal): a row in the column.
+                if (isWindowToggle(id)) return <SidebarTools shell={shell} collapsed={narrow} only={id} />
                 if (isWidgetItem(id)) return (
                   // The row drags the widget (dnd-kit), so the widget's own
                   // native drag is off inside it. While editing, presses pass
@@ -252,6 +255,11 @@ export function ShellNavRail({ shell }: { shell: AppShell }) {
                     badge={<NavBadge navId="apps" collapsed={narrow} appBadges={discoverBadges} />}
                   />
                 )
+                if (isDemoApp(id)) {
+                  // A made-up pinned app (prototype only): it opens Discover.
+                  const m = demoAppMeta(id)
+                  return <NavItem navId={id} path="/apps" label={label ?? m.label} icon={m.icon} active={false} collapsed={narrow} onClick={closeMobileNav} />
+                }
                 if (id === 'apps-library') return (
                   <NavItem
                     navId="apps-library"
@@ -289,7 +297,7 @@ export function ShellNavRail({ shell }: { shell: AppShell }) {
               {/* Design exploration: terminal, phone, feedback and focus mode
                   when Edit layout puts them in the sidebar. Status and "You"
                   are ordinary rows now, wherever they were placed above. */}
-              {placement.side.length > 0 && <SidebarTools shell={shell} collapsed={effectiveCollapsed} />}
+              {/* Checkpoint 54: they are rows of the sidebar column now, above "You". */}
               {/* Design exploration: Star us, Report issue and Discord moved into
                   the profile menu's Help and community group. */}
             </div>

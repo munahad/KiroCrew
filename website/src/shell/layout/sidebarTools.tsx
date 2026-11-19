@@ -14,10 +14,10 @@ import type { AppShell } from '../appShell'
 import { startItemDrag } from './barItems'
 import { shellItemMeta } from './shellItems'
 
-export function SidebarTools({ shell, collapsed }: { shell: AppShell; collapsed: boolean }) {
+export function SidebarTools({ shell, collapsed, only }: { shell: AppShell; collapsed: boolean; only?: string }) {
   const placement = useShellPlacement()
   const editing = useLayoutEditing()
-  const ids = placement.side.filter(id => {
+  const ids = placement.side.filter(id => !only || id === only).filter(id => {
     if (id === TERMINAL_ITEM) return shell.terminalEnabled
     if (id === PHONE_ITEM) return shell.hasRenderableMobileConnect
     return id === FEEDBACK_ITEM || id === FOCUS_ITEM

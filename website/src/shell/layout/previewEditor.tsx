@@ -25,7 +25,7 @@
  * hides with Delete; every change is read out (WCAG 2.1.1, 2.5.7, 4.1.3).
  */
 import { useEffect, useMemo, useRef, useState, type DragEvent, type KeyboardEvent, type ReactNode } from 'react'
-import { ArrowDown, ArrowLeft, ArrowLeftToLine, ArrowRight, ArrowUp, ChevronDown, ChevronUp, EyeOff, MonitorSmartphone, MoreHorizontal, Plus, Search, X } from 'lucide-react'
+import { ArrowDown, ArrowLeft, ArrowLeftToLine, ArrowRight, ArrowUp, ChevronDown, ChevronUp, EyeOff, MoreHorizontal, Plus, Search, X } from 'lucide-react'
 
 import { Btn } from '../../components/ui'
 import { OverlayPortal } from '../../components/overlayRoot'
@@ -38,7 +38,7 @@ import {
   type ShellZone,
 } from '../../lib/shellLayout'
 import { setEditOptionGuard } from '../../lib/editOption'
-import { columnIdsOf, columnOrder, isHeaderId } from '../../lib/sidebarGrid'
+import { columnIdsOf, columnOrder, isFootItem, isHeaderId } from '../../lib/sidebarGrid'
 import { zoneLabel, startItemDrag } from './barItems'
 import { offersStyle } from './barStyleChooser'
 import { restoreLayout, snapshotLayout } from './dragOnlyEdit'
@@ -145,7 +145,9 @@ export function PreviewEditor({ candidates, columnOf, categoryLabel, repeated, g
   const inZone = (zone: ShellZone): string[] => {
     if (zone === 'top' || zone === 'bottom') return barOrder(zone).filter(id => byId.has(id) && where(id) === zone)
     const rows = columnOrder(columnIdsOf(groups)).filter(id => !isHeaderId(id) && id !== LOGO_ITEM && byId.has(id) && where(id) === 'sidebar')
-    return [...rows, ...readShellPlacement().side.filter(id => id !== LOGO_ITEM && byId.has(id) && !rows.includes(id))]
+    // Tool rows (the terminal) sit above the foot rows ("You"), as the column draws them.
+    const side = readShellPlacement().side.filter(id => id !== LOGO_ITEM && byId.has(id) && !rows.includes(id))
+    return [...rows.filter(id => !isFootItem(id)), ...side, ...rows.filter(isFootItem)]
   }
   const logoPlaced = logoShown && byId.has(LOGO_ITEM)
 
@@ -336,14 +338,13 @@ export function PreviewEditor({ candidates, columnOf, categoryLabel, repeated, g
     </span>
   )
   /** The sidebar's head, as the window draws it: the logo (optional) and the
-   *  separate collapse button on one row, the Crews switcher under them. */
+   *  separate collapse button on one row. */
   const sidebarHead = () => (
     <div data-preview-head="" className="flex shrink-0 flex-col gap-1">
       <div className="flex min-w-0 items-center gap-1">
         <div className="flex min-w-0 flex-1">{logoPlaced && chip(LOGO_ITEM, 'sidebar')}</div>
         {fixed(i18nT('nav.layout_locked_toggle'), <ArrowLeftToLine />, 'collapse', true)}
       </div>
-      {fixed(i18nT('components.instanceTabBar.instances'), <MonitorSmartphone />, 'crews')}
     </div>
   )
   const zoneBody = (zone: ShellZone) => {

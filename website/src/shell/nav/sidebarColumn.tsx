@@ -18,7 +18,7 @@ import { GripVertical } from 'lucide-react'
 import { i18nT } from '../../i18n/t'
 import { RAIL_PIN_MIME, insertPin, updateRail, type RailGroup } from '../../lib/railLayout'
 import {
-  announceLayout, isWidgetItem, isWindowToggle, moveItem, readChromeDrag, removeFromBars, setSidebarMembership, useLayoutEditing,
+  announceLayout, isWidgetItem, isWindowToggle, moveItem, readChromeDrag, removeFromBars, setSidebarMembership, useLayoutEditing, useShellPlacement,
 } from '../../lib/shellLayout'
 import {
   columnIdsOf, commitColumn, isFootItem, isHeaderId, placeInSidebar, pushAsideInColumn, resolveColumn, setSidebarRowCount, useSidebarRows,
@@ -101,6 +101,14 @@ export function SidebarColumn({ groups, renderRow, renderHeader, collapsed, labe
   const tilesLine = useTilesPanel()
   const rows = useSidebarRows()
   const ids = columnIdsOf(groups)
+  // Window toggles placed in the sidebar (the terminal, by default) are drawn
+  // in the column just above the foot rows, so "You" stays last, as in
+  // production Crew. They are not rail rows, so moves still go through `ids`.
+  const tools = useShellPlacement().side
+  const footAt = ids.findIndex(isFootItem)
+  const drawIds = tools.length === 0 ? ids
+    : footAt < 0 ? [...ids, ...tools] : [...ids.slice(0, footAt), ...tools, ...ids.slice(footAt)]
+  const isFoot = (id: string) => isFootItem(id) || tools.includes(id)
   registerSidebarGroups(groups)
 
   // How many rows fit in the sidebar's scroll frame, and how tall one is.
@@ -141,9 +149,9 @@ export function SidebarColumn({ groups, renderRow, renderHeader, collapsed, labe
     return () => { window.removeEventListener('dragend', clear); window.removeEventListener('drop', clear) }
   }, [])
 
-  const at = hover?.id
-    ? pushAsideInColumn(ids.includes(hover.id) ? ids : [...ids, hover.id], rows, n, hover.id, hover.row)
-    : resolveColumn(ids, rows, n)
+  const at = hover?.id && !tools.includes(hover.id)
+    ? { ...resolveColumn(drawIds, rows, n), ...pushAsideInColumn(ids.includes(hover.id) ? ids : [...ids, hover.id], rows, n, hover.id, hover.row) }
+    : resolveColumn(drawIds, rows, n)
   // Round 1 (Slack's narrow bar): outside edit mode, rows that do not fit the
   // sidebar's height go into a "More" control at the end of the column, which
   // opens a panel beside the sidebar. The foot rows (status, the bell, "You")
@@ -151,18 +159,18 @@ export function SidebarColumn({ groups, renderRow, renderHeader, collapsed, labe
   // scrolls) so each one can still be dragged.
   // The rows that fit below the drop host's 24px bottom padding.
   const fit = Math.max(1, Math.floor((frame - 24) / pitch))
-  const overflow = !live && frame > 0 && ids.some(id => (at[id] ?? 0) >= fit)
+  const overflow = !live && frame > 0 && drawIds.some(id => (at[id] ?? 0) >= fit)
   const more: string[] = []
   let moreRow = -1
   if (overflow) {
-    const order = [...ids].sort((a, b) => at[a] - at[b])
-    const foot = order.filter(isFootItem)
+    const order = [...drawIds].sort((a, b) => at[a] - at[b])
+    const foot = order.filter(isFoot)
     moreRow = Math.max(0, fit - 1 - foot.length)
-    for (const id of order) if (!isFootItem(id) && at[id] >= moreRow) more.push(id)
+    for (const id of order) if (!isFoot(id) && at[id] >= moreRow) more.push(id)
     foot.forEach((id, i) => { at[id] = moreRow + 1 + i })
   }
   const shown = (id: string) => !more.includes(id)
-  const last = overflow ? fit - 1 : Math.max(n - 1, ...ids.map(id => at[id] ?? 0))
+  const last = overflow ? fit - 1 : Math.max(n - 1, ...drawIds.map(id => at[id] ?? 0))
   const height = (last + 1) * pitch
 
   const rowAt = (y: number) => {
@@ -223,7 +231,7 @@ export function SidebarColumn({ groups, renderRow, renderHeader, collapsed, labe
   // row (the foot rows, such as "You", aside), where an added item goes.
   let addRow = -1
   if (dragOnly && !hover) {
-    const taken = new Set(ids.map(id => at[id]))
+    const taken = new Set(drawIds.map(id => at[id]))
     addRow = ids.filter(id => !isFootItem(id)).reduce((m, id) => Math.max(m, (at[id] ?? -1) + 1), 0)
     while (taken.has(addRow)) addRow++
   }
@@ -292,6 +300,7 @@ export function SidebarColumn({ groups, renderRow, renderHeader, collapsed, labe
           {[...columnIdsOf([g])].filter(shown).sort((a, b) => at[a] - at[b]).map(row)}
         </div>
       ))}
+      {tools.filter(id => !ids.includes(id)).map(row)}
       {addRow >= 0 && (
         <div className={`absolute inset-x-0 flex items-center ${collapsed ? 'justify-center' : 'pl-3'}`} style={{ top: addRow * pitch, height: pitch - 2 }}>
           <AreaAddButton zone="sidebar" onAdd={id => moveInto(id, 'sidebar', addRow)} />

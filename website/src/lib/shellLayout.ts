@@ -44,9 +44,7 @@ export const isWindowToggle = (id: string) => id === TERMINAL_ITEM || id === PHO
  *  - search, the status cluster (connection, usage, notifications) and the
  *    remote Crews switcher;
  *  - Back/Forward and the profile menu ("You").
- *  All default to the SIDEBAR, so the shipped top bar is empty and hidden (an
- *  empty bar disappears, like the bottom bar). The logo and sidebar toggle are
- *  the only fixed items. */
+ *  All but "You" default to the top bar, as production Crew draws them. */
 export const SEARCH_ITEM = 'shell:search'
 export const STATUS_ITEM = 'shell:status'
 export const REMOTE_ITEM = 'shell:remote'
@@ -63,20 +61,17 @@ export type SearchPlace = ShellZone | 'none'
 export type WidgetPlace = SearchPlace
 export type WidgetItem = typeof SEARCH_ITEM | typeof STATUS_ITEM | typeof NOTIFY_ITEM | typeof REMOTE_ITEM | typeof HISTORY_ITEM | typeof PROFILE_ITEM
 export type TwoPlaceItem = WidgetItem
-/** The movable widgets. The local/remote Crews switcher (REMOTE_ITEM) is not
- *  one: it is fixed at the top of the sidebar, under the logo row. */
-export const WIDGET_ITEMS: readonly WidgetItem[] = [SEARCH_ITEM, STATUS_ITEM, NOTIFY_ITEM, HISTORY_ITEM, PROFILE_ITEM]
+/** The movable widgets. The local/remote Crews switcher starts in the top bar
+ *  (checkpoint 54) and moves like the others. */
+export const WIDGET_ITEMS: readonly WidgetItem[] = [SEARCH_ITEM, STATUS_ITEM, NOTIFY_ITEM, REMOTE_ITEM, HISTORY_ITEM, PROFILE_ITEM]
 export const isWidgetItem = (id: string): id is WidgetItem => (WIDGET_ITEMS as readonly string[]).includes(id)
-/** Items no editor may move: the Crews switcher. (The collapse button is not
- *  an item at all.) */
-export const isFixedItem = (id: string) => id === REMOTE_ITEM
 /** Whether an editor may offer Remove (Not shown) for an item. "You" can move
- *  between areas but is never removed: it holds Settings and Edit layout. */
-export const canRemove = (id: string) => id !== PROFILE_ITEM && !isFixedItem(id)
+ *  between areas but is never removed: it holds Settings and Edit layout.
+ *  The Crews switcher can be removed: "Switch remote..." stays in "You". */
+export const canRemove = (id: string) => id !== PROFILE_ITEM
 /** The places an editor may offer for an item, in menu order. */
 export function placesOf(id: string): (ShellZone | 'none')[] {
   if (id === LOGO_ITEM) return ['sidebar', 'none']
-  if (isFixedItem(id)) return []
   return canRemove(id) ? ['sidebar', 'top', 'bottom', 'none'] : ['sidebar', 'top', 'bottom']
 }
 /** Older name, kept for existing call sites: now covers every widget. */
@@ -91,23 +86,24 @@ const PLACE_KEY: Record<WidgetItem, string> = {
 }
 const PLACE_EVENT = 'mc:two-place-changed'
 
-/** Where widgets start: the SIDEBAR (top bar empty and hidden). Under the test
- *  runner, search, status and the remote switcher default to the TOP BAR, so the
- *  existing shell tests, written against the shipped top bar, keep exercising
- *  it. The prototype's own default is checked by hand in the pod. */
+/** Where widgets start (checkpoint 54): production Crew's top bar, with
+ *  Back/Forward, the Crews switcher, search, status and the bell in it, and
+ *  "You" at the sidebar's foot. */
 const IN_TEST = import.meta.env?.MODE === 'test'
 const DEFAULT_PLACE: Record<WidgetItem, WidgetPlace> = {
-  [SEARCH_ITEM]: IN_TEST ? 'top' : 'sidebar',
-  [STATUS_ITEM]: IN_TEST ? 'top' : 'sidebar',
-  [NOTIFY_ITEM]: IN_TEST ? 'top' : 'sidebar',
-  [REMOTE_ITEM]: IN_TEST ? 'top' : 'sidebar',
-  [HISTORY_ITEM]: 'sidebar',
+  [SEARCH_ITEM]: 'top',
+  [STATUS_ITEM]: 'top',
+  [NOTIFY_ITEM]: 'top',
+  [REMOTE_ITEM]: 'top',
+  [HISTORY_ITEM]: 'top',
   [PROFILE_ITEM]: 'sidebar',
 }
 
+/** Fixed sample badge counts, as in production screenshots (prototype only;
+ *  real counts under the test runner). */
+export const SAMPLE_BADGES: Readonly<Record<string, number>> | null = IN_TEST ? null : { members: 1, apps: 1, bell: 66 }
+
 export function readPlace(id: WidgetItem): WidgetPlace {
-  // Fixed at the top of the sidebar, whatever an older build stored.
-  if (isFixedItem(id)) return 'sidebar'
   const v = safeGetItem(PLACE_KEY[id])
   // "You" is never Not shown: an older stored 'none' reads as its default.
   if (v === 'none' && !canRemove(id)) return DEFAULT_PLACE[id]
@@ -264,10 +260,9 @@ const PLACEMENT_EVENT = 'mc:shell-placement-changed'
 const EDITING_EVENT = 'mc:layout-editing-changed'
 
 const EMPTY: ShellPlacement = { top: [], bottom: [], side: [] }
-/** The shipped bars are empty, so focus mode starts not shown (its chord still
- *  works). Under the test runner it starts in the top bar, where the existing
- *  shell tests, written against the shipped top bar, look for it. */
-const DEFAULT_PLACEMENT: ShellPlacement = import.meta.env?.MODE === 'test' ? { top: [FOCUS_ITEM], bottom: [], side: [] } : EMPTY
+/** Production Crew: focus mode (the capture icon) in the top bar, the
+ *  terminal at the sidebar's foot, the bottom bar empty. */
+const DEFAULT_PLACEMENT: ShellPlacement = { top: [FOCUS_ITEM], bottom: [], side: [TERMINAL_ITEM] }
 
 export function readShellPlacement(): ShellPlacement {
   try {
@@ -303,7 +298,6 @@ export function useShellPlacement(): ShellPlacement {
 /** Where an item lives now. `null`: nowhere (a hidden page, an unplaced toggle). */
 export function zoneOf(id: string, placement: ShellPlacement, onSidebar: boolean): ShellZone | null {
   if (id === LOGO_ITEM) return readLogoShown() ? 'sidebar' : null
-  if (isFixedItem(id)) return 'sidebar'
   if (isWidgetItem(id)) { const p = readPlace(id); return p === 'none' ? null : p }
   if (placement.top.includes(id)) return 'top'
   if (placement.bottom.includes(id)) return 'bottom'
@@ -355,8 +349,7 @@ function hideInSidebar(id: string): void {
  * within a bar; omitted, it goes at the end.
  */
 export function moveItem(id: string, zone: ShellZone | null, index?: number): void {
-  // Refuse what the item may not do: move the Crews switcher, remove "You",
-  // or put the logo in a bar.
+  // Refuse what the item may not do: remove "You" or put the logo in a bar.
   if (!placesOf(id).includes(zone ?? 'none')) return
   if (id === LOGO_ITEM) { setLogoShown(zone === 'sidebar'); return }
   if (isWidgetItem(id)) {
@@ -395,6 +388,22 @@ export interface SidebarMembership { id: string; inSidebar: boolean }
 export function setSidebarMembership(id: string, inSidebar: boolean): void {
   window.dispatchEvent(new CustomEvent<SidebarMembership>(SIDEBAR_MEMBERSHIP_EVENT, { detail: { id, inSidebar } }))
 }
+
+/* ── Default layout version ──
+   Checkpoint 54 changed the shipped layout to production Crew's. A layout
+   stored by an earlier build is dropped once, so a fresh load shows the new
+   default. Bump DEFAULT_LAYOUT_VERSION when the default changes again. */
+const DEFAULT_LAYOUT_VERSION = '54'
+const DEFAULT_LAYOUT_VERSION_KEY = 'mc-layout-default-version'
+// Keys owned by railLayout.ts, barGrid.ts and sidebarGrid.ts (named here, not
+// imported, since those modules import this one).
+const OTHER_LAYOUT_KEYS = ['mc-rail-layout', 'mc-bar-cells-top', 'mc-bar-cells-bottom', 'mc-bar-item-style', 'mc-bar-style', 'mc-sidebar-rows']
+export function adoptDefaultLayout(): void {
+  if (safeGetItem(DEFAULT_LAYOUT_VERSION_KEY) === DEFAULT_LAYOUT_VERSION) return
+  for (const k of [PLACEMENT_KEY, ...Object.values(PLACE_KEY), SEARCH_STYLE_KEY, LOGO_KEY, ...OTHER_LAYOUT_KEYS]) safeRemoveItem(k)
+  safeSetItem(DEFAULT_LAYOUT_VERSION_KEY, DEFAULT_LAYOUT_VERSION)
+}
+if (!IN_TEST && typeof window !== 'undefined') adoptDefaultLayout()
 
 /** Every customization back to the shipped canvas: default sidebar, empty bars. */
 export function resetShellLayout(): void {

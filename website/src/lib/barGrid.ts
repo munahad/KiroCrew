@@ -19,7 +19,7 @@ import { useEffect, useState } from 'react'
 
 import { safeGetItem, safeRemoveItem, safeSetItem } from '../utils/safeStorage'
 import {
-  HISTORY_ITEM, NOTIFY_ITEM, PROFILE_ITEM, REMOTE_ITEM, SEARCH_ITEM, STATUS_ITEM, WIDGET_ITEMS, moveItem, placesOf, readPlace,
+  FOCUS_ITEM, HISTORY_ITEM, NOTIFY_ITEM, PROFILE_ITEM, REMOTE_ITEM, SEARCH_ITEM, STATUS_ITEM, WIDGET_ITEMS, moveItem, placesOf, readPlace,
   readSearchStyle, readShellPlacement, setSearchStyle, type BarZone,
 } from './shellLayout'
 
@@ -229,8 +229,14 @@ export function resolveBar(zone: BarZone, ids: readonly string[], cells: Cols, s
   const want: Cols = {}
   let lastEnd = 0
   for (const id of ids) if (id in cells) lastEnd = Math.max(lastEnd, cells[id] + span(id))
+  // Production Crew's top bar, for items with no stored cell: Back/Forward and
+  // the Crews switcher at the left, search in the middle with focus mode (the
+  // capture icon) beside it. Anything else goes to the right end.
+  const searchAt = Math.max(0, Math.floor((n - span(SEARCH_ITEM)) / 2))
+  const topDefault: Cols = { [HISTORY_ITEM]: 0, [REMOTE_ITEM]: span(HISTORY_ITEM), [SEARCH_ITEM]: searchAt, [FOCUS_ITEM]: searchAt + span(SEARCH_ITEM) }
   for (const id of ids) {
     if (id in cells) want[id] = cells[id]
+    else if (zone === 'top' && id in topDefault) want[id] = topDefault[id]
     // No stored cell: the top bar's right end, or after the bottom bar's last item.
     else if (zone === 'top') want[id] = Number.MAX_SAFE_INTEGER
     else { want[id] = lastEnd; lastEnd += span(id) }

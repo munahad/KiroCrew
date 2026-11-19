@@ -31,15 +31,15 @@ import { isAppNavId } from '../../appNotificationBadges'
 import { i18nT } from '../../i18n/t'
 import { useAppSelector } from '../../store'
 import {
-  MATE_PIN_PREFIX, SESSION_PIN_PREFIX, insertPin, isEntityPin, matePinId, removePin, sessionPinId,
+  MATE_PIN_PREFIX, SESSION_PIN_PREFIX, insertPin, isDemoApp, isEntityPin, matePinId, removePin, sessionPinId,
   updateRail, type RailGroup,
 } from '../../lib/railLayout'
 import {
-  SHELL_ITEM_MIME, FEEDBACK_ITEM, FOCUS_ITEM, HISTORY_ITEM, LOGO_ITEM, NOTIFY_ITEM, PHONE_ITEM, PROFILE_ITEM, SEARCH_ITEM, canRemove, placesOf, removeFromBars, STATUS_ITEM, TERMINAL_ITEM, isTwoPlaceItem, announceLayout, isWindowToggle, moveItem, readChromeDrag, resetShellLayout, setLayoutEditing,
+  SHELL_ITEM_MIME, FEEDBACK_ITEM, FOCUS_ITEM, HISTORY_ITEM, LOGO_ITEM, NOTIFY_ITEM, PHONE_ITEM, PROFILE_ITEM, REMOTE_ITEM, SEARCH_ITEM, canRemove, placesOf, removeFromBars, STATUS_ITEM, TERMINAL_ITEM, isTwoPlaceItem, announceLayout, isWindowToggle, moveItem, readChromeDrag, resetShellLayout, setLayoutEditing,
   moveWithinBar, setLayoutWindowLocked, setSearchStyle, useLayoutAnnouncement, useSearchStyle, useShellPlacement, zoneOf, type BarZone, type ShellZone,
 } from '../../lib/shellLayout'
 import { barOrder, cellOf, clearBarCells, placeOnBar, setBarStyle, setItemStyle, shiftOnBar, useBarCells, useBarStyle, useItemStyle } from '../../lib/barGrid'
-import { canShiftInSidebar, clearSidebarRows, columnIdsOf, columnOrder, shiftInSidebar, useSidebarRows } from '../../lib/sidebarGrid'
+import { canShiftInSidebar, clearSidebarRows, columnIdsOf, columnOrder, isFootItem, shiftInSidebar, useSidebarRows } from '../../lib/sidebarGrid'
 import { useTerminalEnabled } from '../../utils/terminalRegistry'
 import { useRailWidth } from '../../hooks/useRailWidth'
 import { MOBILE_BREAKPOINT, useIsMobile } from '../../hooks/useIsMobile'
@@ -65,8 +65,8 @@ function LogoGlyph() {
     : <PanelLeft size={16} />
 }
 const LOCKED: { key: string; icon: JSX.Element; zone: 'sidebar' | 'top' }[] = [
-  // Round 1: the logo is optional (a candidate below); the Crews switcher is fixed.
-  { key: 'components.instanceTabBar.instances', icon: <MonitorSmartphone size={16} />, zone: 'sidebar' },
+  // Round 1: the logo is optional (a candidate below). Checkpoint 54: the
+  // Crews switcher moves like any item (a candidate below).
   { key: 'nav.layout_locked_toggle', icon: <ArrowLeftToLine size={16} />, zone: 'sidebar' },
 ]
 
@@ -89,7 +89,8 @@ function categoryOf(id: string): Exclude<Category, 'all'> {
   if (id.startsWith(SESSION_PIN_PREFIX)) return 'sessions'
   if (isWindowToggle(id) || isTwoPlaceItem(id) || id === LOGO_ITEM) return 'tools'
   // Task Runner, Discover and Library ship in the Apps group, so they read as apps.
-  return isAppNavId(id) || APP_STORE_IDS.has(id) ? 'apps' : 'pages'
+  // The two sample pinned apps read as installed apps (Yours).
+  return isAppNavId(id) || isDemoApp(id) || APP_STORE_IDS.has(id) ? 'apps' : 'pages'
 }
 /** The panel's two columns: what comes with every Crew, and what this person
  *  added (their mates, sessions and the apps they installed), the split most
@@ -273,6 +274,7 @@ export function LayoutEditPanel({ groups, hidden, meta }: {
       add(SEARCH_ITEM, { label: i18nT('nav.layout_locked_search'), icon: <Search size={16} /> })
       add(LOGO_ITEM, { label: i18nT('nav.layout_locked_logo'), icon: <LogoGlyph /> })
       add(HISTORY_ITEM, { label: i18nT('nav.layout_locked_back_forward'), icon: <ArrowLeftRight size={16} /> })
+      add(REMOTE_ITEM, { label: i18nT('components.instanceTabBar.instances'), icon: <MonitorSmartphone size={16} /> })
       add(PROFILE_ITEM, { label: i18nT('nav.profile_menu_name'), icon: <CircleUserRound size={16} /> })
       add(STATUS_ITEM, { label: i18nT('nav.layout_status_item'), icon: <Plug size={16} /> })
       add(NOTIFY_ITEM, { label: i18nT('nav.layout_notifications_item'), icon: <Bell size={16} /> })
@@ -318,8 +320,8 @@ export function LayoutEditPanel({ groups, hidden, meta }: {
     // The bars list their items left to right, as their grid draws them.
     if (section === 'top' || section === 'bottom') return barOrder(section).indexOf(id)
     // The sidebar's own order: its rows top to bottom as the column draws
-    // them, then its tool rows.
-    if (section === 'sidebar') return placement.side.includes(id) ? 10_000 + placement.side.indexOf(id) : columnOrder(columnIdsOf(groups)).indexOf(id)
+    // them, then its tool rows, then its foot rows ("You"), as the column draws them.
+    if (section === 'sidebar') return placement.side.includes(id) ? 10_000 + placement.side.indexOf(id) : columnOrder(columnIdsOf(groups)).indexOf(id) + (isFootItem(id) ? 20_000 : 0)
     return 0
   }
   /** The bar a row sits in, when it is in one (desktop). */
