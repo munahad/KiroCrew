@@ -28,7 +28,7 @@ import { Ban } from 'lucide-react'
 
 import { i18nT } from '../../i18n/t'
 import {
-  SHELL_ITEM_MIME, announceLayout, readChromeDrag, setChromeDrag, useChromeDrag, useLayoutEditing, useShellPlacement, useWidgetsIn,
+  SHELL_ITEM_MIME, announceLayout, canRemove, readChromeDrag, setChromeDrag, useChromeDrag, useLayoutEditing, useShellPlacement, useWidgetsIn,
   type BarZone, type ShellZone,
 } from '../../lib/shellLayout'
 import { barOrder, cellAt, placeOnBar } from '../../lib/barGrid'
@@ -143,7 +143,8 @@ function ZoneOutline({ zone, area, dragging, nativeDrag, allowed, over, lineX, f
           {i18nT('nav.layout_preview_empty_area')}
         </span>
       )}
-      {flat && bars && count >= 2 && !dragging && (
+      {/* Only what can go counts ("You" stays), so it never offers to remove one item. */}
+      {flat && bars && barOrder(zone as BarZone).filter(canRemove).length >= 2 && !dragging && (
         // On the edge facing the page, clear of the bar's own items.
         <button
           type="button"

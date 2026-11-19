@@ -35,7 +35,7 @@ import {
   updateRail, type RailGroup,
 } from '../../lib/railLayout'
 import {
-  SHELL_ITEM_MIME, FEEDBACK_ITEM, FOCUS_ITEM, HISTORY_ITEM, LOGO_ITEM, NOTIFY_ITEM, PHONE_ITEM, PROFILE_ITEM, SEARCH_ITEM, canRemove, placesOf, removeFromBars, STATUS_ITEM, TERMINAL_ITEM, isTwoPlaceItem, announceLayout, isWindowToggle, moveItem, resetShellLayout, setLayoutEditing,
+  SHELL_ITEM_MIME, FEEDBACK_ITEM, FOCUS_ITEM, HISTORY_ITEM, LOGO_ITEM, NOTIFY_ITEM, PHONE_ITEM, PROFILE_ITEM, SEARCH_ITEM, canRemove, placesOf, removeFromBars, STATUS_ITEM, TERMINAL_ITEM, isTwoPlaceItem, announceLayout, isWindowToggle, moveItem, readChromeDrag, resetShellLayout, setLayoutEditing,
   moveWithinBar, setLayoutWindowLocked, setSearchStyle, useLayoutAnnouncement, useSearchStyle, useShellPlacement, zoneOf, type BarZone, type ShellZone,
 } from '../../lib/shellLayout'
 import { barOrder, cellOf, clearBarCells, placeOnBar, setBarStyle, setItemStyle, shiftOnBar, useBarCells, useBarStyle, useItemStyle } from '../../lib/barGrid'
@@ -407,9 +407,9 @@ export function LayoutEditPanel({ groups, hidden, meta }: {
   /** Drop on a place section's own space (its heading, its padding, an empty
    *  slot): the item goes to the end of that place, or into the line already
    *  shown beside that section's last row. */
-  const listSectionDrop = (section: ShellZone | 'none', rows: Candidate[]) => ({
+  const listSectionDrop = (section: ShellZone | 'none', rows: Candidate[], shut: boolean) => ({
     onDragOver: (e: DragEvent) => {
-      if (!e.dataTransfer.types.includes(SHELL_ITEM_MIME)) return
+      if (shut || !e.dataTransfer.types.includes(SHELL_ITEM_MIME)) return
       e.preventDefault()
       e.dataTransfer.dropEffect = 'move'
       const last = rows[rows.length - 1]
@@ -422,6 +422,7 @@ export function LayoutEditPanel({ groups, hidden, meta }: {
       if (rowAt && rows.some(r => r.id === rowAt.id)) setRowAt(null)
     },
     onDrop: (e: DragEvent) => {
+      if (shut) return
       e.preventDefault()
       const id = e.dataTransfer.getData(SHELL_ITEM_MIME)
       const at = rowAt
@@ -432,6 +433,15 @@ export function LayoutEditPanel({ groups, hidden, meta }: {
     },
   })
   const endRowDrag = () => { setRowDragging(false); setRowAt(null); setTileOver(null) }
+  /** Built in and Yours are set by what an item is, not where it is dropped,
+   *  so while an item is dragged the other column is shut: no slots, no drop
+   *  line, no drop (it would land under its own column and look lost). */
+  const shutFor = (key: string) => {
+    if (key !== 'builtin' && key !== 'yours') return false
+    const id = readChromeDrag()?.id
+    const x = id ? candidates.find(c => c.id === id) : undefined
+    return !!x && columnOf(x) !== key
+  }
 
   /** The place sections (top bar, sidebar, bottom bar, not shown) for one
    *  list of items; `key` keeps their heading ids unique per column. Option 2
@@ -441,16 +451,17 @@ export function LayoutEditPanel({ groups, hidden, meta }: {
     <>
         {(phone ? PHONE_SECTIONS : SECTIONS).map(section => {
           const rows = list.filter(x => where(x.id) === section).sort((a, b) => orderOf(a.id, section) - orderOf(b.id, section))
-          // An empty place shows only while a row is dragged, as a slot to
-          // drop into, so a bar with nothing in it can still be filled.
-          if (rows.length === 0 && !rowDragging) return null
+          const shut = shutFor(key)
+          // An empty place shows only while a row of this column is dragged,
+          // as a slot to drop into, so a bar with nothing in it can be filled.
+          if (rows.length === 0 && (!rowDragging || shut)) return null
           const headingId = `layout-section-${key}-${section}`
           const Heading = phone ? 'h3' : 'h4'
           // Gradual: what is not shown is one "Add an item" button opening a
           // searchable list, instead of a long section. A search in the
           // panel itself still lists every match in place.
           if (gradual && !q && section === 'none') return (
-            <li key={section} className={`mt-2 rounded-lg ${tileOver === section ? 'ring-2 ring-accent' : ''}`} {...listSectionDrop(section, [])}>
+            <li key={section} className={`mt-2 rounded-lg ${tileOver === section ? 'ring-2 ring-accent' : ''}`} {...listSectionDrop(section, [], shut)}>
               <HiddenItemPicker
                 items={rows.map(x => ({ id: x.id, label: x.meta.label, icon: x.meta.icon, kind: categoryLabel(x.category), detail: x.detail && repeated.has(x.meta.label) ? x.detail : undefined }))}
                 onAdd={(id, label) => place(id, 'sidebar', label)}
@@ -458,7 +469,7 @@ export function LayoutEditPanel({ groups, hidden, meta }: {
             </li>
           )
           return (
-          <li key={section} className="mt-1 first:mt-0" data-layout-section={section} {...listSectionDrop(section, rows)}>
+          <li key={section} className="mt-1 first:mt-0" data-layout-section={section} {...listSectionDrop(section, rows, shut)}>
             <Heading id={headingId} className="m-0 mt-2 mb-1 mx-2 text-[11px] font-medium uppercase tracking-wide text-muted">
               {placeLabel(section)} <span className="opacity-70 normal-case">{rows.length}</span>
             </Heading>
@@ -490,7 +501,7 @@ export function LayoutEditPanel({ groups, hidden, meta }: {
               }}
               onDragEnd={endRowDrag}
               onDragOver={e => {
-                if (!e.dataTransfer.types.includes(SHELL_ITEM_MIME)) return
+                if (shut || !e.dataTransfer.types.includes(SHELL_ITEM_MIME)) return
                 e.preventDefault()
                 e.stopPropagation()
                 e.dataTransfer.dropEffect = 'move'
@@ -500,6 +511,7 @@ export function LayoutEditPanel({ groups, hidden, meta }: {
                 if (tileOver) setTileOver(null)
               }}
               onDrop={e => {
+                if (shut) return
                 e.preventDefault()
                 e.stopPropagation()
                 const id = e.dataTransfer.getData(SHELL_ITEM_MIME)

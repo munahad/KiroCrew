@@ -37,6 +37,7 @@ import {
   readShellPlacement, setLayoutEditing, setLogoShown, setSearchStyle, useLogoShown, useSearchStyle,
   type ShellZone,
 } from '../../lib/shellLayout'
+import { setEditOptionGuard } from '../../lib/editOption'
 import { columnIdsOf, columnOrder, isHeaderId } from '../../lib/sidebarGrid'
 import { zoneLabel, startItemDrag } from './barItems'
 import { offersStyle } from './barStyleChooser'
@@ -82,15 +83,46 @@ export function PreviewEditor({ candidates, columnOf, categoryLabel, repeated, g
   const initialOwn = useRef({ logo: readLogoShown(), bell: readPlace(NOTIFY_ITEM) })
   const own = () => ({ logo: readLogoShown(), bell: readPlace(NOTIFY_ITEM) })
   const dirty = () => JSON.stringify([snapshotLayout(), own()]) !== JSON.stringify([initial.current, initialOwn.current])
-  const done = () => setLayoutEditing(false)
-  const cancel = () => {
+  const revert = () => {
     restoreLayout(initial.current)
     const { logo, bell } = initialOwn.current
     setLogoShown(logo)
     moveItem(NOTIFY_ITEM, bell === 'none' ? null : bell)
-    setLayoutEditing(false)
   }
+  // A band switch waiting on "Keep your changes?"; null when leaving edit mode.
+  const pendingSwitch = useRef<(() => void) | null>(null)
+  // True once the person chose keep or discard, so unmounting reverts nothing.
+  const settled = useRef(false)
+  const finish = (keep: boolean) => {
+    if (!keep) revert()
+    settled.current = true
+    const next = pendingSwitch.current
+    pendingSwitch.current = null
+    setConfirming(false)
+    if (next) next(); else setLayoutEditing(false)
+  }
+  const done = () => finish(true)
+  const cancel = () => finish(false)
+  const stay = () => { pendingSwitch.current = null; setConfirming(false) }
   const leave = () => { if (dirty()) setConfirming(true); else done() }
+  // Switching option in the prototype band asks first when there are changes
+  // (Keep: they stay and the band switches; Discard: put back, then switch).
+  // Any other way out that skips the prompt (the window narrowed to phone
+  // size) puts the layout back, as Cancel does: changes never stay unasked.
+  useEffect(() => {
+    setEditOptionGuard(proceed => {
+      if (!dirty()) { settled.current = true; return false }
+      pendingSwitch.current = proceed
+      setConfirming(true)
+      return true
+    })
+    return () => {
+      setEditOptionGuard(null)
+      if (!settled.current && dirty()) revert()
+    }
+    // Reads refs and the stores only, so the first render's closures hold.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
   const logoShown = useLogoShown()
 
   // Widget places change through their own event; redraw on it.
@@ -176,7 +208,7 @@ export function PreviewEditor({ candidates, columnOf, categoryLabel, repeated, g
     if (e.key === 'Escape') {
       e.preventDefault()
       e.stopPropagation()
-      if (confirming) setConfirming(false)
+      if (confirming) stay()
       else if (menu) { const id = menu.id; setMenu(null); dialogRef.current?.querySelector<HTMLElement>(`[data-preview-chip="${CSS.escape(id)}"]`)?.focus() }
       else if (selected) setSelected(null)
       else leave()
@@ -586,7 +618,7 @@ export function PreviewEditor({ candidates, columnOf, categoryLabel, repeated, g
                 <h3 id="preview-keep-title" className="m-0 text-[15px] font-semibold">{i18nT('nav.layout_preview_keep_title')}</h3>
                 <p id="preview-keep-body" className="m-0 mt-1.5 text-[13px] text-muted">{i18nT('nav.layout_preview_keep_body')}</p>
                 <div className="mt-4 flex flex-wrap justify-end gap-2">
-                  <Btn onClick={() => setConfirming(false)}>{i18nT('nav.layout_preview_keep_editing')}</Btn>
+                  <Btn onClick={stay}>{i18nT('nav.layout_preview_keep_editing')}</Btn>
                   <Btn onClick={cancel}>{i18nT('nav.layout_preview_discard')}</Btn>
                   <Btn primary onClick={done} autoFocus>{i18nT('nav.layout_preview_keep')}</Btn>
                 </div>

@@ -15,7 +15,7 @@ import { useId } from 'react'
 
 import { i18nT } from '../../i18n/t'
 import {
-  DISCLOSURE_STYLES, EDIT_OPTIONS, GRID_STYLES, PANEL_STYLES, TILES_ENABLED, setDisclosure, setEditOption, setGridStyle, setPanelStyle,
+  DISCLOSURE_STYLES, EDIT_OPTIONS, GRID_STYLES, PANEL_STYLES, TILES_ENABLED, requestEditOption, setDisclosure, setGridStyle, setPanelStyle,
   useDisclosure, useEditOption, useGridChoice, usePanelStyle,
 } from '../../lib/editOption'
 
@@ -82,7 +82,7 @@ export function EditOptionSwitcher() {
       className="relative z-[90] flex h-9 shrink-0 items-center justify-center gap-6 px-3 font-mono"
       style={{ background: BAND, color: INK, borderBottom: `1px solid ${INK}` }}
     >
-      <Segments label={i18nT('nav.layout_option_label')} options={EDIT_OPTIONS} value={option} onChange={setEditOption} labelOf={o => i18nT(OPTION_KEY[o])} />
+      <Segments label={i18nT('nav.layout_option_label')} options={EDIT_OPTIONS} value={option} onChange={requestEditOption} labelOf={o => i18nT(OPTION_KEY[o])} />
       {/* The second switch belongs to the option under review: the panel
           compares how it reveals its items, drag only compares grids, and
           the preview (its own drawing, no grid) has none. */}

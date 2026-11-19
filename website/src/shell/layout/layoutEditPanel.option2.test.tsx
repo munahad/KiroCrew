@@ -12,8 +12,8 @@ import { setEditOption } from '../../lib/editOption'
 import { SHELL_ITEM_MIME, isLayoutWindowLocked, setLayoutEditing } from '../../lib/shellLayout'
 import { renderWithProviders } from '../../test/helpers'
 
-const AVAILABLE = ['chat', 'members']
-const LABELS: Record<string, string> = { chat: 'Sessions', members: 'Mates' }
+const AVAILABLE = ['chat', 'members', 'app-ada']
+const LABELS: Record<string, string> = { chat: 'Sessions', members: 'Mates', 'app-ada': 'Ada' }
 
 function openPanel() {
   renderWithProviders(
@@ -73,6 +73,29 @@ describe('Edit layout option 2 (list only)', () => {
     expect(screen.getAllByTestId('layout-list-drop-line')).toHaveLength(1)
     fireEvent.drop(mates, { dataTransfer: dt('chat'), clientY: 10 })
     expect(screen.queryByTestId('layout-list-drop-line')).toBeNull()
+  })
+
+  it('takes a dragged row only in its own column (Built in or Yours)', async () => {
+    const panel = openPanel()
+    const sessions = panel.querySelector('[data-layout-row="chat"]')!
+    const ada = panel.querySelector('[data-layout-row="app-ada"]')!
+    const yours = within(panel).getByRole('heading', { name: /^Yours/ }).closest('section')!
+    expect(yours.contains(ada)).toBe(true)
+    // A Built in row over a Yours row: no landing line, and the drop does nothing.
+    fireEvent.dragStart(sessions, { dataTransfer: dt('chat') })
+    await act(() => new Promise(r => setTimeout(r, 0)))
+    // The other column opens no empty slots either.
+    expect(within(yours).queryByTestId('layout-list-empty-slot')).toBeNull()
+    const over = fireEvent.dragOver(ada, { dataTransfer: dt('chat'), clientY: 10 })
+    expect(over).toBe(true) // not cancelled: the browser refuses the drop
+    expect(screen.queryByTestId('layout-list-drop-line')).toBeNull()
+    fireEvent.dragEnd(sessions)
+    // Its own column still takes it.
+    const mates = panel.querySelector('[data-layout-row="members"]')!
+    fireEvent.dragStart(sessions, { dataTransfer: dt('chat') })
+    expect(fireEvent.dragOver(mates, { dataTransfer: dt('chat'), clientY: 10 })).toBe(false)
+    expect(screen.getAllByTestId('layout-list-drop-line')).toHaveLength(1)
+    fireEvent.dragEnd(sessions)
   })
 
   it('leaves the window bars closed to drops (list only)', () => {

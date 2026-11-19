@@ -5,11 +5,12 @@
  * removed, the bell on its own).
  */
 import { afterEach, describe, expect, it } from 'vitest'
-import { cleanup, fireEvent, render, screen, within } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, screen, within } from '@testing-library/react'
 
 import { i18nT } from '../../i18n/t'
+import { readEditOption, requestEditOption, setEditOption } from '../../lib/editOption'
 import {
-  LOGO_ITEM, NOTIFY_ITEM, PROFILE_ITEM, SEARCH_ITEM, STATUS_ITEM, moveItem, readShellPlacement, zoneOf, type ShellZone,
+  LOGO_ITEM, NOTIFY_ITEM, PROFILE_ITEM, SEARCH_ITEM, STATUS_ITEM, isLayoutEditing, moveItem, readShellPlacement, setLayoutEditing, zoneOf, type ShellZone,
 } from '../../lib/shellLayout'
 import { zoneLabel } from './barItems'
 import { PreviewEditor } from './previewEditor'
@@ -92,5 +93,69 @@ describe('PreviewEditor drawing', () => {
     expect(within(screen.getByTestId('preview-chip-menu')).queryByRole('menuitem', { name: i18nT('nav.layout_kbd_remove') })).toBeNull()
     const row = document.querySelector<HTMLElement>(`[data-preview-row="${PROFILE_ITEM}"]`)!
     expect(within(row).queryByRole('button', { name: i18nT('nav.layout_preview_hide_item', { item: 'You' }) })).toBeNull()
+  })
+})
+
+describe('PreviewEditor switching option in the band', () => {
+  const removeStatus = () => {
+    fireEvent.click(within(zone('top')).getByRole('button', { name: 'Status' }))
+    fireEvent.click(within(screen.getByTestId('preview-chip-menu')).getByRole('menuitem', { name: i18nT('nav.layout_kbd_remove') }))
+    expect(zoneOf(STATUS_ITEM, readShellPlacement(), false)).toBeNull()
+  }
+  const prompt = () => screen.queryByRole('alertdialog')
+  const start = () => { setEditOption('preview'); setLayoutEditing(true); return renderEditor() }
+  afterEach(() => setLayoutEditing(false))
+
+  it('switches straight away with no changes', () => {
+    start()
+    act(() => requestEditOption('drag'))
+    expect(prompt()).toBeNull()
+    expect(readEditOption()).toBe('drag')
+  })
+
+  it('asks first with changes; Keep editing stays in option 3', () => {
+    start()
+    removeStatus()
+    act(() => requestEditOption('drag'))
+    expect(prompt()).not.toBeNull()
+    expect(readEditOption()).toBe('preview')
+    fireEvent.click(screen.getByRole('button', { name: i18nT('nav.layout_preview_keep_editing') }))
+    expect(prompt()).toBeNull()
+    expect(readEditOption()).toBe('preview')
+    // Escape on the prompt also stays, and a later Done does not switch.
+    act(() => requestEditOption('panel'))
+    fireEvent.keyDown(screen.getByRole('alertdialog'), { key: 'Escape' })
+    expect(prompt()).toBeNull()
+    expect(readEditOption()).toBe('preview')
+  })
+
+  it('Discard puts the layout back, then switches and stays in edit mode', () => {
+    start()
+    removeStatus()
+    act(() => requestEditOption('drag'))
+    fireEvent.click(screen.getByRole('button', { name: i18nT('nav.layout_preview_discard') }))
+    expect(readEditOption()).toBe('drag')
+    expect(zoneOf(STATUS_ITEM, readShellPlacement(), false)).toBe('top')
+    expect(isLayoutEditing()).toBe(true)
+  })
+
+  it('Keep holds the changes, then switches', () => {
+    const { unmount } = start()
+    removeStatus()
+    act(() => requestEditOption('drag'))
+    fireEvent.click(screen.getByRole('button', { name: i18nT('nav.layout_preview_keep') }))
+    expect(readEditOption()).toBe('drag')
+    unmount()
+    expect(zoneOf(STATUS_ITEM, readShellPlacement(), false)).toBeNull()
+  })
+
+  it('puts the layout back when it closes without asking (the phone)', () => {
+    const { unmount } = start()
+    removeStatus()
+    unmount()
+    expect(zoneOf(STATUS_ITEM, readShellPlacement(), false)).toBe('top')
+    // With the editor gone, the band switches freely again.
+    requestEditOption('drag')
+    expect(readEditOption()).toBe('drag')
   })
 })

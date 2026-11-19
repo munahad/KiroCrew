@@ -33,6 +33,25 @@ export function setEditOption(option: EditOption): void {
   window.dispatchEvent(new Event(EVENT))
 }
 
+/**
+ * An editor that must ask before the band switches away from it (option 3
+ * edits the layout live and asks "Keep your changes?"). The guard returns
+ * true when it took over: it calls `proceed` itself once the person chose.
+ */
+type LeaveGuard = (proceed: () => void) => boolean
+let leaveGuard: LeaveGuard | null = null
+
+export function setEditOptionGuard(guard: LeaveGuard | null): void {
+  leaveGuard = guard
+}
+
+/** The band's switch: asks the open editor first, then switches. */
+export function requestEditOption(option: EditOption): void {
+  if (option === readEditOption()) return
+  if (leaveGuard?.(() => setEditOption(option))) return
+  setEditOption(option)
+}
+
 export function useEditOption(): EditOption {
   const [option, setOption] = useState(readEditOption)
   useEffect(() => {
