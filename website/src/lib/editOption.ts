@@ -86,6 +86,7 @@ export function useGridStyle(): GridStyle {
   // choice left over from option 1 would otherwise hide the editable areas.
   // Tiles uses the minimal look on the canvas: no grid, just the landing
   // line and the space the item takes (its area outlines stay, see layoutZones).
+  // With Tiles off (TILES_ENABLED), option 2 always follows List: drafting.
   return option === 'panel' ? (panelStyle === 'tiles' ? 'minimal' : 'drafting') : style
 }
 
@@ -152,8 +153,14 @@ export const PANEL_STYLES: readonly PanelStyle[] = ['list', 'tiles']
 const PANEL_STYLE_KEY = 'mc-layout-panel-style'
 const PANEL_STYLE_EVENT = 'mc:layout-panel-style-changed'
 
+/** Round 1: option 2 is the list only (Molly found a panel and a canvas to
+ *  edit in two places confusing), so Tiles is switched off. Its code stays;
+ *  while this is false a stored 'tiles' choice reads as 'list' everywhere
+ *  (the panel, the grid style, the canvas drop lines), so it cannot apply. */
+export const TILES_ENABLED = false
+
 export function readPanelStyle(): PanelStyle {
-  return safeGetItem(PANEL_STYLE_KEY) === 'tiles' ? 'tiles' : 'list'
+  return TILES_ENABLED && safeGetItem(PANEL_STYLE_KEY) === 'tiles' ? 'tiles' : 'list'
 }
 
 export function setPanelStyle(style: PanelStyle): void {

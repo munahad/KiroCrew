@@ -45,37 +45,33 @@ describe('RailGroups right-click', () => {
   })
 
   it('unpins an app through the Library pin state, not the layout', async () => {
+    // Round 1: an app is in the sidebar only once pinned there.
+    writeRailLayout(insertPin(readRailLayout(), 'app:radar', 'workspace', null))
     const setAppPinned = renderRail()
     fireEvent.contextMenu(screen.getByText('Radar'))
     fireEvent.click(await screen.findByRole('menuitem', { name: /Remove from sidebar/ }))
     expect(setAppPinned).toHaveBeenCalledWith('app:radar', false)
-    expect(localStorage.getItem(RAIL_LAYOUT_KEY)).toBeNull()
+    expect(readRailLayout().hidden).toEqual([])
   })
 
-  it('offers New group on empty rail space and adds one', async () => {
+  it('shows an installed app only once it is pinned to the sidebar', () => {
     renderRail()
-    fireEvent.contextMenu(screen.getByRole('group', { name: 'Main list' }))
-    fireEvent.click(await screen.findByRole('menuitem', { name: /New group/ }))
-    expect(readRailLayout().groups.map(g => g.id)).toEqual(['workspace', 'group-2'])
+    expect(screen.queryByText('Radar')).toBeNull()
   })
 
-  it('opens a new group\'s name for typing, and Rename group edits it later', async () => {
+  it('folds stored groups into one list, with no section headers', () => {
+    writeRailLayout({ version: 1, groups: [{ id: 'workspace', items: ['chat'] }, { id: 'group-2', title: 'Design', items: ['members'] }], hidden: [] })
+    renderRail()
+    expect(screen.getAllByRole('group')).toHaveLength(1)
+    expect(screen.queryByText('Design')).toBeNull()
+    expect(screen.getByText('Mates')).toBeTruthy()
+  })
+
+  it('offers only Edit layout on empty rail space (no sections)', async () => {
     renderRail()
     fireEvent.contextMenu(screen.getByRole('group', { name: 'Main list' }))
-    fireEvent.click(await screen.findByRole('menuitem', { name: /New group/ }))
-    await flushFrame()
-    const field = await screen.findByRole('textbox', { name: 'Group name' })
-    fireEvent.change(field, { target: { value: 'Design' } })
-    fireEvent.keyDown(field, { key: 'Enter' })
-    expect(readRailLayout().groups.find(g => g.id === 'group-2')?.title).toBe('Design')
-
-    fireEvent.contextMenu(screen.getByRole('group', { name: 'Design' }))
-    fireEvent.click(await screen.findByRole('menuitem', { name: /Rename group/ }))
-    await flushFrame()
-    const again = await screen.findByRole('textbox', { name: 'Group name' })
-    fireEvent.change(again, { target: { value: 'Reviews' } })
-    fireEvent.keyDown(again, { key: 'Enter' })
-    expect(readRailLayout().groups.find(g => g.id === 'group-2')?.title).toBe('Reviews')
+    expect(await screen.findByRole('menuitem', { name: /Edit layout/ })).toBeTruthy()
+    expect(screen.queryByRole('menuitem', { name: /New group/ })).toBeNull()
   })
 
   it('offers no Rename group on the base flat list', async () => {
@@ -89,9 +85,9 @@ describe('RailGroups right-click', () => {
     renderRail(vi.fn(), true)
     fireEvent.contextMenu(screen.getByText('Sessions'))
     fireEvent.click(await screen.findByRole('menuitem', { name: /Edit layout/ }))
-    expect(await screen.findByRole('region', { name: 'Edit layout' })).toBeTruthy()
+    expect(await screen.findByRole('dialog', { name: 'Edit layout' })).toBeTruthy()
     fireEvent.keyDown(window, { key: 'Escape' })
-    await waitFor(() => expect(screen.queryByRole('region', { name: 'Edit layout' })).toBeNull())
+    await waitFor(() => expect(screen.queryByRole('dialog', { name: 'Edit layout' })).toBeNull())
   })
 })
 

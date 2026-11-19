@@ -15,7 +15,7 @@ import { useId } from 'react'
 
 import { i18nT } from '../../i18n/t'
 import {
-  DISCLOSURE_STYLES, EDIT_OPTIONS, GRID_STYLES, PANEL_STYLES, setDisclosure, setEditOption, setGridStyle, setPanelStyle,
+  DISCLOSURE_STYLES, EDIT_OPTIONS, GRID_STYLES, PANEL_STYLES, TILES_ENABLED, setDisclosure, setEditOption, setGridStyle, setPanelStyle,
   useDisclosure, useEditOption, useGridChoice, usePanelStyle,
 } from '../../lib/editOption'
 
@@ -86,10 +86,10 @@ export function EditOptionSwitcher() {
       {/* The second switch belongs to the option under review: the panel
           compares how it reveals its items, drag only compares grids, and
           the preview (its own drawing, no grid) has none. */}
-      {/* Option 2 compares two panels: List (rows) and Tiles (Sketch's
-          Customize Toolbar). Reveal belongs to List only: Tiles shows
-          everything at once, as Sketch does. */}
-      {option === 'panel' && <Segments label={i18nT('nav.layout_panel_style_label')} options={PANEL_STYLES} value={panelStyle} onChange={setPanelStyle} labelOf={p => i18nT(PANEL_STYLE_KEY[p])} />}
+      {/* Option 2 compared two panels: List (rows) and Tiles (Sketch's
+          Customize Toolbar). Round 1: List only, so the Panel switch is
+          off (TILES_ENABLED in lib/editOption.ts) and Reveal always shows. */}
+      {TILES_ENABLED && option === 'panel' && <Segments label={i18nT('nav.layout_panel_style_label')} options={PANEL_STYLES} value={panelStyle} onChange={setPanelStyle} labelOf={p => i18nT(PANEL_STYLE_KEY[p])} />}
       {option === 'panel' && panelStyle === 'list' && <Segments label={i18nT('nav.layout_disclosure_label')} options={DISCLOSURE_STYLES} value={disclosure} onChange={setDisclosure} labelOf={d => i18nT(DISCLOSURE_KEY[d])} />}
       {option === 'drag' && <Segments label={i18nT('nav.layout_grid_label')} options={GRID_STYLES} value={grid} onChange={setGridStyle} labelOf={g => i18nT(GRID_KEY[g])} />}
     </div>

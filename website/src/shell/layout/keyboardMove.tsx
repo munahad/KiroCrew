@@ -11,13 +11,16 @@
  *    sidebar's first row into the top bar, Down from its last into the
  *    bottom bar.
  *  - Space or Enter drops it; Escape puts everything back as it was.
- *  - Delete or Backspace hides it (with Undo in option 1).
+ *  - Delete or Backspace removes it (Not shown).
  * Every step is read out (4.1.3), and focus follows the item across areas.
  *
  * The item menu (right-click, Shift+F10 or the Menu key) offers the same
  * moves by name, plus Icon only / Icon and label in a bar, and Remove. In
- * option 2 (edit panel) each item also shows a "⋯" More button on hover or
- * keyboard focus that opens the same menu.
+ * option 1 (on the window) each item also shows step arrows and a "⋯" More
+ * button on hover or keyboard focus; the "⋯" opens the same menu.
+ *
+ * Option 2 (edit panel) edits only in its list: there the window is locked,
+ * so none of this applies to items on the window (`useCanvasEditing`).
  */
 import { useEffect, useLayoutEffect, useRef, useState, type KeyboardEvent, type MouseEvent } from 'react'
 import { ArrowDown, ArrowLeft, ArrowRight, ArrowUp, ChevronDown, ChevronLeft, ChevronRight, ChevronUp, MoreHorizontal } from 'lucide-react'
@@ -29,7 +32,7 @@ import { useEditOption } from '../../lib/editOption'
 import { cellOf, placeOnBar, setItemStyle, shiftOnBar, useItemStyle } from '../../lib/barGrid'
 import { insertPin, type RailGroup, updateRail } from '../../lib/railLayout'
 import {
-  SEARCH_ITEM, announceLayout, isWidgetItem, isWindowToggle, moveItem, moveWithinBar, readShellPlacement, removeFromBars,
+  LOGO_ITEM, SEARCH_ITEM, announceLayout, canRemove, isWidgetItem, isWindowToggle, moveItem, moveWithinBar, readShellPlacement, removeFromBars,
   setSearchStyle, setSidebarMembership, useLayoutEditing, useSearchStyle, zoneOf, type ShellZone,
 } from '../../lib/shellLayout'
 import { canShiftInSidebar, columnIdsOf, commitColumn, isHeaderId, placeInSidebar, readSidebarRowCount, readSidebarRows, resolveColumn, shiftInSidebar } from '../../lib/sidebarGrid'
@@ -41,6 +44,15 @@ import { hideFromCanvas, restoreLayout, snapshotLayout, type LayoutSnapshot } fr
 
 let sidebarGroups: readonly RailGroup[] = []
 export function registerSidebarGroups(groups: readonly RailGroup[]): void { sidebarGroups = groups }
+export function readSidebarGroups(): readonly RailGroup[] { return sidebarGroups }
+
+/** True while items on the window can be edited: edit mode is on, and the
+ *  option shown is not 2 (edit panel), whose window is locked behind its list. */
+export function useCanvasEditing(): boolean {
+  const editing = useLayoutEditing()
+  const option = useEditOption()
+  return editing && option !== 'panel'
+}
 
 /* ── The held item ── */
 
@@ -77,6 +89,8 @@ export function moveInto(id: string, zone: ShellZone, at: 'start' | 'end' | numb
     placeOnBar(zone, id, at === 'start' ? 0 : at === 'end' ? Number.MAX_SAFE_INTEGER : at)
     return
   }
+  // The logo is drawn in the sidebar's header, not as a row.
+  if (id === LOGO_ITEM) { moveItem(id, 'sidebar'); return }
   if (isWindowToggle(id) || isWidgetItem(id)) moveItem(id, 'sidebar')
   else {
     removeFromBars(id)
@@ -168,80 +182,93 @@ function canStepItem(id: string, zone: ShellZone, d: -1 | 1): boolean {
 }
 
 /**
- * The "⋯" More button on a placed item, option 2 only (desktop): shows on
- * hover or keyboard focus of the item and opens the item menu. It repeats
- * the right-click and Shift+F10 menu for the mouse, so it is left out of the
- * accessibility tree and the Tab order (the item itself carries the keyboard
- * path and its hint); a nested button inside the item's button would be read
- * twice.
+ * An item's own controls in option 1 (on the window, desktop): step arrows
+ * (˄˅ in the sidebar, ‹› in a bar) and a "⋯" More button that opens the item
+ * menu (Move to, Icon only, Remove). They show on hover or keyboard focus of
+ * the item, and are in the Tab order right after it, each with its own name.
+ * Render them BESIDE the item element (a sibling inside the same `group/edit`
+ * wrapper), never inside it: a button inside the item's button would be read
+ * as part of it.
+ *
+ * Bare icons, no pill (Munahad's minimal controls), in their own space so
+ * they never touch the item's icon: just outside a bar cell (below the top
+ * bar's, above the bottom bar's); inside a sidebar row on its right; in a
+ * collapsed sidebar, the arrows stacked on the row's left edge and "⋯" on its
+ * right, either side of the centred icon.
  */
-export function ItemMoreButton({ id, zone, label, corner = false }: { id: string; zone: ShellZone; label: string; corner?: boolean }) {
+export function ItemMoreButton({ id, zone, label, narrow = false }: { id: string; zone: ShellZone; label: string; narrow?: boolean }) {
   const editing = useLayoutEditing()
   const option = useEditOption()
   const phone = useIsMobile()
-  useHeldItem()
-  if (!editing || option !== 'panel' || phone || isHeaderId(id)) return null
+  const heldId = useHeldItem()
+  if (!editing || option !== 'drag' || phone || isHeaderId(id)) return null
   const inBar = zone === 'top' || zone === 'bottom'
   const keys = inBar ? (['ArrowLeft', 'ArrowRight'] as const) : (['ArrowUp', 'ArrowDown'] as const)
   const icons = inBar ? [ChevronLeft, ChevronRight] : [ChevronUp, ChevronDown]
   const names = inBar ? ['nav.layout_move_left', 'nav.layout_move_right'] : ['nav.layout_move_up', 'nav.layout_move_down']
   const stop = {
     onPointerDown: (e: { stopPropagation: () => void }) => { e.stopPropagation() },
-    onMouseDown: (e: { preventDefault: () => void; stopPropagation: () => void }) => { e.preventDefault(); e.stopPropagation() },
+    onMouseDown: (e: { stopPropagation: () => void }) => { e.stopPropagation() },
     onDragStart: (e: { preventDefault: () => void; stopPropagation: () => void }) => { e.preventDefault(); e.stopPropagation() },
   }
-  const btn = 'flex h-[18px] w-[18px] items-center justify-center rounded-md border-none bg-transparent text-muted hover:bg-text/10 hover:text-text !cursor-pointer disabled:opacity-30 disabled:pointer-events-none'
-  // Bars: the pill sits just outside the cell (below the top bar's, above the
-  // bottom bar's), so a one-cell icon keeps its neighbours clear. The
-  // sidebar: inside the row, on its right.
-  const place = inBar ? (zone === 'top' ? 'right-0 top-full pt-1' : 'right-0 bottom-full pb-1') : (corner ? '-right-1.5 -top-1.5' : 'right-1 top-1/2 -translate-y-1/2')
-  return (
-    // Mouse controls that repeat the item's keyboard path (Space then arrows,
-    // Shift+F10 for the menu), so they stay out of the Tab order and the
-    // accessibility tree; a button nested in the item's button would be read twice.
-    <span
-      aria-hidden="true"
-      className={`absolute z-20 flex opacity-0 group-hover/edit:opacity-100 group-focus-visible/edit:opacity-100 group-data-[held]/edit:opacity-0 transition-opacity duration-100 motion-reduce:transition-none [&_*]:!cursor-pointer ${place}`}
+  const size = narrow ? 'h-[13px] w-[14px]' : 'h-[18px] w-[18px]'
+  const btn = `flex ${size} items-center justify-center rounded-md border-none bg-transparent p-0 text-muted hover:bg-text/10 hover:text-text !cursor-pointer disabled:opacity-30 disabled:pointer-events-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent`
+  // Shown on hover or while focus is on the item or one of these; hidden
+  // while the item is held for a keyboard move (the arrow keys move it then).
+  const show = heldId === id ? 'opacity-0' : 'opacity-0 group-hover/edit:opacity-100 group-focus-within/edit:opacity-100'
+  const fade = `absolute z-20 flex ${show} transition-opacity duration-100 motion-reduce:transition-none [&_*]:!cursor-pointer`
+  const arrows = keys.map((k, i) => {
+    const d = (i === 0 ? -1 : 1) as -1 | 1
+    const Icon = icons[i]
+    return (
+      <button
+        key={k}
+        type="button"
+        draggable={false}
+        disabled={!canStepItem(id, zone, d)}
+        aria-label={i18nT(names[i], { item: label })}
+        title={i18nT(names[i], { item: label })}
+        data-testid={`layout-item-step-${d < 0 ? 'earlier' : 'later'}`}
+        {...stop}
+        onClick={e => {
+          e.preventDefault(); e.stopPropagation()
+          const to = stepItem(id, zone, k)
+          if (to) announceStep(label, zone, to, k)
+          // At the new end the pressed arrow turns off and would drop focus: keep it on the item.
+          if (to && !canStepItem(id, to, d)) refocus(id)
+        }}
+        className={btn}
+      >
+        <Icon size={narrow ? 11 : 12} aria-hidden="true" />
+      </button>
+    )
+  })
+  const more = (
+    <button
+      type="button"
+      draggable={false}
+      aria-haspopup="menu"
+      aria-label={i18nT('nav.layout_kbd_menu', { item: label })}
+      title={i18nT('nav.layout_item_more')}
+      data-testid="layout-item-more"
+      {...stop}
+      onClick={e => { e.preventDefault(); e.stopPropagation(); openItemMenu(id, label, zone, e.currentTarget) }}
+      className={btn}
     >
-      {/* In the sidebar the controls take the hovered row's own colour, so they
-          cover the row's trailing glyph (the Local switcher's chevron, say)
-          without looking like a separate white pill. */}
-      <span className={inBar ? 'flex items-center overflow-hidden rounded-md border border-border bg-bg-elevated shadow-sm divide-x divide-border' : 'flex items-center gap-0.5 rounded-md bg-bg-hover pl-1'}>
-        {keys.map((k, i) => {
-          const d = (i === 0 ? -1 : 1) as -1 | 1
-          const Icon = icons[i]
-          return (
-            <button
-              key={k}
-              type="button"
-              tabIndex={-1}
-              draggable={false}
-              disabled={!canStepItem(id, zone, d)}
-              title={i18nT(names[i], { item: label })}
-              data-testid={`layout-item-step-${d < 0 ? 'earlier' : 'later'}`}
-              {...stop}
-              onClick={e => { e.preventDefault(); e.stopPropagation(); const to = stepItem(id, zone, k); if (to) announceStep(label, zone, to, k) }}
-              className={btn}
-            >
-              <Icon size={12} aria-hidden="true" />
-            </button>
-          )
-        })}
-        <button
-          type="button"
-          tabIndex={-1}
-          draggable={false}
-          title={i18nT('nav.layout_item_more')}
-          data-testid="layout-item-more"
-          {...stop}
-          onClick={e => { e.preventDefault(); e.stopPropagation(); openItemMenu(id, label, zone, e.currentTarget) }}
-          className={btn}
-        >
-          <MoreHorizontal size={12} aria-hidden="true" />
-        </button>
-      </span>
-    </span>
+      <MoreHorizontal size={12} aria-hidden="true" />
+    </button>
   )
+  if (narrow) return (
+    <>
+      <span className={`${fade} left-0.5 top-1/2 -translate-y-1/2 flex-col`}>{arrows}</span>
+      <span className={`${fade} right-0.5 top-1/2 -translate-y-1/2`}>{more}</span>
+    </>
+  )
+  // Bars: just outside the cell, so a one-cell icon keeps its neighbours
+  // clear. The sidebar: inside the row on its right, in the hovered row's
+  // own colour, so it covers a trailing glyph (the chevron, say) cleanly.
+  const place = inBar ? (zone === 'top' ? 'right-0 top-full pt-1' : 'right-0 bottom-full pb-1') : 'right-1 top-1/2 -translate-y-1/2 rounded-md bg-bg-hover pl-1'
+  return <span className={`${fade} ${place} items-center gap-0.5`}>{arrows}{more}</span>
 }
 
 /**
@@ -249,7 +276,7 @@ export function ItemMoreButton({ id, zone, label, corner = false }: { id: string
  * on the element that holds the item in its area (a bar cell, a sidebar row).
  */
 export function useLayoutItemProps(id: string, zone: ShellZone, label: string) {
-  const editing = useLayoutEditing()
+  const editing = useCanvasEditing()
   const heldId = useHeldItem()
   if (!editing) return {}
   const isHeld = heldId === id
@@ -396,7 +423,7 @@ function LayoutItemMenu() {
       }
     } })
   }
-  if (!isHeaderId(m.id)) items.push({ key: 'hide', label: i18nT('nav.layout_kbd_remove'), run: () => hideFromCanvas(m.id, m.label) })
+  if (!isHeaderId(m.id) && canRemove(m.id)) items.push({ key: 'hide', label: i18nT('nav.layout_kbd_remove'), run: () => hideFromCanvas(m.id, m.label) })
 
   const onKey = (e: KeyboardEvent<HTMLDivElement>) => {
     const list = [...(ref.current?.querySelectorAll<HTMLElement>('[role="menuitem"]') ?? [])]

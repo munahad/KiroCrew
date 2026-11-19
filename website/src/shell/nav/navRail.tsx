@@ -1,7 +1,7 @@
 import { surfaceLabel } from '../../surfaces/registry'
 import { railWidthFor } from '../../hooks/useRailWidth'
 import { FOCUS_INSET } from '../../hooks/useFocusMode'
-import { Coins, Compass, LayoutGrid, Settings2, SquareTerminal, Smartphone, Search as SearchIcon } from 'lucide-react'
+import { Coins, Compass, LayoutGrid, SquareTerminal, Smartphone, Search as SearchIcon } from 'lucide-react'
 import { motion } from 'framer-motion'
 import { toggleBottomTerminal } from '../../hooks/useBottomTerminal'
 import { focusPopout as focusTerminalPopout } from '../../utils/terminalPopout'
@@ -10,18 +10,19 @@ import { uiLocation } from '../../uiLocations/uiLocation'
 import { isAppNavId } from '../../appNotificationBadges'
 import { NAV_ITEMS } from './navItems'
 import { isChatRoute } from './routeActive'
-import { RailBrandToggle, RailCommunityLinks } from './railChrome'
+import { RailBrandToggle, RailCommunityLinks, RailHeader } from './railChrome'
+import { RemoteCrewSwitcher } from '../layout/remoteCrews'
 import { PinnedRailGroups } from './railPins'
 import { forwardRailContextMenu, pinAtPoint } from './railPinDrop'
 import { RAIL_PIN_MIME } from '../../lib/railLayout'
 import {
-  isWidgetItem, isWindowToggle, moveItem, removeFromBars, setLayoutEditing, setSidebarMembership, useLayoutEditing, useShellPlacement, useWidgetsIn,
+  isWidgetItem, isWindowToggle, moveItem, removeFromBars, setSidebarMembership, useLayoutEditing, useLogoShown, useShellPlacement, useWidgetsIn,
 } from '../../lib/shellLayout'
 import { ShellWidget } from '../layout/shellWidgets'
 import { DragOwnedByParent } from '../layout/dragOwner'
 import { SidebarTools } from '../layout/sidebarTools'
 import { PhoneBarRows } from '../layout/phoneBarRows'
-import { forPhone, phoneBarIds, usePhoneLayout } from '../../lib/phoneLayout'
+import { phoneBarIds } from '../../lib/phoneLayout'
 
 /** Sidebar-wide drop while editing: the groups' own drop host handles drops over
  *  them (and marks the event handled); this catches the rest of the sidebar. */
@@ -70,10 +71,12 @@ export function ShellNavRail({ shell }: { shell: AppShell }) {
   const sidebarWidgets: string[] = useWidgetsIn('sidebar')
   const layoutEditing = useLayoutEditing()
   const placement = useShellPlacement()
-  // The phone's column: bar items join the drawer, in the phone's own order.
-  const phoneLayout = usePhoneLayout()
-  const phoneTop = forPhone(phoneBarIds(placement.top), phoneLayout)
-  const phoneBottom = forPhone([...phoneBarIds(placement.bottom), ...phoneLayout.extra], phoneLayout)
+  const logoShown = useLogoShown()
+  // The phone's column: the desktop's items in one list, in the desktop's
+  // order. The phone layout is not editable (round 1), so its own store
+  // (lib/phoneLayout.ts) is kept but no longer applied.
+  const phoneTop = phoneBarIds(placement.top)
+  const phoneBottom = phoneBarIds(placement.bottom)
 
   // Render one standard nav row (used by the top-fixed mains, the Apps list,
   // and the bottom-fixed section). Active-state, mobile close, chat pin
@@ -87,6 +90,8 @@ export function ShellNavRail({ shell }: { shell: AppShell }) {
     label?: string,
     /** A pin inside this row's section is the selected row (see railPins). */
     covered = false,
+    /** The More panel: drawn with its label even when the sidebar is collapsed. */
+    expanded = false,
   ) => (
     <NavItem
       navId={n.id}
@@ -94,7 +99,7 @@ export function ShellNavRail({ shell }: { shell: AppShell }) {
       label={label ?? surfaceLabel(n)}
       icon={n.icon}
       active={!covered && navRowActive(n.path)}
-      collapsed={effectiveCollapsed}
+      collapsed={effectiveCollapsed && !expanded}
       onClick={closeMobileNav}
       // The chat row, while chat is the page on screen, toggles the sessions
       // sidebar instead of navigating. Whether chat is STILL where the app is
@@ -164,14 +169,16 @@ export function ShellNavRail({ shell }: { shell: AppShell }) {
                head the sidebar (as in Claude, Codex and Slack) instead of the
                top bar. Expanded they share one row; collapsed, the logo is the
                expand control and the arrows stack under it. */
-            <div className={`flex mb-1.5 ${effectiveCollapsed ? 'flex-col items-center gap-1' : 'items-center gap-1'}`} data-testid="sidebar-header">
-              <div className="flex-1 min-w-0 w-full [&>div]:mb-0">
-                <RailBrandToggle effectiveCollapsed={effectiveCollapsed} toggleNav={toggleNav} avatar={avatar} branding={branding} botName={botName} />
+            <>
+              {/* Round 1: the logo is optional, and the collapse button is its
+                  own control, so a collapsed sidebar can always be expanded. */}
+              <RailHeader effectiveCollapsed={effectiveCollapsed} toggleNav={toggleNav} avatar={avatar} branding={branding} botName={botName} showLogo={logoShown} />
+              {/* The local/remote Crews switcher is fixed here, at the top of
+                  the sidebar; Edit layout cannot move it. */}
+              <div data-testid="sidebar-crews" className={`mb-1 ${effectiveCollapsed ? 'flex justify-center' : 'w-full'}`}>
+                <RemoteCrewSwitcher shape={effectiveCollapsed ? 'icon' : 'chip'} fill={!effectiveCollapsed} />
               </div>
-              {/* Back/Forward, search and the other widgets are ordinary rows
-                  now: they sit wherever they were placed among the sidebar's
-                  rows. Only the logo and collapse toggle stay up here. */}
-            </div>
+            </>
           )}
           {/* Hairline under the expanded header (collapsed rail has none —
               the big logo alone separates well). */}
@@ -219,7 +226,8 @@ export function ShellNavRail({ shell }: { shell: AppShell }) {
               unpinnedApps={allAppGroup.filter(a => !sortedAppGroup.some(v => v.id === a.id)).map(a => a.id)}
               isApp={id => !railDefaultIsStatic(id) && allAppGroup.some(a => a.id === id)}
               setAppPinned={(id, pinned) => { if (readAppNavHidden().has(id) === pinned) toggleAppNavHidden(id) }}
-              renderItem={(id, label, covered) => {
+              renderItem={(id, label, covered, expanded = false) => {
+                const narrow = effectiveCollapsed && !expanded
                 if (isWidgetItem(id)) return (
                   // The row drags the widget (dnd-kit), so the widget's own
                   // native drag is off inside it. While editing, presses pass
@@ -227,8 +235,8 @@ export function ShellNavRail({ shell }: { shell: AppShell }) {
                   // remote Crews) would otherwise take the press to open its
                   // menu, and the row never starts dragging.
                   <DragOwnedByParent.Provider value>
-                    <div className={`${effectiveCollapsed ? 'flex justify-center' : 'w-full [&>div]:w-full'} ${layoutEditing ? '[&_*]:pointer-events-none' : ''}`}>
-                      <ShellWidget id={id} zone="sidebar" shell={shell} collapsed={effectiveCollapsed} />
+                    <div className={`${narrow ? 'flex justify-center' : 'w-full [&>div]:w-full'} ${layoutEditing ? '[&_*]:pointer-events-none' : ''}`}>
+                      <ShellWidget id={id} zone="sidebar" shell={shell} collapsed={narrow} />
                     </div>
                   </DragOwnedByParent.Provider>
                 )
@@ -239,9 +247,9 @@ export function ShellNavRail({ shell }: { shell: AppShell }) {
                     label={label ?? i18nT('nav.discover')}
                     icon={<Compass size={16} />}
                     active={discoverNavActive}
-                    collapsed={effectiveCollapsed}
+                    collapsed={narrow}
                     onClick={closeMobileNav}
-                    badge={<NavBadge navId="apps" collapsed={effectiveCollapsed} appBadges={discoverBadges} />}
+                    badge={<NavBadge navId="apps" collapsed={narrow} appBadges={discoverBadges} />}
                   />
                 )
                 if (id === 'apps-library') return (
@@ -251,12 +259,12 @@ export function ShellNavRail({ shell }: { shell: AppShell }) {
                     label={label ?? i18nT('nav.library')}
                     icon={<LayoutGrid size={16} />}
                     active={libraryNavActive}
-                    collapsed={effectiveCollapsed}
+                    collapsed={narrow}
                     onClick={closeMobileNav}
                   />
                 )
                 const n = advertisedNavItems.find(x => x.id === id) ?? sortedAppGroup.find(x => x.id === id)
-                return n ? renderNavRow(n, label, covered) : null
+                return n ? renderNavRow(n, label, covered, expanded) : null
               }}
             />
             {/* Design exploration: the phone has no bars, so what the desktop
@@ -342,21 +350,8 @@ export function ShellNavRail({ shell }: { shell: AppShell }) {
                 />
               )}
               <div>{renderNavRow(cap)}</div>
-              {/* Design exploration: the phone's way into Edit layout. The
-                  desktop opens it from the "You" menu, which the phone drawer
-                  does not have, and a long-press on a row is not discoverable.
-                  The drawer stays open: the sidebar it edits lives in it. */}
-              {isMobile && (
-                <NavItem
-                  path="#"
-                  label={i18nT('nav.rail_customize')}
-                  icon={<Settings2 size={16} />}
-                  active={false}
-                  collapsed={effectiveCollapsed}
-                  onClickOverride={() => setLayoutEditing(true)}
-                  navId="edit-layout"
-                />
-              )}
+              {/* Round 1: no Edit layout on the phone. Editing happens on the
+                  desktop or the web; the phone shows the result. */}
               {/* Phone only: the account modal (balance, sign-in state) has no
                   other phone entry -- the readout capsule that opens it on the
                   desktop is not rendered on the phone. Shown on exactly the
@@ -454,9 +449,8 @@ export function ShellNavRail({ shell }: { shell: AppShell }) {
                 transition: 'transform 200ms cubic-bezier(0.2, 0, 0, 1)',
                 pointerEvents: railPeek.open ? 'auto' : 'none',
               }
-              // Design exploration: the sidebar now starts at the window top,
-              // so it takes the same 8px gap above as it has below.
-              : { gridArea: 'nav', width: 'auto', marginTop: 8 }}
+              // Round 1: the full-width top bar sits above the sidebar again.
+              : { gridArea: 'nav', width: 'auto' }}
             role="navigation"
             aria-label={i18nT('app.main_navigation')}
             // Anywhere on the rail opens the rail's own menu, not the OS one.

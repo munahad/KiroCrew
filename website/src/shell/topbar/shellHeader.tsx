@@ -21,6 +21,7 @@ import { GuideRevealScope } from '../../guide/GuideRevealScope'
 import type { AppShell } from '../appShell'
 import { hiddenChromeProps } from '../focus/focusChrome'
 import { zoneLabel } from '../layout/barItems'
+import { forwardBarContextMenu } from '../layout/barContextMenu'
 import { BarGrid } from '../layout/barGridView'
 import { SEND_FEEDBACK_EVENT, useStatusPlace } from '../../lib/shellLayout'
 
@@ -443,13 +444,16 @@ export function ShellHeader({ shell }: { shell: AppShell }) {
             focus mode) keep a fixed group at the end. Spans every track.
             `data-topbar-overlay` is read by the crew-pin capture harnesses. */}
         {!isMobile && (
-          <div data-topbar-overlay className="h-full flex items-center gap-1.5 min-w-0" style={{ gridColumn: '1 / -1' }}>
+          // Round 1: a right-click anywhere on the top bar (not only over its
+          // item grid) opens the bar's menu, so Edit layout is always reachable.
+          // eslint-disable-next-line jsx-a11y/no-static-element-interactions -- mouse-only forwarding; the grid's own items take Shift+F10
+          <div data-topbar-overlay className="h-full flex items-center gap-1.5 min-w-0" style={{ gridColumn: '1 / -1' }} onContextMenu={forwardBarContextMenu}>
           {isWinElectron && <WindowsTitlebarMenu />}
           <div role="toolbar" aria-label={zoneLabel('top')} className="flex-1 min-w-0 h-full">
             <BarGrid
               zone="top"
               shell={shell}
-              renderStatus={() => <span className="flex items-center gap-1.5">{statusCapsule}{statusCapsule && <MetricsErrorNotice metrics={metrics} />}<NotificationsBellButton /></span>}
+              renderStatus={() => <span className="flex items-center gap-1.5">{statusCapsule}{statusCapsule && <MetricsErrorNotice metrics={metrics} />}</span>}
             />
           </div>
           <div ref={metricsGroupRef} data-topbar-actions className={`relative h-full flex items-center gap-1.5 shrink-0${updateAvailable ? ' tb-has-update' : ''}`}>

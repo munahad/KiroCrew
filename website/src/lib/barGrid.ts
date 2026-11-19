@@ -19,7 +19,7 @@ import { useEffect, useState } from 'react'
 
 import { safeGetItem, safeRemoveItem, safeSetItem } from '../utils/safeStorage'
 import {
-  HISTORY_ITEM, PROFILE_ITEM, REMOTE_ITEM, SEARCH_ITEM, STATUS_ITEM, WIDGET_ITEMS, moveItem, readPlace,
+  HISTORY_ITEM, NOTIFY_ITEM, PROFILE_ITEM, REMOTE_ITEM, SEARCH_ITEM, STATUS_ITEM, WIDGET_ITEMS, moveItem, placesOf, readPlace,
   readSearchStyle, readShellPlacement, setSearchStyle, type BarZone,
 } from './shellLayout'
 
@@ -192,7 +192,7 @@ function guessSpan(zone: BarZone, id: string): number {
   if (id === HISTORY_ITEM) return 2
   if (id === REMOTE_ITEM) return 3
   if (id === STATUS_ITEM) return zone === 'top' ? 6 : 4
-  if (id === PROFILE_ITEM) return 1
+  if (id === PROFILE_ITEM || id === NOTIFY_ITEM) return 1
   // Its own choice, else its bar's Show setting (icon only to start).
   return (readStyles()[id] ?? readBarStyle(zone)) === 'icon' ? 1 : 3
 }
@@ -258,6 +258,8 @@ export function pushAside(zone: BarZone, ids: readonly string[], cells: Cols, sp
  *  it, and whatever sat there moves aside. Every item's cell is saved, so the
  *  bar stays as it looks now. */
 export function placeOnBar(zone: BarZone, id: string, col: number): void {
+  // The logo, the Crews switcher and anything else a bar may not hold.
+  if (!placesOf(id).includes(zone)) return
   if (!barIds(zone).includes(id)) {
     arriveInBar(zone, id)
     moveItem(id, zone)

@@ -8,7 +8,7 @@ import { useDndSensors } from '../../hooks/useDndSensors'
 import { haptic } from '../../lib/haptic'
 import { i18nT } from '../../i18n/t'
 import {
-  FALLBACK_GROUP_ID, applyVisibleOrder, commitRail, isEntityPin, renameGroup, readRailLayout, removePin, resolveRailLayout, setRailLabel, updateRail,
+  FALLBACK_GROUP_ID, applyVisibleOrder, commitRail, flattenRailGroups, isEntityPin, renameGroup, readRailLayout, removePin, resolveRailLayout, setRailLabel, updateRail,
   useRailLayout, writeRailLayout, type RailGroup,
 } from '../../lib/railLayout'
 import { SortableAppNavRow } from './appRail'
@@ -16,17 +16,16 @@ import { RailContextMenu, groupTitle, type RailItemMeta } from './railCustomize'
 import { LayoutEditPanel } from '../layout/layoutEditPanel'
 import { hideFromCanvas, pageHideZoneAt, setPageHideOver, useDragOnlyEditing } from '../layout/dragOnlyEdit'
 import {
-  HISTORY_ITEM, PROFILE_ITEM, REMOTE_ITEM, SEARCH_ITEM, SIDEBAR_MEMBERSHIP_EVENT, STATUS_ITEM, announceLayout, barZoneAt, isWidgetItem, moveItem,
+  HISTORY_ITEM, NOTIFY_ITEM, PROFILE_ITEM, SEARCH_ITEM, SIDEBAR_MEMBERSHIP_EVENT, STATUS_ITEM, announceLayout, barZoneAt, isWidgetItem, moveItem,
   setChromeDrag, setLayoutEditing, useChromeDrag, useLayoutEditing, type SidebarMembership,
 } from '../../lib/shellLayout'
 import { cellAt, placeOnBar, styleInBar } from '../../lib/barGrid'
 
 /** Where widgets start in the sidebar: the top of its rows, and the bottom. */
-const SIDEBAR_HEAD_WIDGETS = [HISTORY_ITEM, REMOTE_ITEM, SEARCH_ITEM]
-const SIDEBAR_FOOT_WIDGETS = [STATUS_ITEM, PROFILE_ITEM]
+const SIDEBAR_HEAD_WIDGETS = [HISTORY_ITEM, SEARCH_ITEM]
+const SIDEBAR_FOOT_WIDGETS = [STATUS_ITEM, NOTIFY_ITEM, PROFILE_ITEM]
 import { shellItemMeta, zonesFor } from '../layout/shellItems'
 import { useIsMobile } from '../../hooks/useIsMobile'
-import { forPhone, usePhoneLayout } from '../../lib/phoneLayout'
 
 /** No drag sensors: the phone's drawer rows do not drag. */
 const NO_SENSORS: ReturnType<typeof useDndSensors> = []
@@ -142,8 +141,10 @@ function GroupHeader({ group, first, collapsed, renaming = false, onRenamed }: {
  */
 export function RailGroups({ available, renderItem, collapsed, defaultGroup, meta, unpinnedApps = [], isApp = () => false, setAppPinned }: {
   available: readonly string[]
-  /** Draw one row. `label` is the user's rail-only name for it, when set. */
-  renderItem: (id: string, label?: string) => ReactNode
+  /** Draw one row. `label` is the user's rail-only name for it, when set.
+   *  `expanded`: draw it with its label even in a collapsed sidebar (the
+   *  More panel). */
+  renderItem: (id: string, label?: string, expanded?: boolean) => ReactNode
   collapsed: boolean
   /** The group an id the layout never listed joins (e.g. a newly installed app). */
   defaultGroup?: (id: string) => string
@@ -156,28 +157,30 @@ export function RailGroups({ available, renderItem, collapsed, defaultGroup, met
   setAppPinned?: (id: string, pinned: boolean) => void
 }) {
   const layout = useRailLayout()
-  // Design exploration: the phone shows the groups in its own order, without
-  // what was hidden on the phone (lib/phoneLayout.ts); the desktop is untouched.
+  // Round 1: the phone shows the desktop's items in one list, and is not
+  // editable (the phone store, lib/phoneLayout.ts, is kept but not applied).
   const phone = useIsMobile()
-  const phoneLayout = usePhoneLayout()
+  // Round 1: an installed app is in the sidebar only when pinned there (listed
+  // in the rail layout); apps no longer fill the sidebar on their own. The
+  // rest are Not shown, and Discover still lists every app.
+  const pinnedIds = useMemo(() => new Set(layout.groups.flatMap(x => x.items)), [layout.groups])
+  const shownAvailable = useMemo(() => available.filter(id => !isApp(id) || pinnedIds.has(id)), [available, isApp, pinnedIds])
   const allGroups = useMemo(() => {
-    const g = resolveRailLayout(layout, available, defaultGroup)
+    // Round 1: no user sections. Every row is in one list, in order.
+    const g = flattenRailGroups(resolveRailLayout(layout, shownAvailable, defaultGroup))
     // Design exploration: a widget the stored layout has never listed starts
     // where the fixed widgets used to sit: Back/Forward, remote Crews and
     // search at the top, status and "You" at the bottom. Once moved, its row
     // keeps the place it was dropped in, like any other row.
     const listed = new Set(layout.groups.flatMap(x => x.items))
-    const fresh = new Set(available.filter(id => isWidgetItem(id) && !listed.has(id)))
+    const fresh = new Set(shownAvailable.filter(id => isWidgetItem(id) && !listed.has(id)))
     if (fresh.size === 0 || g.length === 0) return g
     const out = g.map(x => ({ ...x, items: x.items.filter(id => !fresh.has(id)) }))
     out[0].items.unshift(...SIDEBAR_HEAD_WIDGETS.filter(id => fresh.has(id)))
     out[out.length - 1].items.push(...SIDEBAR_FOOT_WIDGETS.filter(id => fresh.has(id)))
     return out
-  }, [layout, available, defaultGroup])
-  const groups = useMemo(
-    () => (phone ? allGroups.map(x => ({ ...x, items: forPhone(x.items, phoneLayout) })) : allGroups),
-    [allGroups, phone, phoneLayout],
-  )
+  }, [layout, shownAvailable, defaultGroup])
+  const groups = allGroups
   const flat = useMemo(() => groups.flatMap(g => [headerId(g.id), ...g.items]), [groups])
   // Same 8px mouse threshold as the Apps list: a plain click must reach navigation.
   // The phone reorders from Edit layout's list instead: a drag here would
@@ -191,10 +194,13 @@ export function RailGroups({ available, renderItem, collapsed, defaultGroup, met
   const barDrag = useChromeDrag()
   // The profile menu opens the same editor from outside this component.
   useEffect(() => {
-    const open = () => setLayoutEditing(true)
+    const open = () => { if (!phone) setLayoutEditing(true) }
     window.addEventListener(OPEN_RAIL_CUSTOMIZE_EVENT, open)
     return () => window.removeEventListener(OPEN_RAIL_CUSTOMIZE_EVENT, open)
-  }, [])
+  }, [phone])
+  // Round 1: no layout editing on the phone. Whatever started it (or a window
+  // narrowed to phone size mid-edit), the phone leaves edit mode.
+  useEffect(() => { if (phone && editing) setLayoutEditing(false) }, [phone, editing])
   // Unpin: apps go through the Library's set (the rail drops them via
   // `sortedAppGroup`); everything else is hidden in the layout itself.
   const unpin = useCallback((id: string) => {
@@ -208,8 +214,10 @@ export function RailGroups({ available, renderItem, collapsed, defaultGroup, met
   }, [groups, isApp, setAppPinned])
   const hidden = useMemo(() => {
     const avail = new Set(available)
-    return [...layout.hidden.filter(id => avail.has(id)), ...unpinnedApps]
-  }, [layout.hidden, available, unpinnedApps])
+    // Installed apps not pinned to the sidebar are Not shown too.
+    const unlisted = available.filter(id => isApp(id) && !pinnedIds.has(id))
+    return [...new Set([...layout.hidden.filter(id => avail.has(id)), ...unpinnedApps, ...unlisted])]
+  }, [layout.hidden, available, unpinnedApps, isApp, pinnedIds])
 
   const [renaming, setRenaming] = useState<string | null>(null)
   // Design exploration: the group whose name is open for editing, if any.
@@ -319,8 +327,6 @@ export function RailGroups({ available, renderItem, collapsed, defaultGroup, met
       onRename={setRenaming}
       onResetName={id => saveName(id, null)}
       isRenamed={id => !!labelOf(id)}
-      onRenameGroup={setRenamingGroup}
-      onGroupCreated={setRenamingGroup}
     >
     {/* Drop host: sessions dragged from the chat sidebar land on the zone the
         sidebar portals in here; Mates drag natively and drop on this element. */}
@@ -347,6 +353,9 @@ export function RailGroups({ available, renderItem, collapsed, defaultGroup, met
                 </div>
               )}
           </div>
+        )}
+        renderOverflowRow={id => (
+          <div data-rail-item={id} className="relative">{renderItem(id, labelOf(id), true)}</div>
         )}
         renderRow={id => (
           <div data-rail-item={id} className="relative">
@@ -403,7 +412,7 @@ export function RailGroups({ available, renderItem, collapsed, defaultGroup, met
     )}
     </div>
     </RailContextMenu>
-    {editing && !dragOnly && (
+    {editing && !dragOnly && !phone && (
       <LayoutEditPanel
         groups={allGroups}
         hidden={hidden}

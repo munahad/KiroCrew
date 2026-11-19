@@ -173,6 +173,13 @@ export function applyVisibleOrder(stored: RailLayout, visible: readonly RailGrou
   return { ...stored, version: RAIL_LAYOUT_VERSION, groups }
 }
 
+/** Round 1: no user sections. Every group's rows, in order, as ONE untitled
+ *  list (the base group). Stored groups are folded into it on the next write. */
+export function flattenRailGroups(groups: readonly RailGroup[]): RailGroup[] {
+  if (groups.length === 0) return []
+  return [{ id: FALLBACK_GROUP_ID, items: groups.flatMap(g => g.items) }]
+}
+
 /* ── Edits on the VISIBLE groups (what the rail draws). Pure; commit with `commitRail`. ── */
 
 /** Move one row to the end of another group. A no-op for an unknown id or group. */

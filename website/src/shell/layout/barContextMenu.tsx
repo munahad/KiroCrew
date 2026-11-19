@@ -14,12 +14,22 @@ import { ArrowLeft, ArrowRight, EyeOff, PanelBottom, PanelLeft, PanelTop, Settin
 import { OverlayPortal } from '../../components/overlayRoot'
 import { i18nT } from '../../i18n/t'
 import { cellOf, shiftOnBar } from '../../lib/barGrid'
-import { announceLayout, setLayoutEditing, type BarZone } from '../../lib/shellLayout'
+import { announceLayout, canRemove, setLayoutEditing, type BarZone } from '../../lib/shellLayout'
 import { zoneLabel } from './barItems'
 import { hideFromCanvas, layoutItemLabel } from './dragOnlyEdit'
 import { moveInto } from './keyboardMove'
 
 interface At { zone: BarZone; id: string | null; label: string; x: number; y: number; from: HTMLElement | null }
+
+/** On bar chrome outside a bar's item grid (the top bar's fixed end group,
+ *  its padding): hand a right-click to the grid, so the same menu opens. */
+export function forwardBarContextMenu(e: MouseEvent<HTMLElement>) {
+  const grid = e.currentTarget.querySelector<HTMLElement>('[data-bar-grid]')
+  const target = e.target as Element | null
+  if (!grid || (target && (grid.contains(target) || target.closest('input, textarea, [contenteditable="true"]')))) return
+  e.preventDefault()
+  grid.dispatchEvent(new window.MouseEvent('contextmenu', { bubbles: true, cancelable: true, clientX: e.clientX, clientY: e.clientY }))
+}
 
 /** Props for a bar's root element: opens the menu on right-click or Shift+F10. */
 export function useBarContextMenu(zone: BarZone, editing: boolean) {
@@ -71,7 +81,7 @@ function BarMenu({ at, close }: { at: At; close: () => void }) {
       const Icon = z === 'top' ? PanelTop : z === 'bottom' ? PanelBottom : PanelLeft
       items.push({ key: `to-${z}`, icon: <Icon size={13} />, text: i18nT('nav.layout_kbd_move_to', { place: zoneLabel(z) }), run: () => { moveInto(id, z, 'end'); announceLayout(i18nT('nav.layout_moved', { item: at.label, place: zoneLabel(z) })) } })
     }
-    items.push({ key: 'remove', icon: <EyeOff size={13} />, text: i18nT('nav.layout_kbd_remove'), run: () => hideFromCanvas(id, at.label) })
+    if (canRemove(id)) items.push({ key: 'remove', icon: <EyeOff size={13} />, text: i18nT('nav.layout_kbd_remove'), run: () => hideFromCanvas(id, at.label) })
   }
   items.push({ key: 'edit', icon: <Settings2 size={13} />, text: i18nT('nav.rail_customize'), run: () => setLayoutEditing(true), divider: !!at.id })
 

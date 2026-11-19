@@ -104,7 +104,9 @@ export function RailBrandToggle({ effectiveCollapsed, toggleNav, avatar, brandin
         title={effectiveCollapsed ? i18nT('app.expand_sidebar') : i18nT('app.collapse_sidebar')}
         aria-label={effectiveCollapsed ? i18nT('app.expand_sidebar') : i18nT('app.collapse_sidebar')}
         aria-expanded={!effectiveCollapsed}
-        {...uiLocation('shell.nav-toggle', rowRef)}
+        // The guide's 'shell.nav-toggle' names the desktop collapse button
+        // (RailHeader); this phone drawer header only keeps the ref.
+        ref={rowRef}
       >
         <span className={`flex items-center gap-2.5 min-w-0 transition-[margin] duration-300 ${effectiveCollapsed ? 'mt-1' : ''}`}>
           <RailHeaderGlyph avatar={avatar} boxClass={branding?.logoClass ?? (effectiveCollapsed ? 'w-9 h-9' : 'w-7 h-7')} iconSize={effectiveCollapsed ? 24 : 18} />
@@ -157,6 +159,81 @@ export function RailBrandToggle({ effectiveCollapsed, toggleNav, avatar, brandin
             </motion.span>
           )}
         </AnimatePresence>
+        {effectiveCollapsed && tip && <OverlayPortal>
+          <div
+            data-testid="rail-expand-tip"
+            className={`fixed flex items-center px-3 rounded-md bg-card border border-border shadow-lg text-text text-sm font-medium z-[9999] pointer-events-none whitespace-nowrap transition-opacity duration-150 ${tipOn ? 'opacity-100' : 'opacity-0'}`}
+            style={{ top: tip.top, left: tip.left + tip.width + 4, height: tip.height }}
+          >
+            {i18nT('app.expand_sidebar')}
+          </div>
+        </OverlayPortal>}
+      </button>
+    </div>
+  )
+}
+
+/** The bot name as the header draws it: the last word in the accent. */
+function BrandText({ botName }: { botName: string }) {
+  return (
+    <span className="text-[13px] font-bold tracking-[.14em] uppercase whitespace-nowrap truncate min-w-0">
+      {botName.includes(' ') ? (
+        <>
+          <span className="text-muted">{botName.slice(0, botName.lastIndexOf(' ') + 1)}</span>
+          <span className="text-accent/90">{botName.slice(botName.lastIndexOf(' ') + 1)}</span>
+        </>
+      ) : (
+        <span className="text-muted">{botName}</span>
+      )}
+    </span>
+  )
+}
+
+/**
+ * The desktop sidebar's header (round 1): the optional logo, and the collapse
+ * button as its own control. The logo used to BE the collapse toggle, so a
+ * collapsed sidebar without it had no way back; now the button is always
+ * here, whether or not the logo is shown. Collapsed, the logo (if shown)
+ * sits above the expand button. The phone drawer keeps RailBrandToggle.
+ */
+export function RailHeader({ effectiveCollapsed, toggleNav, avatar, branding, botName, showLogo }: {
+  effectiveCollapsed: boolean
+  toggleNav: () => void
+  avatar: string
+  branding: ReturnType<typeof getThemeBranding>
+  botName: string
+  showLogo: boolean
+}) {
+  useGuideRevealScope('shell.nav-rail', !effectiveCollapsed)
+  // Collapsed, the button carries no text: the same instant hover label as the
+  // collapsed nav rows (#25743).
+  const { tip, tipOn, rowRef, showTip, hideTip, dismissTip, pointerProps } = useNavTip<HTMLButtonElement>(effectiveCollapsed)
+  const label = effectiveCollapsed ? i18nT('app.expand_sidebar') : i18nT('app.collapse_sidebar')
+  return (
+    <div data-testid="sidebar-header" className={`relative flex mb-1.5 ${effectiveCollapsed ? 'flex-col items-center gap-1 mt-1' : 'items-center gap-2 min-h-7'}`}>
+      {showLogo && (
+        <span data-layout-logo className={`flex items-center gap-2.5 min-w-0 ${effectiveCollapsed ? '' : 'flex-1 pl-0.5'}`}>
+          <RailHeaderGlyph avatar={avatar} boxClass={branding?.logoClass ?? (effectiveCollapsed ? 'w-9 h-9' : 'w-7 h-7')} iconSize={effectiveCollapsed ? 24 : 18} />
+          {!effectiveCollapsed && <BrandText botName={botName} />}
+        </span>
+      )}
+      {!showLogo && !effectiveCollapsed && <span className="flex-1" />}
+      <button
+        type="button"
+        onClick={() => { dismissTip(); toggleNav() }}
+        {...pointerProps}
+        onMouseEnter={showTip}
+        onMouseLeave={hideTip}
+        onFocus={showTip}
+        onBlur={hideTip}
+        title={label}
+        aria-label={effectiveCollapsed ? i18nT('app.expand_sidebar') : i18nT('app.collapse_sidebar')}
+        aria-expanded={!effectiveCollapsed}
+        data-testid="sidebar-collapse-toggle"
+        className="flex items-center justify-center w-7 h-7 shrink-0 rounded-md bg-transparent border-none cursor-pointer text-muted hover:text-text hover:bg-bg-hover transition-colors"
+        {...uiLocation('shell.nav-toggle', rowRef)}
+      >
+        {effectiveCollapsed ? <PanelLeft size={16} aria-hidden="true" /> : <ArrowLeftToLine size={15} aria-hidden="true" />}
         {effectiveCollapsed && tip && <OverlayPortal>
           <div
             data-testid="rail-expand-tip"

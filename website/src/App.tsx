@@ -87,7 +87,7 @@ import { guideTarget } from './uiLocations/targetRegistry'
 import { useAppShell } from './shell/appShell'
 import { ShellHeader } from './shell/topbar/shellHeader'
 import { ShellStatusBar } from './shell/statusbar/shellStatusBar'
-import { useBarHasContent, useLayoutEditing, useTopBarHasContent, setLayoutEditing } from './lib/shellLayout'
+import { useBarHasContent, useLayoutEditing, useLayoutWindowLocked, setLayoutEditing } from './lib/shellLayout'
 import { LayoutZoneOutlines } from './shell/layout/layoutZones'
 import { EditOptionSwitcher } from './shell/layout/editOptionSwitcher'
 import { HoverLabels } from './shell/layout/hoverLabels'
@@ -337,8 +337,12 @@ export default function App() {
   // in it (search, status, placed items, or a pending update), or while editing
   // as a drop target. Empty, its row collapses and each page's own header is
   // the top of the window, so there is one bar, not two.
-  const topBarHasContent = useTopBarHasContent()
-  const hideTopBar = !isMobile && !focusActive && !layoutEditing && !topBarHasContent && !updateAvailable
+  // Round 1: the top bar always shows on the desktop, even empty, and spans
+  // the full window width with the sidebar below it. Empty, it still takes
+  // drops while editing and still has a right-click target (barContextMenu).
+  // Option 2's panel can ask for the window behind it to be blurred and locked
+  // (lib/shellLayout.ts setLayoutWindowLocked); the shell root carries the flag.
+  const windowLocked = useLayoutWindowLocked()
   // The page steps back while editing: dimmed well down and greyed, so the
   // chrome you can edit (the raised bars and sidebar) and the Edit layout
   // panel floating over the page read as the editor, not as the page.
@@ -628,7 +632,8 @@ export default function App() {
     <div
       ref={shellRef}
       data-testid="dashboard-shell"
-      className={`relative z-[1] h-full grid ${shellEntered ? '' : 'animate-rise'} overflow-hidden bg-bg p-safe ${isMacElectron || isMacPreview ? `mac-electron ${macFullscreen ? 'mac-fullscreen' : ''}` : ''} ${(isMacElectron || isMacPreview) && !macFullscreen && !isMobile && !focusActive ? 'mac-sidebar-top' : ''} ${isWinElectron ? 'win-electron' : ''} ${isLinuxFramelessElectron ? 'linux-electron' : ''} ${isMobile ? 'grid-cols-[minmax(0,1fr)] grid-rows-[42px_minmax(0,1fr)]' : bottomDock ? 'grid-rows-[42px_minmax(0,1fr)_auto_auto]' : 'grid-rows-[42px_minmax(0,1fr)_auto]'}`}
+      data-layout-locked={windowLocked ? '' : undefined}
+      className={`relative z-[1] h-full grid ${shellEntered ? '' : 'animate-rise'} overflow-hidden bg-bg p-safe ${isMacElectron || isMacPreview ? `mac-electron ${macFullscreen ? 'mac-fullscreen' : ''}` : ''} ${isWinElectron ? 'win-electron' : ''} ${isLinuxFramelessElectron ? 'linux-electron' : ''} ${isMobile ? 'grid-cols-[minmax(0,1fr)] grid-rows-[42px_minmax(0,1fr)]' : bottomDock ? 'grid-rows-[42px_minmax(0,1fr)_auto_auto]' : 'grid-rows-[42px_minmax(0,1fr)_auto]'}`}
       // Retire the entrance animation once it has played, so re-showing this
       // pane cannot replay it. Guarded on BOTH the keyframe name and the event
       // target: `animationend` bubbles, and descendants (banners, cards) use
@@ -642,12 +647,11 @@ export default function App() {
         // focus mode drops it along with the other chrome tracks.
         gridTemplateAreas: isMobile
           ? '"topbar" "content"'
-          // Design exploration: the sidebar runs the full height (it now holds
-          // the logo, collapse toggle and Back/Forward), so the top bar spans
-          // only the page side. Focus mode keeps the full-width top row.
+          // Round 1: the top bar spans the full window width, with the
+          // sidebar below it (as in focus mode).
           : bottomDock
-            ? `${focusActive ? '"topbar topbar"' : '"nav topbar"'} "nav content" "nav actbar"${focusActive ? '' : ' "status status"'}`
-            : `${focusActive ? '"topbar topbar topbar"' : '"nav topbar topbar"'} "nav content actbar"${focusActive ? '' : ' "status status status"'}`,
+            ? `"topbar topbar" "nav content" "nav actbar"${focusActive ? '' : ' "status status"'}`
+            : `"topbar topbar topbar" "nav content actbar"${focusActive ? '' : ' "status status status"'}`,
         ...(!isMobile && {
           gridTemplateColumns: bottomDock
             ? `${focusActive ? 0 : railWidthFor({ isMobile, collapsed: effectiveCollapsed })}px minmax(0,1fr)`
@@ -661,9 +665,6 @@ export default function App() {
         // Focus mode collapses the chrome tracks. Inline so it beats the Tailwind
         // `grid-rows-[42px_...]` class rather than having to fight it there, and
         // so the one platform that needs a gutter (see FOCUS_INSET) can keep it.
-        ...(hideTopBar && {
-          gridTemplateRows: bottomDock ? '0px minmax(0,1fr) auto auto' : '0px minmax(0,1fr) auto',
-        }),
         ...(focusActive && {
           gridTemplateRows: bottomDock
             ? `${FOCUS_INSET}px minmax(0,1fr) auto`
@@ -761,7 +762,7 @@ export default function App() {
         </>
       )}
 
-      {!hideTopBar && <ShellHeader shell={shell} />}
+      <ShellHeader shell={shell} />
 
       {agentSwitchNotice && <AgentSwitchNoticeBanner notice={agentSwitchNotice} />}
 

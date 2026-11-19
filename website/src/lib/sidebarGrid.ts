@@ -16,7 +16,7 @@ import { useEffect, useState } from 'react'
 import { safeGetItem, safeRemoveItem, safeSetItem } from '../utils/safeStorage'
 import { normalize } from './barGrid'
 import { FALLBACK_GROUP_ID, applyVisibleOrder, readRailLayout, writeRailLayout, type RailGroup } from './railLayout'
-import { PROFILE_ITEM, STATUS_ITEM } from './shellLayout'
+import { NOTIFY_ITEM, PROFILE_ITEM, STATUS_ITEM } from './shellLayout'
 
 const KEY = 'mc-sidebar-rows'
 const EVENT = 'mc:sidebar-rows-changed'
@@ -63,8 +63,10 @@ export function readSidebarRowCount(): number { return rowCount }
 
 /** Items with no stored row start at the bottom: status and "You", where the
  *  sidebar's account area always was. Everything else packs from the top. */
-const FOOT = new Set<string>([STATUS_ITEM, PROFILE_ITEM])
+const FOOT = new Set<string>([STATUS_ITEM, NOTIFY_ITEM, PROFILE_ITEM])
 const one = () => 1
+/** Whether an item keeps to the column's foot (status, the bell, "You"). */
+export const isFootItem = (id: string) => FOOT.has(id)
 
 /** The row each item is drawn at. `ids` in list order. */
 export function resolveColumn(ids: readonly string[], rows: Rows, n: number): Rows {

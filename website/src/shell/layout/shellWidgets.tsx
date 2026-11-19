@@ -12,7 +12,7 @@ import { GripVertical } from 'lucide-react'
 
 import { NavHistoryArrows } from '../../components/NavHistoryArrows'
 import {
-  HISTORY_ITEM, PROFILE_ITEM, REMOTE_ITEM, SEARCH_ITEM, STATUS_ITEM, useLayoutEditing, type ShellZone, type WidgetItem,
+  HISTORY_ITEM, NOTIFY_ITEM, PROFILE_ITEM, REMOTE_ITEM, SEARCH_ITEM, STATUS_ITEM, useLayoutEditing, type ShellZone, type WidgetItem,
 } from '../../lib/shellLayout'
 import { ShellProfileMenu } from '../nav/railSettingsFlyout'
 import type { AppShell } from '../appShell'
@@ -21,6 +21,7 @@ import { DragOwnedByParent } from './dragOwner'
 import { SearchTrigger } from './searchTrigger'
 import { SidebarStatus } from './sidebarStatus'
 import { RemoteCrewSwitcher } from './remoteCrews'
+import { NotificationsBellButton } from '../topbar/shellHeader'
 
 /** A widget's wrapper: names it for drop indexing and lets it drag while editing. */
 export function WidgetSlot({ id, children, className = '', gutter = false }: {
@@ -68,6 +69,8 @@ export function ShellWidget({ id, zone, shell, collapsed = false }: {
       )
     case STATUS_ITEM:
       return <SidebarStatus shell={shell} collapsed={collapsed} />
+    case NOTIFY_ITEM:
+      return <WidgetSlot id={NOTIFY_ITEM} gutter={zone === 'sidebar'}><NotificationsBellButton /></WidgetSlot>
     case REMOTE_ITEM:
       // Always shown, even with no remote yet (then it offers to add one).
       return (

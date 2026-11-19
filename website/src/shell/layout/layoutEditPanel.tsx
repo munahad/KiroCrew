@@ -15,9 +15,9 @@
  * Rendered by RailGroups, which owns the sidebar data the list needs, and
  * portaled to the body so it floats over the page area only.
  */
-import { useEffect, useLayoutEffect, useMemo, useRef, useState, type DragEvent } from 'react'
+import { useEffect, useLayoutEffect, useMemo, useRef, useState, type DragEvent, type KeyboardEvent as ReactKeyboardEvent } from 'react'
 import { useQuery } from '@tanstack/react-query'
-import { ArrowLeftRight, ArrowLeftToLine, Bell, Check, ChevronDown, ChevronLeft, ChevronRight, ChevronUp, CircleUserRound, EyeOff, Fullscreen, GripVertical, PanelBottom, PanelTop, RectangleHorizontal, Square, Lightbulb, Lock, MessageSquare, Minus, MonitorSmartphone, MoreHorizontal, PanelLeft, Search, Smartphone, SquareTerminal, X } from 'lucide-react'
+import { ArrowLeftRight, ArrowLeftToLine, Bell, Check, ChevronDown, ChevronLeft, ChevronRight, ChevronUp, CircleUserRound, EyeOff, Fullscreen, GripVertical, PanelBottom, PanelTop, Lightbulb, Lock, MessageSquare, Minus, MonitorSmartphone, MoreHorizontal, PanelLeft, Plug, Plus, Search, Smartphone, SquareTerminal, X } from 'lucide-react'
 
 import CrewAvatar from '../../components/CrewAvatar'
 import {
@@ -35,8 +35,8 @@ import {
   updateRail, type RailGroup,
 } from '../../lib/railLayout'
 import {
-  SHELL_ITEM_MIME, FEEDBACK_ITEM, FOCUS_ITEM, HISTORY_ITEM, PHONE_ITEM, PROFILE_ITEM, REMOTE_ITEM, SEARCH_ITEM, removeFromBars, STATUS_ITEM, TERMINAL_ITEM, isTwoPlaceItem, announceLayout, isWindowToggle, moveItem, resetShellLayout, setLayoutEditing,
-  moveWithinBar, setSearchStyle, useLayoutAnnouncement, useSearchStyle, useShellPlacement, zoneOf, type BarZone, type ShellZone,
+  SHELL_ITEM_MIME, FEEDBACK_ITEM, FOCUS_ITEM, HISTORY_ITEM, LOGO_ITEM, NOTIFY_ITEM, PHONE_ITEM, PROFILE_ITEM, SEARCH_ITEM, canRemove, placesOf, removeFromBars, STATUS_ITEM, TERMINAL_ITEM, isTwoPlaceItem, announceLayout, isWindowToggle, moveItem, resetShellLayout, setLayoutEditing,
+  moveWithinBar, setLayoutWindowLocked, setSearchStyle, useLayoutAnnouncement, useSearchStyle, useShellPlacement, zoneOf, type BarZone, type ShellZone,
 } from '../../lib/shellLayout'
 import { barOrder, cellOf, clearBarCells, placeOnBar, setBarStyle, setItemStyle, shiftOnBar, useBarCells, useBarStyle, useItemStyle } from '../../lib/barGrid'
 import { canShiftInSidebar, clearSidebarRows, columnIdsOf, columnOrder, shiftInSidebar, useSidebarRows } from '../../lib/sidebarGrid'
@@ -52,19 +52,21 @@ import { PreviewEditor } from './previewEditor'
 import { HiddenItemPicker } from './hiddenItemPicker'
 import { moveInto, spotOf } from './keyboardMove'
 import { STATUS_BAR_EDIT_HEIGHT } from '../statusbar/shellStatusBar'
+import './layoutLock.css'
 
 
 /** Items that never move, listed so their place reads as deliberate. */
 /** The Crew's logo as the sidebar header draws it (its image), or the
  *  header's own fallback glyph before the image loads. */
 function LogoGlyph() {
-  const [src] = useState(() => document.querySelector<HTMLImageElement>('button[aria-expanded] img[aria-hidden="true"]')?.getAttribute('src') ?? null)
+  const [src] = useState(() => document.querySelector<HTMLImageElement>('[data-layout-logo] img, button[aria-expanded] img[aria-hidden="true"]')?.getAttribute('src') ?? null)
   return src
     ? <img src={src} alt="" aria-hidden="true" className="h-6 w-6 rounded-md object-contain" />
     : <PanelLeft size={16} />
 }
 const LOCKED: { key: string; icon: JSX.Element; zone: 'sidebar' | 'top' }[] = [
-  { key: 'nav.layout_locked_logo', icon: <LogoGlyph />, zone: 'sidebar' },
+  // Round 1: the logo is optional (a candidate below); the Crews switcher is fixed.
+  { key: 'components.instanceTabBar.instances', icon: <MonitorSmartphone size={16} />, zone: 'sidebar' },
   { key: 'nav.layout_locked_toggle', icon: <ArrowLeftToLine size={16} />, zone: 'sidebar' },
 ]
 
@@ -85,7 +87,7 @@ export interface Candidate { id: string; category: Exclude<Category, 'all'>; met
 function categoryOf(id: string): Exclude<Category, 'all'> {
   if (id.startsWith(MATE_PIN_PREFIX)) return 'mates'
   if (id.startsWith(SESSION_PIN_PREFIX)) return 'sessions'
-  if (isWindowToggle(id) || isTwoPlaceItem(id)) return 'tools'
+  if (isWindowToggle(id) || isTwoPlaceItem(id) || id === LOGO_ITEM) return 'tools'
   // Task Runner, Discover and Library ship in the Apps group, so they read as apps.
   return isAppNavId(id) || APP_STORE_IDS.has(id) ? 'apps' : 'pages'
 }
@@ -113,11 +115,13 @@ const CATEGORY_KEY: Record<Category, string> = {
 const categoryLabel = (c: Category) => i18nT(CATEGORY_KEY[c])
 
 /** The places an item may go, in the order the menu lists them. */
-function placesFor(_id: string, phone = false): (ShellZone | 'none')[] {
+function placesFor(id: string, phone = false): (ShellZone | 'none')[] {
   // Every movable item can go anywhere, or nowhere. Only the logo and sidebar
   // toggle are fixed, and they are listed under "Always here" instead.
   // The phone has no top or bottom bar: there it is the sidebar or nothing.
-  return phone ? ['sidebar', 'none'] : ['sidebar', 'top', 'bottom', 'none']
+  // Round 1: per item (lib/shellLayout.ts placesOf): "You" has no Not shown,
+  // the logo is the sidebar or nothing.
+  return phone ? ['sidebar', 'none'] : placesOf(id)
 }
 /** Panel sections, in the order the canvas reads: top bar, sidebar, bottom
  *  bar, then everything not shown. Locked items follow under "Always here". */
@@ -209,6 +213,34 @@ export function LayoutEditPanel({ groups, hidden, meta }: {
   const tiles = usePanelStyle() === 'tiles' && !phone
   const gradual = useDisclosure() === 'gradual' && !phone && !tiles
   const preview = useEditOption() === 'preview' && !phone
+  // Option 2 is the list only (round 1): while it edits, the window behind is
+  // blurred, dimmed and locked (layoutLock.css), and still updates live as
+  // the list changes. `inert` keeps keyboard focus and screen readers out of
+  // it too; the panel portals to the body, outside the shell root. Done,
+  // Escape or another option unmounts the panel or flips `locked`, which
+  // unlocks.
+  const locked = !preview && !phone
+  useEffect(() => {
+    if (!locked) return
+    setLayoutWindowLocked(true)
+    const shell = document.querySelector<HTMLElement>('[data-testid="dashboard-shell"]')
+    shell?.setAttribute('inert', '')
+    return () => { setLayoutWindowLocked(false); shell?.removeAttribute('inert') }
+  }, [locked])
+  // While locked, Tab and Shift+Tab cycle inside the panel.
+  const trapTab = (e: ReactKeyboardEvent<HTMLElement>) => {
+    if (!locked || e.key !== 'Tab' || !panelRef.current) return
+    const f = [...panelRef.current.querySelectorAll<HTMLElement>('button:not([disabled]), input:not([disabled]), [tabindex]:not([tabindex="-1"])')]
+    if (f.length === 0) return
+    const first = f[0], last = f[f.length - 1]
+    const at = document.activeElement
+    if (e.shiftKey && (at === first || at === panelRef.current)) { e.preventDefault(); last.focus() }
+    else if (!e.shiftKey && at === last) { e.preventDefault(); first.focus() }
+  }
+  // List drags: the row a dragged row would land beside (one purple line),
+  // and whether a drag is on, so empty places show a slot to drop into.
+  const [rowAt, setRowAt] = useState<{ id: string; before: boolean } | null>(null)
+  const [rowDragging, setRowDragging] = useState(false)
   // Hidden: edit by dragging alone, with a small bar to bring the panel back.
   // Each Edit layout starts with the panel shown.
   const [panelHidden, setPanelHidden] = useState(false)
@@ -239,10 +271,11 @@ export function LayoutEditPanel({ groups, hidden, meta }: {
     }
     if (!phone) {
       add(SEARCH_ITEM, { label: i18nT('nav.layout_locked_search'), icon: <Search size={16} /> })
-      add(REMOTE_ITEM, { label: i18nT('components.instanceTabBar.instances'), icon: <MonitorSmartphone size={16} /> })
+      add(LOGO_ITEM, { label: i18nT('nav.layout_locked_logo'), icon: <LogoGlyph /> })
       add(HISTORY_ITEM, { label: i18nT('nav.layout_locked_back_forward'), icon: <ArrowLeftRight size={16} /> })
       add(PROFILE_ITEM, { label: i18nT('nav.profile_menu_name'), icon: <CircleUserRound size={16} /> })
-      add(STATUS_ITEM, { label: i18nT('nav.layout_status_item'), icon: <Bell size={16} /> })
+      add(STATUS_ITEM, { label: i18nT('nav.layout_status_item'), icon: <Plug size={16} /> })
+      add(NOTIFY_ITEM, { label: i18nT('nav.layout_notifications_item'), icon: <Bell size={16} /> })
       if (terminalEnabled) add(TERMINAL_ITEM, { label: i18nT('app.terminal'), icon: <SquareTerminal size={16} /> })
       add(PHONE_ITEM, { label: i18nT('app.connect_your_phone'), icon: <Smartphone size={16} /> })
       add(FEEDBACK_ITEM, { label: i18nT('nav.send_feedback'), icon: <Lightbulb size={16} /> })
@@ -340,6 +373,7 @@ export function LayoutEditPanel({ groups, hidden, meta }: {
 
   const place = (id: string, to: ShellZone | 'none', label: string) => {
     if (to === where(id)) return
+    if (!phone && !placesOf(id).includes(to)) return
     // The phone changes the phone only; the desktop layout stays as it is.
     if (phone) {
       if (to === 'none') phoneHide(id)
@@ -370,20 +404,53 @@ export function LayoutEditPanel({ groups, hidden, meta }: {
       : i18nT('nav.layout_moved', { item: label, place: zoneLabel(to) }))
   }
 
+  /** Drop on a place section's own space (its heading, its padding, an empty
+   *  slot): the item goes to the end of that place, or into the line already
+   *  shown beside that section's last row. */
+  const listSectionDrop = (section: ShellZone | 'none', rows: Candidate[]) => ({
+    onDragOver: (e: DragEvent) => {
+      if (!e.dataTransfer.types.includes(SHELL_ITEM_MIME)) return
+      e.preventDefault()
+      e.dataTransfer.dropEffect = 'move'
+      const last = rows[rows.length - 1]
+      if (last) { if (rowAt?.id !== last.id || rowAt.before) setRowAt({ id: last.id, before: false }) }
+      else if (tileOver !== section) { setRowAt(null); setTileOver(section) }
+    },
+    onDragLeave: (e: DragEvent) => {
+      if (e.currentTarget.contains(e.relatedTarget as Node | null)) return
+      setTileOver(null)
+      if (rowAt && rows.some(r => r.id === rowAt.id)) setRowAt(null)
+    },
+    onDrop: (e: DragEvent) => {
+      e.preventDefault()
+      const id = e.dataTransfer.getData(SHELL_ITEM_MIME)
+      const at = rowAt
+      setRowAt(null); setTileOver(null)
+      if (!id) return
+      if (at && rows.some(r => r.id === at.id)) dropBeside(id, at.id, at.before, section)
+      else { const x = candidates.find(c => c.id === id); if (x) place(id, section, x.meta.label) }
+    },
+  })
+  const endRowDrag = () => { setRowDragging(false); setRowAt(null); setTileOver(null) }
+
   /** The place sections (top bar, sidebar, bottom bar, not shown) for one
-   *  list of items; `key` keeps their heading ids unique per column. */
+   *  list of items; `key` keeps their heading ids unique per column. Option 2
+   *  edits here only: rows drag within and between sections (one purple line
+   *  marks where a row lands), and each row has its arrows and "⋯" inline. */
   const sectionsFor = (list: Candidate[], key: string) => (
     <>
         {(phone ? PHONE_SECTIONS : SECTIONS).map(section => {
           const rows = list.filter(x => where(x.id) === section).sort((a, b) => orderOf(a.id, section) - orderOf(b.id, section))
-          if (rows.length === 0) return null
+          // An empty place shows only while a row is dragged, as a slot to
+          // drop into, so a bar with nothing in it can still be filled.
+          if (rows.length === 0 && !rowDragging) return null
           const headingId = `layout-section-${key}-${section}`
           const Heading = phone ? 'h3' : 'h4'
           // Gradual: what is not shown is one "Add an item" button opening a
           // searchable list, instead of a long section. A search in the
           // panel itself still lists every match in place.
           if (gradual && !q && section === 'none') return (
-            <li key={section} className="mt-2">
+            <li key={section} className={`mt-2 rounded-lg ${tileOver === section ? 'ring-2 ring-accent' : ''}`} {...listSectionDrop(section, [])}>
               <HiddenItemPicker
                 items={rows.map(x => ({ id: x.id, label: x.meta.label, icon: x.meta.icon, kind: categoryLabel(x.category), detail: x.detail && repeated.has(x.meta.label) ? x.detail : undefined }))}
                 onAdd={(id, label) => place(id, 'sidebar', label)}
@@ -391,21 +458,61 @@ export function LayoutEditPanel({ groups, hidden, meta }: {
             </li>
           )
           return (
-          <li key={section} className="mt-1 first:mt-0">
+          <li key={section} className="mt-1 first:mt-0" data-layout-section={section} {...listSectionDrop(section, rows)}>
             <Heading id={headingId} className="m-0 mt-2 mb-1 mx-2 text-[11px] font-medium uppercase tracking-wide text-muted">
               {placeLabel(section)} <span className="opacity-70 normal-case">{rows.length}</span>
             </Heading>
             <ul aria-labelledby={headingId} className="m-0 p-0 list-none">
+        {rows.length === 0 && (
+          <li
+            data-testid="layout-list-empty-slot"
+            className={`mx-2 mb-1 rounded-lg border-2 border-dashed px-2 py-2 text-center text-[12px] ${tileOver === section ? 'border-accent text-text' : 'border-border text-muted'}`}
+          >
+            {i18nT('nav.layout_tiles_empty')}
+          </li>
+        )}
         {rows.map(x => {
           const at = where(x.id)
           const inBar = at === 'top' || at === 'bottom'
           return (
+            // A drag source and drop target; its arrows and "⋯" are the
+            // keyboard path for every move (WCAG 2.5.7).
+            // eslint-disable-next-line jsx-a11y/no-noninteractive-element-interactions
             <li
               key={x.id}
               draggable
-              onDragStart={e => startItemDrag(e, x.id)}
+              data-layout-row={x.id}
+              onDragStart={e => {
+                startItemDrag(e, x.id)
+                // After the browser has taken the drag image: adding the empty
+                // slots during dragstart can cancel the drag.
+                window.setTimeout(() => setRowDragging(true), 0)
+              }}
+              onDragEnd={endRowDrag}
+              onDragOver={e => {
+                if (!e.dataTransfer.types.includes(SHELL_ITEM_MIME)) return
+                e.preventDefault()
+                e.stopPropagation()
+                e.dataTransfer.dropEffect = 'move'
+                const r = e.currentTarget.getBoundingClientRect()
+                const before = e.clientY < r.top + r.height / 2
+                if (rowAt?.id !== x.id || rowAt.before !== before) setRowAt({ id: x.id, before })
+                if (tileOver) setTileOver(null)
+              }}
+              onDrop={e => {
+                e.preventDefault()
+                e.stopPropagation()
+                const id = e.dataTransfer.getData(SHELL_ITEM_MIME)
+                const before = rowAt?.id === x.id ? rowAt.before : true
+                endRowDrag()
+                if (id) dropBeside(id, x.id, before, section)
+              }}
               className="group/row relative flex flex-col gap-1 pl-3 pr-1.5 py-1.5 rounded-lg hover:bg-bg-hover cursor-grab active:cursor-grabbing"
             >
+              {/* The one landing line, in the gap above or below this row. */}
+              {rowAt?.id === x.id && (
+                <span aria-hidden="true" data-testid="layout-list-drop-line" className={`pointer-events-none absolute left-2 right-2 h-[2px] rounded-full bg-accent ${rowAt.before ? '-top-px' : '-bottom-px'}`} />
+              )}
               <div className="relative flex items-center gap-2">
               {/* The grip overlays the row's left padding on hover instead of
                   taking a column of its own, so the name gets that room.
@@ -416,72 +523,22 @@ export function LayoutEditPanel({ groups, hidden, meta }: {
                 <span className="block truncate text-[13px] text-text" title={x.meta.label}>{x.meta.label}</span>
                 <span className="block text-[11px] text-muted">
                   {categoryLabel(x.category)}{x.detail && repeated.has(x.meta.label) ? ` · ${x.detail}` : ''}
+                  {/* In a bar, how it shows, so the list says what the
+                      blurred window shows (changed from its "⋯"). */}
+                  {inBar && offersStyle(x.id) && ` · ${i18nT(isIcon(x.id) ? 'nav.layout_search_icon' : (x.id === SEARCH_ITEM ? 'nav.layout_search_field' : 'nav.layout_style_label'))}`}
                 </span>
               </span>
               {/* Gradual: the row's controls stay visible but muted, full
                   strength on hover or keyboard focus. Edit mode already says
                   the person wants to change things, so the controls are not
-                  hidden (hover-only also fails on touch). */}
-              <span className={`shrink-0 flex items-center gap-2 ${gradual ? 'opacity-50 transition-opacity duration-100 group-hover/row:opacity-100 group-focus-within/row:opacity-100 motion-reduce:transition-none' : ''}`}>
-              {/* A placed item in a bar: icon and label (as dropped) or the icon
-                  only, the user's choice, never a rule the bar applies. Same
-                  two-icon toggle as search's. */}
-              {inBar && !isTwoPlaceItem(x.id) && (
-                <span role="group" aria-label={i18nT('nav.layout_show_as')} className="shrink-0 flex items-center p-0.5 rounded-md border border-border">
-                  {(['label', 'icon'] as const).map(style => {
-                    const name = i18nT(style === 'icon' ? 'nav.layout_search_icon' : 'nav.layout_style_label')
-                    const on = styleOf(x.id) === style
-                    return (
-                      <button
-                        key={style}
-                        type="button"
-                        aria-pressed={on}
-                        aria-label={name}
-                        title={name}
-                        onClick={() => {
-                          if (on) return
-                          setItemStyle(x.id, style)
-                          announceLayout(i18nT(style === 'icon' ? 'nav.layout_now_icon' : 'nav.layout_now_label', { item: x.meta.label }))
-                        }}
-                        className={`w-6 h-5 flex items-center justify-center rounded border-none cursor-pointer ${on ? 'bg-bg-hover text-text' : 'bg-transparent text-muted hover:text-text'}`}
-                      >
-                        {style === 'icon' ? <Square size={11} /> : <RectangleHorizontal size={13} />}
-                      </button>
-                    )
-                  })}
-                </span>
-              )}
-              {/* Search only: field or icon, as a two-icon toggle on the row
-                  itself (no second line). Each half names itself for screen
-                  readers and on hover; the pressed one is the current style. */}
-              {x.id === SEARCH_ITEM && (
-                <span role="group" aria-label={i18nT('nav.layout_show_as')} className="shrink-0 flex items-center p-0.5 rounded-md border border-border">
-                  {(['field', 'icon'] as const).map(style => (
-                    <button
-                      key={style}
-                      type="button"
-                      aria-pressed={searchStyle === style}
-                      aria-label={i18nT(style === 'icon' ? 'nav.layout_search_icon' : 'nav.layout_search_field')}
-                      title={i18nT(style === 'icon' ? 'nav.layout_search_icon' : 'nav.layout_search_field')}
-                      onClick={() => {
-                        if (searchStyle === style) return
-                        setSearchStyle(style)
-                        announceLayout(i18nT(style === 'icon' ? 'nav.layout_search_now_icon' : 'nav.layout_search_now_field'))
-                      }}
-                      className={`w-6 h-5 flex items-center justify-center rounded border-none cursor-pointer ${searchStyle === style ? 'bg-bg-hover text-text' : 'bg-transparent text-muted hover:text-text'}`}
-                    >
-                      {style === 'icon' ? <Search size={12} /> : <RectangleHorizontal size={13} />}
-                    </button>
-                  ))}
-                </span>
-              )}
+                  hidden (hover-only also fails on touch). Bare icons, after
+                  the name, so they never touch the item's icon. */}
+              <span className={`shrink-0 flex items-center gap-0.5 ${gradual ? 'opacity-50 transition-opacity duration-100 group-hover/row:opacity-100 group-focus-within/row:opacity-100 motion-reduce:transition-none' : ''}`}>
               {/* Move up / Move down in the sidebar, Move left / Move right in a
-                  bar (one cell): reorder without dragging (WCAG 2.5.7). Not on
-                  hidden items, which have no place. Nothing has a fixed spot:
-                  widgets are ordinary rows in the sidebar too. */}
-              {at !== 'none' && (
-                <span className="shrink-0 flex items-center">
-                  {([-1, 1] as const).map(d => {
+                  bar (one cell): reorder without dragging (WCAG 2.5.7), each
+                  press one step, no menu. A hidden item has no place: it gets
+                  "Put back" instead, which adds it to the sidebar. */}
+              {at !== 'none' ? ([-1, 1] as const).map(d => {
                     const key = inBar
                       ? (d < 0 ? 'nav.layout_move_left' : 'nav.layout_move_right')
                       : (d < 0 ? 'nav.layout_move_up' : 'nav.layout_move_down')
@@ -490,6 +547,7 @@ export function LayoutEditPanel({ groups, hidden, meta }: {
                       <button
                         key={d}
                         type="button"
+                        draggable={false}
                         disabled={!canStep(x.id, d)}
                         onClick={() => step(x.id, d, x.meta.label)}
                         aria-label={i18nT(key, { item: x.meta.label })}
@@ -499,35 +557,34 @@ export function LayoutEditPanel({ groups, hidden, meta }: {
                         <Icon size={14} />
                       </button>
                     )
-                  })}
-                </span>
-              )}
-              {/* Where it goes: a compact menu button, not a dropdown showing the
-                  current place, because the section heading already says that.
-                  The menu ticks the current place. */}
+                  })
+                : placesFor(x.id, phone).includes('sidebar') && (
+                  <button
+                    type="button"
+                    draggable={false}
+                    onClick={() => place(x.id, 'sidebar', x.meta.label)}
+                    aria-label={i18nT('nav.layout_put_back_item', { item: x.meta.label })}
+                    title={i18nT('nav.layout_put_back_item', { item: x.meta.label })}
+                    data-testid="layout-row-put-back"
+                    className="w-6 h-6 flex items-center justify-center rounded-md bg-transparent border-none text-muted hover:text-text hover:bg-bg-hover cursor-pointer"
+                  >
+                    <Plus size={14} />
+                  </button>
+                )}
               <DropdownMenu modal={false}>
                 <DropdownMenuTrigger asChild>
                   <button
                     type="button"
-                    aria-label={i18nT('nav.layout_show_in', { item: x.meta.label })}
-                    title={i18nT('nav.layout_show_in', { item: x.meta.label })}
-                    className="shrink-0 h-6 pl-1 pr-0.5 flex items-center gap-0.5 rounded-md border border-border bg-bg text-muted hover:text-text hover:bg-bg-hover cursor-pointer data-[state=open]:bg-bg-hover data-[state=open]:text-text"
+                    draggable={false}
+                    aria-label={i18nT('nav.layout_kbd_menu', { item: x.meta.label })}
+                    title={i18nT('nav.layout_item_more')}
+                    data-testid="layout-row-more"
+                    className="w-6 h-6 flex items-center justify-center rounded-md bg-transparent border-none text-muted hover:text-text hover:bg-bg-hover cursor-pointer data-[state=open]:bg-bg-hover data-[state=open]:text-text"
                   >
-                    {/* The current place as an icon, so the button shows what is
-                        selected without repeating the section's name in words. */}
-                    <PlaceIcon place={at} />
-                    <ChevronDown size={11} aria-hidden="true" />
+                    <MoreHorizontal size={14} aria-hidden="true" />
                   </button>
                 </DropdownMenuTrigger>
-                <DropdownMenuContent align="end" className="min-w-[140px]">
-                  <DropdownMenuRadioGroup value={at} onValueChange={v => place(x.id, v as ShellZone | 'none', x.meta.label)}>
-                    {placesFor(x.id, phone).map(p => (
-                      <DropdownMenuRadioItem key={p} value={p}>
-                        <span className="inline-flex items-center gap-2"><PlaceIcon place={p} />{placeLabel(p)}</span>
-                      </DropdownMenuRadioItem>
-                    ))}
-                  </DropdownMenuRadioGroup>
-                </DropdownMenuContent>
+                {itemMenu(x, at)}
               </DropdownMenu>
               </span>
               </div>
@@ -610,6 +667,36 @@ export function LayoutEditPanel({ groups, hidden, meta }: {
     el.style.outline = '2px solid var(--accent)'; el.style.outlineOffset = '2px'; el.style.borderRadius = '8px'; el.dataset.tileLit = ''
   }
   const isIcon = (id: string) => (id === SEARCH_ITEM ? searchStyle === 'icon' : styleOf(id) === 'icon')
+  /** An item's "⋯" menu, for list rows and tiles alike: Move to each other
+   *  place it may go (for a hidden item, that adds it back), how it shows in
+   *  a bar, then Remove (never for "You", see canRemove). */
+  const itemMenu = (x: Candidate, section: ShellZone | 'none', testId = 'layout-row-menu') => {
+    const inBar = section === 'top' || section === 'bottom'
+    return (
+      <DropdownMenuContent align="end" className="min-w-[190px]" data-testid={testId}>
+        {placesFor(x.id, phone).filter((z): z is ShellZone => z !== 'none' && z !== section).map(z => (
+          <DropdownMenuItem key={z} onSelect={() => place(x.id, z, x.meta.label)}>
+            <span className="inline-flex items-center gap-2"><PlaceIcon place={z} />{i18nT('nav.layout_kbd_move_to', { place: zoneLabel(z) })}</span>
+          </DropdownMenuItem>
+        ))}
+        {inBar && offersStyle(x.id) && (
+          <DropdownMenuItem onSelect={() => {
+            const icon = !isIcon(x.id)
+            if (x.id === SEARCH_ITEM) setSearchStyle(icon ? 'icon' : 'field'); else setItemStyle(x.id, icon ? 'icon' : 'label')
+            announceLayout(i18nT(icon ? 'nav.layout_now_icon' : 'nav.layout_now_label', { item: x.meta.label }))
+          }}>
+            {i18nT(isIcon(x.id) ? (x.id === SEARCH_ITEM ? 'nav.layout_search_field' : 'nav.layout_style_label') : 'nav.layout_search_icon')}
+          </DropdownMenuItem>
+        )}
+        {section !== 'none' && canRemove(x.id) && placesFor(x.id, phone).includes('none') && (
+          <>
+            <DropdownMenuSeparator />
+            <DropdownMenuItem onSelect={() => place(x.id, 'none', x.meta.label)}>{i18nT('nav.layout_kbd_remove')}</DropdownMenuItem>
+          </>
+        )}
+      </DropdownMenuContent>
+    )
+  }
   /** A section's Show setting, as its toggle presses it. */
   const sectionStyle = (section: ShellZone): 'label' | 'icon' =>
     section === 'sidebar' ? (navCollapsed ? 'icon' : 'label') : section === 'top' ? topStyle : bottomStyle
@@ -659,6 +746,8 @@ export function LayoutEditPanel({ groups, hidden, meta }: {
   const dropBeside = (id: string, target: string, before: boolean, section: ShellZone | 'none') => {
     const x = candidates.find(c => c.id === id)
     if (!x || id === target) return
+    // Only to a place this item may go ("You" never to Not shown, say).
+    if (!placesFor(id, phone).includes(section)) return
     if (section === 'none') { place(id, 'none', x.meta.label); return }
     const order = list0(section).filter(i => i !== id)
     const i = order.indexOf(target) + (before ? 0 : 1)
@@ -754,28 +843,7 @@ export function LayoutEditPanel({ groups, hidden, meta }: {
               <MoreHorizontal size={12} aria-hidden="true" />
             </button>
           </DropdownMenuTrigger>
-          <DropdownMenuContent align="start" className="min-w-[190px]" data-testid="layout-tile-menu">
-            {(['top', 'sidebar', 'bottom'] as const).filter(z => z !== section).map(z => (
-              <DropdownMenuItem key={z} onSelect={() => place(x.id, z, x.meta.label)}>
-                <span className="inline-flex items-center gap-2"><PlaceIcon place={z} />{i18nT('nav.layout_kbd_move_to', { place: zoneLabel(z) })}</span>
-              </DropdownMenuItem>
-            ))}
-            {inBar && offersStyle(x.id) && (
-              <DropdownMenuItem onSelect={() => {
-                const icon = !isIcon(x.id)
-                if (x.id === SEARCH_ITEM) setSearchStyle(icon ? 'icon' : 'field'); else setItemStyle(x.id, icon ? 'icon' : 'label')
-                announceLayout(i18nT(icon ? 'nav.layout_now_icon' : 'nav.layout_now_label', { item: x.meta.label }))
-              }}>
-                {i18nT(isIcon(x.id) ? (x.id === SEARCH_ITEM ? 'nav.layout_search_field' : 'nav.layout_style_label') : 'nav.layout_search_icon')}
-              </DropdownMenuItem>
-            )}
-            {section !== 'none' && (
-              <>
-                <DropdownMenuSeparator />
-                <DropdownMenuItem onSelect={() => place(x.id, 'none', x.meta.label)}>{i18nT('nav.layout_kbd_remove')}</DropdownMenuItem>
-              </>
-            )}
-          </DropdownMenuContent>
+          {itemMenu(x, section, 'layout-tile-menu')}
         </DropdownMenu>
         </span>
       </li>
@@ -963,10 +1031,15 @@ export function LayoutEditPanel({ groups, hidden, meta }: {
       className={`fixed inset-y-0 right-0 z-[60] flex items-center justify-center pointer-events-none ${phone ? 'p-safe' : 'px-[clamp(12px,5vw,64px)] py-[clamp(12px,6vh,64px)]'}`}
       style={{ left: phone ? 0 : railWidth }}
     >
+    {/* onKeyDown only keeps Tab inside the dialog (focus trap). */}
+    {/* eslint-disable-next-line jsx-a11y/no-noninteractive-element-interactions */}
     <aside
       ref={panelRef}
       tabIndex={-1}
-      role="region"
+      // Locked window behind (option 2): a modal dialog, Tab stays inside.
+      role={locked ? 'dialog' : 'region'}
+      aria-modal={locked || undefined}
+      onKeyDown={trapTab}
       aria-label={i18nT('nav.rail_customize_title')}
       className={`pointer-events-auto min-h-0 flex flex-col bg-bg-elevated text-text outline-none overflow-hidden ${phone ? 'w-full h-full' : '@container w-[640px] max-w-full h-[min(560px,100%)] rounded-2xl border border-border shadow-2xl'}`}
       data-testid="layout-edit-panel"
@@ -984,18 +1057,9 @@ export function LayoutEditPanel({ groups, hidden, meta }: {
               </p>
             : <p className="mt-1 mb-0 text-[12px] text-muted truncate" title={i18nT('nav.layout_hint')}>{i18nT('nav.layout_hint')}</p>}
         </div>
-        {/* Hide the panel and edit by dragging alone; a small bar brings it back. */}
-        {!phone && (
-          <button
-            type="button"
-            onClick={() => setPanelHidden(true)}
-            aria-label={i18nT('nav.layout_hide_panel')}
-            title={i18nT('nav.layout_hide_panel')}
-            className="w-7 h-7 flex items-center justify-center rounded-md bg-transparent border-none cursor-pointer text-muted hover:text-text hover:bg-bg-hover"
-          >
-            <Minus size={15} />
-          </button>
-        )}
+        {/* Round 1: no Hide panel. Option 2 edits in the list only, and the
+            window behind is locked, so there is nothing to drag without it.
+            (The hidden bar below stays, unreachable, with the Tiles code.) */}
         <button
           type="button"
           onClick={() => setLayoutEditing(false)}

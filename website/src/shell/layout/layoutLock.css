@@ -1,0 +1,22 @@
+/*
+ * Option 2 (list only, design exploration): while its Edit layout panel is
+ * open, the window behind it is softly blurred and dimmed and takes no clicks
+ * (layoutEditPanel.tsx turns on setLayoutWindowLocked, App.tsx puts
+ * data-layout-locked on the shell root, and the panel also marks the root
+ * inert for keyboard and screen readers). The panel portals to the body, so
+ * it stays sharp. The blur is light on purpose: the window keeps updating as
+ * the list changes, and its shape must stay readable through it.
+ */
+[data-layout-locked] {
+  filter: blur(3px);
+  opacity: 0.6;
+  pointer-events: none;
+  user-select: none;
+  transition: filter 150ms ease, opacity 150ms ease;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  [data-layout-locked] {
+    transition: none;
+  }
+}

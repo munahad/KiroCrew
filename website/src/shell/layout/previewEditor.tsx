@@ -25,7 +25,7 @@
  * hides with Delete; every change is read out (WCAG 2.1.1, 2.5.7, 4.1.3).
  */
 import { useEffect, useMemo, useRef, useState, type DragEvent, type KeyboardEvent, type ReactNode } from 'react'
-import { ArrowDown, ArrowLeft, ArrowRight, ArrowUp, ChevronDown, ChevronUp, EyeOff, MoreHorizontal, Plus, Search, X } from 'lucide-react'
+import { ArrowDown, ArrowLeft, ArrowLeftToLine, ArrowRight, ArrowUp, ChevronDown, ChevronUp, EyeOff, MonitorSmartphone, MoreHorizontal, Plus, Search, X } from 'lucide-react'
 
 import { Btn } from '../../components/ui'
 import { OverlayPortal } from '../../components/overlayRoot'
@@ -33,7 +33,8 @@ import { i18nT } from '../../i18n/t'
 import { barOrder, cellOf, setItemStyle, useItemStyle } from '../../lib/barGrid'
 import type { RailGroup } from '../../lib/railLayout'
 import {
-  SEARCH_ITEM, SHELL_ITEM_MIME, announceLayout, readShellPlacement, setLayoutEditing, setSearchStyle, useSearchStyle,
+  LOGO_ITEM, NOTIFY_ITEM, SEARCH_ITEM, SHELL_ITEM_MIME, announceLayout, canRemove, moveItem, placesOf, readLogoShown, readPlace,
+  readShellPlacement, setLayoutEditing, setLogoShown, setSearchStyle, useLogoShown, useSearchStyle,
   type ShellZone,
 } from '../../lib/shellLayout'
 import { columnIdsOf, columnOrder, isHeaderId } from '../../lib/sidebarGrid'
@@ -75,12 +76,22 @@ export function PreviewEditor({ candidates, columnOf, categoryLabel, repeated, g
   const styleOf = useItemStyle()
   const searchStyle = useSearchStyle()
 
-  // The layout as it was on open: Cancel and Discard put it back.
+  // The layout as it was on open: Cancel and Discard put it back. The logo
+  // and the bell keep their own stores, outside the shared snapshot.
   const initial = useRef(snapshotLayout())
-  const dirty = () => JSON.stringify(snapshotLayout()) !== JSON.stringify(initial.current)
+  const initialOwn = useRef({ logo: readLogoShown(), bell: readPlace(NOTIFY_ITEM) })
+  const own = () => ({ logo: readLogoShown(), bell: readPlace(NOTIFY_ITEM) })
+  const dirty = () => JSON.stringify([snapshotLayout(), own()]) !== JSON.stringify([initial.current, initialOwn.current])
   const done = () => setLayoutEditing(false)
-  const cancel = () => { restoreLayout(initial.current); setLayoutEditing(false) }
+  const cancel = () => {
+    restoreLayout(initial.current)
+    const { logo, bell } = initialOwn.current
+    setLogoShown(logo)
+    moveItem(NOTIFY_ITEM, bell === 'none' ? null : bell)
+    setLayoutEditing(false)
+  }
   const leave = () => { if (dirty()) setConfirming(true); else done() }
+  const logoShown = useLogoShown()
 
   // Widget places change through their own event; redraw on it.
   const [, setTick] = useState(0)
@@ -97,16 +108,21 @@ export function PreviewEditor({ candidates, columnOf, categoryLabel, repeated, g
   const byId = useMemo(() => new Map(candidates.map(x => [x.id, x])), [candidates])
   const labelOf = (id: string) => byId.get(id)?.meta.label ?? id
 
-  // What each area holds, in the order it draws it.
+  // What each area holds, in the order it draws it. The logo is not in any
+  // order: it is drawn at the sidebar's head, beside the fixed items.
   const inZone = (zone: ShellZone): string[] => {
     if (zone === 'top' || zone === 'bottom') return barOrder(zone).filter(id => byId.has(id) && where(id) === zone)
-    const rows = columnOrder(columnIdsOf(groups)).filter(id => !isHeaderId(id) && byId.has(id) && where(id) === 'sidebar')
-    return [...rows, ...readShellPlacement().side.filter(id => byId.has(id) && !rows.includes(id))]
+    const rows = columnOrder(columnIdsOf(groups)).filter(id => !isHeaderId(id) && id !== LOGO_ITEM && byId.has(id) && where(id) === 'sidebar')
+    return [...rows, ...readShellPlacement().side.filter(id => id !== LOGO_ITEM && byId.has(id) && !rows.includes(id))]
   }
+  const logoPlaced = logoShown && byId.has(LOGO_ITEM)
 
   /* ── Moves ── */
 
   const dropAt = (id: string, zone: ShellZone, index: number) => {
+    // Refuse what the item may not do (the logo in a bar).
+    if (!placesOf(id).includes(zone)) return
+    if (id === LOGO_ITEM) { place(id, zone, labelOf(id)); return }
     const order = inZone(zone).filter(x => x !== id)
     const before = order[index]
     if (zone === 'top' || zone === 'bottom') moveInto(id, zone, before ? (cellOf(zone, before)?.col ?? 'end') : 'end')
@@ -115,6 +131,7 @@ export function PreviewEditor({ candidates, columnOf, categoryLabel, repeated, g
     setSelected(id)
   }
   const hide = (id: string) => {
+    if (!canRemove(id)) return
     place(id, 'none', labelOf(id))
     if (selected === id) setSelected(null)
     if (menu?.id === id) setMenu(null)
@@ -134,7 +151,7 @@ export function PreviewEditor({ candidates, columnOf, categoryLabel, repeated, g
   }
   const step = (id: string, key: string) => {
     const from = where(id)
-    if (from === 'none') return
+    if (from === 'none' || id === LOGO_ITEM) return
     const to = stepItem(id, from, key)
     if (to) {
       announceStep(labelOf(id), from, to, key)
@@ -185,7 +202,8 @@ export function PreviewEditor({ candidates, columnOf, categoryLabel, repeated, g
 
   const [over, setOver] = useState<{ zone: ShellZone; index: number } | null>(null)
   const indexAt = (e: DragEvent, zone: ShellZone) => {
-    const chips = [...(e.currentTarget as HTMLElement).querySelectorAll<HTMLElement>('[data-preview-chip]')]
+    // The sidebar's head (logo, Crews, collapse) is fixed: drops land below it.
+    const chips = [...(e.currentTarget as HTMLElement).querySelectorAll<HTMLElement>('[data-preview-chip]')].filter(c => !c.closest('[data-preview-head]'))
     const vertical = zone === 'sidebar'
     const i = chips.findIndex(c => {
       const r = c.getBoundingClientRect()
@@ -233,8 +251,9 @@ export function PreviewEditor({ candidates, columnOf, categoryLabel, repeated, g
         <button
           type="button"
           data-preview-chip={id}
-          draggable
-          onDragStart={e => { setMenu(null); startItemDrag(e, id) }}
+          // The logo stays at the sidebar's head: shown or not, never dragged.
+          draggable={id !== LOGO_ITEM}
+          onDragStart={e => { setMenu(null); if (id === LOGO_ITEM) e.preventDefault(); else startItemDrag(e, id) }}
           onClick={e => (menu?.id === id ? setMenu(null) : openMenu(id, e.currentTarget))}
           onKeyDown={e => {
             if (e.key.startsWith('Arrow')) { e.preventDefault(); step(id, e.key) }
@@ -245,7 +264,7 @@ export function PreviewEditor({ candidates, columnOf, categoryLabel, repeated, g
           aria-label={x.meta.label}
           aria-describedby="preview-chip-hint"
           title={x.meta.label}
-          className={`flex h-6 min-w-0 flex-1 items-center gap-1.5 rounded-md border px-1.5 pr-5 text-[11px] cursor-grab active:cursor-grabbing ${
+          className={`flex h-6 min-w-0 flex-1 items-center gap-1.5 rounded-md border px-1.5 pr-5 text-[11px] ${id === LOGO_ITEM ? 'cursor-pointer' : 'cursor-grab active:cursor-grabbing'} ${
             on ? 'border-accent bg-accent-subtle text-text-strong' : lit ? 'border-accent/60 bg-bg-hover text-text' : 'border-border bg-bg text-text hover:bg-bg-hover'}`}
         >
           <span className="flex h-3.5 w-3.5 shrink-0 items-center justify-center [&_svg]:h-3.5 [&_svg]:w-3.5">{x.meta.icon}</span>
@@ -272,6 +291,29 @@ export function PreviewEditor({ candidates, columnOf, categoryLabel, repeated, g
   const line = (vertical: boolean) => (
     <span aria-hidden="true" className={`shrink-0 rounded-full bg-accent ${vertical ? 'h-0.5 w-full' : 'h-5 w-0.5'}`} />
   )
+  /** An item no editor moves (the Crews switcher, the collapse button): drawn
+   *  in place, with no drag and no menu. */
+  const fixed = (label: string, icon: ReactNode, testId: string, iconOnlyChip = false) => (
+    <span
+      data-preview-fixed={testId}
+      title={`${label} · ${i18nT('nav.layout_always_here')}`}
+      className={`flex h-6 min-w-0 shrink-0 items-center gap-1.5 rounded-md border border-dotted border-border px-1.5 text-[11px] text-muted ${iconOnlyChip ? 'w-6 justify-center px-0' : ''}`}
+    >
+      <span aria-hidden="true" className="flex h-3.5 w-3.5 shrink-0 items-center justify-center [&_svg]:h-3.5 [&_svg]:w-3.5">{icon}</span>
+      <span className={iconOnlyChip ? 'sr-only' : 'min-w-0 truncate'}>{label}</span>
+    </span>
+  )
+  /** The sidebar's head, as the window draws it: the logo (optional) and the
+   *  separate collapse button on one row, the Crews switcher under them. */
+  const sidebarHead = () => (
+    <div data-preview-head="" className="flex shrink-0 flex-col gap-1">
+      <div className="flex min-w-0 items-center gap-1">
+        <div className="flex min-w-0 flex-1">{logoPlaced && chip(LOGO_ITEM, 'sidebar')}</div>
+        {fixed(i18nT('nav.layout_locked_toggle'), <ArrowLeftToLine />, 'collapse', true)}
+      </div>
+      {fixed(i18nT('components.instanceTabBar.instances'), <MonitorSmartphone />, 'crews')}
+    </div>
+  )
   const zoneBody = (zone: ShellZone) => {
     const ids = inZone(zone)
     const vertical = zone === 'sidebar'
@@ -279,6 +321,8 @@ export function PreviewEditor({ candidates, columnOf, categoryLabel, repeated, g
     const out: ReactNode[] = []
     ids.forEach((id, i) => { if (i === at) out.push(<span key={`line-${i}`} className="contents">{line(vertical)}</span>); out.push(chip(id, zone)) })
     if (at >= ids.length) out.push(<span key="line-end" className="contents">{line(vertical)}</span>)
+    // Remove all only where it saves clicks: a bar with two or more items it can remove.
+    const removable = ids.filter(canRemove)
     return (
       <div
         role="group"
@@ -289,14 +333,15 @@ export function PreviewEditor({ candidates, columnOf, categoryLabel, repeated, g
           vertical ? 'h-full flex-col' : 'h-full items-center'
         } ${over?.zone === zone ? 'border-accent bg-accent-subtle/40' : 'border-text/30'}`}
       >
+        {vertical && sidebarHead()}
         {out}
         {ids.length === 0 && at < 0 && (
           <span className={`pointer-events-none text-[11px] text-muted ${vertical ? 'm-auto' : 'mx-auto'}`}>{i18nT('nav.layout_preview_empty_area')}</span>
         )}
-        {zone !== 'sidebar' && ids.length > 0 && (
+        {zone !== 'sidebar' && removable.length >= 2 && (
           <button
             type="button"
-            onClick={() => { for (const id of ids) place(id, 'none', labelOf(id)) }}
+            onClick={() => { for (const id of removable) place(id, 'none', labelOf(id)) }}
             className="ml-auto shrink-0 rounded border-none bg-transparent px-1 text-[11px] text-muted hover:text-text hover:underline cursor-pointer"
           >
             {i18nT('nav.layout_preview_clear_area')}
@@ -389,7 +434,8 @@ export function PreviewEditor({ candidates, columnOf, categoryLabel, repeated, g
                     in the drawing moves its row here too. */}
                 {([...ZONES, 'none'] as const).map(z => {
                   const inTab = new Set(rows.map(x => x.id))
-                  const ids = z === 'none' ? rows.filter(x => where(x.id) === 'none').map(x => x.id) : inZone(z).filter(id => inTab.has(id))
+                  const ids = z === 'none' ? rows.filter(x => where(x.id) === 'none').map(x => x.id)
+                    : [...(z === 'sidebar' && logoPlaced && inTab.has(LOGO_ITEM) ? [LOGO_ITEM] : []), ...inZone(z).filter(id => inTab.has(id))]
                   if (ids.length === 0) return null
                   return (
                     <section key={z} aria-label={placeName(z)} data-preview-group={z} className="mb-2">
@@ -406,8 +452,8 @@ export function PreviewEditor({ candidates, columnOf, categoryLabel, repeated, g
                             <li
                               key={id}
                               data-preview-row={id}
-                              draggable
-                              onDragStart={e => startItemDrag(e, id)}
+                              draggable={id !== LOGO_ITEM}
+                              onDragStart={e => { if (id === LOGO_ITEM) e.preventDefault(); else startItemDrag(e, id) }}
                               onPointerEnter={() => setHot(id)}
                               onPointerLeave={() => setHot(h => (h === id ? null : h))}
                               className={`group/row flex items-center gap-2 rounded-lg px-2 py-1.5 cursor-grab active:cursor-grabbing ${lit ? 'bg-bg-hover ring-1 ring-accent/60' : 'hover:bg-bg-hover'}`}
@@ -419,7 +465,8 @@ export function PreviewEditor({ candidates, columnOf, categoryLabel, repeated, g
                                   {categoryLabel(x.category)}{x.detail && repeated.has(x.meta.label) ? ` · ${x.detail}` : ''}
                                 </span>
                               </span>
-                              {z !== 'none' && (
+                              {z !== 'none' && id === LOGO_ITEM && <span aria-hidden="true" className="w-12 shrink-0" />}
+                              {z !== 'none' && id !== LOGO_ITEM && (
                                 <span className="flex shrink-0 items-center">
                                   {[true, false].map(earlier => {
                                     const ok = canStep(id, earlier)
@@ -442,7 +489,7 @@ export function PreviewEditor({ candidates, columnOf, categoryLabel, repeated, g
                                 </span>
                               )}
                               {/* Hide a placed item; show one that is not shown (in the sidebar). */}
-                              <button
+                              {(z === 'none' || canRemove(id)) && <button
                                 type="button"
                                 onClick={() => toggle(id)}
                                 aria-label={i18nT(z === 'none' ? 'nav.layout_preview_show_item' : 'nav.layout_preview_hide_item', { item: x.meta.label })}
@@ -450,7 +497,7 @@ export function PreviewEditor({ candidates, columnOf, categoryLabel, repeated, g
                                 className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md border border-border bg-bg text-muted hover:text-text cursor-pointer"
                               >
                                 {z === 'none' ? <Plus size={13} /> : <EyeOff size={13} />}
-                              </button>
+                              </button>}
                             </li>
                           )
                         })}
@@ -510,12 +557,12 @@ export function PreviewEditor({ candidates, columnOf, categoryLabel, repeated, g
                   const items: { key: string; text: string; run: () => void; icon?: JSX.Element }[] = []
                   if (canStep(id, true)) items.push({ key: 'earlier', icon: inBar ? <ArrowLeft size={13} aria-hidden="true" /> : <ArrowUp size={13} aria-hidden="true" />, text: i18nT(inBar ? 'nav.layout_move_left' : 'nav.layout_move_up', { item: label }), run: () => step(id, earlierKey(menuAt)) })
                   if (canStep(id, false)) items.push({ key: 'later', icon: inBar ? <ArrowRight size={13} aria-hidden="true" /> : <ArrowDown size={13} aria-hidden="true" />, text: i18nT(inBar ? 'nav.layout_move_right' : 'nav.layout_move_down', { item: label }), run: () => step(id, laterKey(menuAt)) })
-                  for (const z of ZONES) if (z !== menuAt) items.push({ key: `to-${z}`, text: i18nT('nav.layout_kbd_move_to', { place: zoneLabel(z) }), run: () => dropAt(id, z, inZone(z).length) })
+                  for (const z of ZONES) if (z !== menuAt && placesOf(id).includes(z)) items.push({ key: `to-${z}`, text: i18nT('nav.layout_kbd_move_to', { place: zoneLabel(z) }), run: () => dropAt(id, z, inZone(z).length) })
                   if (inBar && offersStyle(id)) {
                     const icon = iconOnly(id)
                     items.push({ key: 'style', text: i18nT(icon ? (id === SEARCH_ITEM ? 'nav.layout_search_field' : 'nav.layout_style_label') : 'nav.layout_search_icon'), run: () => setIconOnly(id, !icon) })
                   }
-                  items.push({ key: 'remove', text: i18nT('nav.layout_kbd_remove'), run: () => hide(id) })
+                  if (canRemove(id)) items.push({ key: 'remove', text: i18nT('nav.layout_kbd_remove'), run: () => hide(id) })
                   return items.map(x => (
                     <button
                       key={x.key}

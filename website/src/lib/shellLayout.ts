@@ -52,17 +52,39 @@ export const STATUS_ITEM = 'shell:status'
 export const REMOTE_ITEM = 'shell:remote'
 export const HISTORY_ITEM = 'shell:history'
 export const PROFILE_ITEM = 'shell:profile'
+/** Notifications (the bell): its own movable widget, split out of the status
+ *  cluster, which keeps the connection light and the credits reading. */
+export const NOTIFY_ITEM = 'shell:notifications'
+/** The Crew's logo at the head of the sidebar. Optional: shown there or not
+ *  at all (never in a bar). The sidebar's collapse button is separate, so
+ *  removing the logo never removes the way to expand a collapsed sidebar. */
+export const LOGO_ITEM = 'shell:logo'
 export type SearchPlace = ShellZone | 'none'
 export type WidgetPlace = SearchPlace
-export type WidgetItem = typeof SEARCH_ITEM | typeof STATUS_ITEM | typeof REMOTE_ITEM | typeof HISTORY_ITEM | typeof PROFILE_ITEM
+export type WidgetItem = typeof SEARCH_ITEM | typeof STATUS_ITEM | typeof NOTIFY_ITEM | typeof REMOTE_ITEM | typeof HISTORY_ITEM | typeof PROFILE_ITEM
 export type TwoPlaceItem = WidgetItem
-export const WIDGET_ITEMS: readonly WidgetItem[] = [SEARCH_ITEM, STATUS_ITEM, REMOTE_ITEM, HISTORY_ITEM, PROFILE_ITEM]
+/** The movable widgets. The local/remote Crews switcher (REMOTE_ITEM) is not
+ *  one: it is fixed at the top of the sidebar, under the logo row. */
+export const WIDGET_ITEMS: readonly WidgetItem[] = [SEARCH_ITEM, STATUS_ITEM, NOTIFY_ITEM, HISTORY_ITEM, PROFILE_ITEM]
 export const isWidgetItem = (id: string): id is WidgetItem => (WIDGET_ITEMS as readonly string[]).includes(id)
+/** Items no editor may move: the Crews switcher. (The collapse button is not
+ *  an item at all.) */
+export const isFixedItem = (id: string) => id === REMOTE_ITEM
+/** Whether an editor may offer Remove (Not shown) for an item. "You" can move
+ *  between areas but is never removed: it holds Settings and Edit layout. */
+export const canRemove = (id: string) => id !== PROFILE_ITEM && !isFixedItem(id)
+/** The places an editor may offer for an item, in menu order. */
+export function placesOf(id: string): (ShellZone | 'none')[] {
+  if (id === LOGO_ITEM) return ['sidebar', 'none']
+  if (isFixedItem(id)) return []
+  return canRemove(id) ? ['sidebar', 'top', 'bottom', 'none'] : ['sidebar', 'top', 'bottom']
+}
 /** Older name, kept for existing call sites: now covers every widget. */
 export const isTwoPlaceItem = isWidgetItem
 const PLACE_KEY: Record<WidgetItem, string> = {
   [SEARCH_ITEM]: 'mc-search-place',
   [STATUS_ITEM]: 'mc-status-place',
+  [NOTIFY_ITEM]: 'mc-notify-place',
   [REMOTE_ITEM]: 'mc-remote-place',
   [HISTORY_ITEM]: 'mc-history-place',
   [PROFILE_ITEM]: 'mc-profile-place',
@@ -77,13 +99,18 @@ const IN_TEST = import.meta.env?.MODE === 'test'
 const DEFAULT_PLACE: Record<WidgetItem, WidgetPlace> = {
   [SEARCH_ITEM]: IN_TEST ? 'top' : 'sidebar',
   [STATUS_ITEM]: IN_TEST ? 'top' : 'sidebar',
+  [NOTIFY_ITEM]: IN_TEST ? 'top' : 'sidebar',
   [REMOTE_ITEM]: IN_TEST ? 'top' : 'sidebar',
   [HISTORY_ITEM]: 'sidebar',
   [PROFILE_ITEM]: 'sidebar',
 }
 
 export function readPlace(id: WidgetItem): WidgetPlace {
+  // Fixed at the top of the sidebar, whatever an older build stored.
+  if (isFixedItem(id)) return 'sidebar'
   const v = safeGetItem(PLACE_KEY[id])
+  // "You" is never Not shown: an older stored 'none' reads as its default.
+  if (v === 'none' && !canRemove(id)) return DEFAULT_PLACE[id]
   return v === 'top' || v === 'sidebar' || v === 'bottom' || v === 'none' ? v : DEFAULT_PLACE[id]
 }
 export const readSearchPlace = () => readPlace(SEARCH_ITEM)
@@ -111,6 +138,55 @@ export const useStatusPlace = () => usePlace(STATUS_ITEM)
 export const useRemotePlace = () => usePlace(REMOTE_ITEM)
 export const useHistoryPlace = () => usePlace(HISTORY_ITEM)
 export const useProfilePlace = () => usePlace(PROFILE_ITEM)
+export const useNotifyPlace = () => usePlace(NOTIFY_ITEM)
+
+/* ── The optional logo ── */
+const LOGO_KEY = 'mc-logo-hidden'
+const LOGO_EVENT = 'mc:logo-changed'
+export const readLogoShown = () => safeGetItem(LOGO_KEY) !== '1'
+export function setLogoShown(on: boolean): void {
+  if (on) safeRemoveItem(LOGO_KEY)
+  else safeSetItem(LOGO_KEY, '1')
+  window.dispatchEvent(new Event(LOGO_EVENT))
+}
+export function useLogoShown(): boolean {
+  const [on, setOn] = useState(readLogoShown)
+  useEffect(() => {
+    const sync = () => setOn(readLogoShown())
+    window.addEventListener(LOGO_EVENT, sync)
+    window.addEventListener('storage', sync)
+    return () => {
+      window.removeEventListener(LOGO_EVENT, sync)
+      window.removeEventListener('storage', sync)
+    }
+  }, [])
+  return on
+}
+
+/* ── Window lock (for option 2's panel) ──
+   While an editor wants the window behind it blurred and unclickable, it
+   turns this on; App.tsx then puts the `data-layout-locked` attribute on the
+   shell root (data-testid="dashboard-shell"), for a `[data-layout-locked]`
+   style rule.
+   Shared only: no option turns it on yet, and no style is attached. */
+const LOCK_EVENT = 'mc:layout-window-locked'
+let windowLocked = false
+export const isLayoutWindowLocked = () => windowLocked
+export function setLayoutWindowLocked(on: boolean): void {
+  if (windowLocked === on) return
+  windowLocked = on
+  window.dispatchEvent(new Event(LOCK_EVENT))
+}
+export function useLayoutWindowLocked(): boolean {
+  const [on, setOn] = useState(windowLocked)
+  useEffect(() => {
+    const sync = () => setOn(windowLocked)
+    window.addEventListener(LOCK_EVENT, sync)
+    sync()
+    return () => window.removeEventListener(LOCK_EVENT, sync)
+  }, [])
+  return on
+}
 
 /** How search is drawn: the full field (default) or only its magnifier icon.
  *  Set from the search row in Edit layout; applies wherever search lives. In
@@ -226,6 +302,8 @@ export function useShellPlacement(): ShellPlacement {
 
 /** Where an item lives now. `null`: nowhere (a hidden page, an unplaced toggle). */
 export function zoneOf(id: string, placement: ShellPlacement, onSidebar: boolean): ShellZone | null {
+  if (id === LOGO_ITEM) return readLogoShown() ? 'sidebar' : null
+  if (isFixedItem(id)) return 'sidebar'
   if (isWidgetItem(id)) { const p = readPlace(id); return p === 'none' ? null : p }
   if (placement.top.includes(id)) return 'top'
   if (placement.bottom.includes(id)) return 'bottom'
@@ -277,6 +355,10 @@ function hideInSidebar(id: string): void {
  * within a bar; omitted, it goes at the end.
  */
 export function moveItem(id: string, zone: ShellZone | null, index?: number): void {
+  // Refuse what the item may not do: move the Crews switcher, remove "You",
+  // or put the logo in a bar.
+  if (!placesOf(id).includes(zone ?? 'none')) return
+  if (id === LOGO_ITEM) { setLogoShown(zone === 'sidebar'); return }
   if (isWidgetItem(id)) {
     writePlace(id, zone ?? 'none')
     return
@@ -319,6 +401,8 @@ export function resetShellLayout(): void {
   safeRemoveItem(PLACEMENT_KEY)
   for (const id of WIDGET_ITEMS) safeRemoveItem(PLACE_KEY[id])
   safeRemoveItem(SEARCH_STYLE_KEY)
+  safeRemoveItem(LOGO_KEY)
+  window.dispatchEvent(new Event(LOGO_EVENT))
   window.dispatchEvent(new Event(PLACE_EVENT))
   window.dispatchEvent(new Event(SEARCH_STYLE_EVENT))
   window.dispatchEvent(new Event(PLACEMENT_EVENT))

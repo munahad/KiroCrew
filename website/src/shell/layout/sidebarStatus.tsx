@@ -1,6 +1,6 @@
 /**
  * Status cluster at the foot of the sidebar (design exploration): the
- * connection light, the Kiro credits reading and the notifications bell,
+ * connection light and the Kiro credits reading (the bell is its own item),
  * moved here from the top bar so the shipped top bar is empty and hidden
  * (Linear and Slack keep their inbox and activity in the sidebar).
  *
@@ -12,7 +12,6 @@ import { GripVertical, Plug, Unplug } from 'lucide-react'
 
 import { useLayoutEditing, STATUS_ITEM } from '../../lib/shellLayout'
 import { kiroUsageSegment } from '../topbar/kiroUsageReadout'
-import { NotificationsBellButton } from '../topbar/shellHeader'
 import type { AppShell } from '../appShell'
 import { startItemDrag } from './barItems'
 import { DragOwnedByParent } from './dragOwner'
@@ -50,8 +49,7 @@ export function SidebarStatus({ shell, collapsed }: {
         <span role="status" className="sr-only">{gatewayStatusMsg}</span>
       </span>
       {usage && <span className="flex-1 min-w-0 flex items-center text-[11px]">{usage}</span>}
-      {!usage && !collapsed && <span className="flex-1" />}
-      <NotificationsBellButton />
+      {/* The bell is its own item now (NOTIFY_ITEM, shellWidgets.tsx). */}
     </div>
   )
 }

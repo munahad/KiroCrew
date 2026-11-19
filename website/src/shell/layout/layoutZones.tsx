@@ -33,7 +33,7 @@ import {
 } from '../../lib/shellLayout'
 import { barOrder, cellAt, placeOnBar } from '../../lib/barGrid'
 import { hideFromCanvas, useDragOnlyEditing } from './dragOnlyEdit'
-import { useGridStyle, useTilesPanel } from '../../lib/editOption'
+import { useEditOption, useGridStyle, useTilesPanel } from '../../lib/editOption'
 import { shellItemMeta, zonesFor } from './shellItems'
 import { zoneLabel } from './barItems'
 
@@ -186,16 +186,18 @@ export function LayoutZoneOutlines() {
   const placement = useShellPlacement()
   const topWidgets = useWidgetsIn('top')
   const bottomWidgets = useWidgetsIn('bottom')
+  // Option 2 edits in the list only: the window behind it takes no drops.
+  const listOnly = useEditOption() === 'panel'
   if (!editing) return null
   const countOf = (z: ShellZone) => (z === 'top' ? placement.top.length + topWidgets.length : z === 'bottom' ? placement.bottom.length + bottomWidgets.length : 1)
   const dragging = native || drag.id !== null
   // A native drag with no layout item (a Mate or session from another page)
   // can only be pinned to the sidebar.
-  const allowed = (z: ShellZone) => (drag.id ? zonesFor(drag.id).includes(z) : z === 'sidebar')
+  const allowed = (z: ShellZone) => !listOnly && (drag.id ? zonesFor(drag.id).includes(z) : z === 'sidebar')
   const props = (zone: ShellZone) => ({
     zone,
-    dragging,
-    nativeDrag: native,
+    dragging: dragging && !listOnly,
+    nativeDrag: native && !listOnly,
     allowed: allowed(zone),
     over: zone !== 'sidebar' && drag.over === zone,
     lineX: drag.over === zone ? drag.lineX : null,

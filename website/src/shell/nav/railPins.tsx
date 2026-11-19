@@ -43,7 +43,7 @@ const PIN_PARENT = { session: 'chat', mate: 'members' } as const
 export function PinnedRailGroups({ available, meta, renderItem, collapsed, onNavigate, ...rest }: Omit<GroupsProps, 'renderItem'> & {
   /** Draw a non-pin row. `covered`: a pin inside this row's section is the
    *  selected row, so this one must not paint selected too. */
-  renderItem: (id: string, label?: string, covered?: boolean) => ReactNode
+  renderItem: (id: string, label?: string, covered?: boolean, expanded?: boolean) => ReactNode
   /** Called after a pin opens its target (closes the phone drawer). */
   onNavigate?: () => void
 }) {
@@ -88,7 +88,9 @@ export function PinnedRailGroups({ available, meta, renderItem, collapsed, onNav
     return out
   }, [onChat, onMembers, live, slotOf, mateOf, activeSlot, openMate])
 
-  const renderPin = useCallback((id: string, label?: string) => {
+  const renderPin = useCallback((id: string, label?: string, expanded = false) => {
+    // The More panel draws rows with their labels, even from a collapsed sidebar.
+    const narrow = collapsed && !expanded
     const s = slotOf(id)
     if (s) {
       return (
@@ -97,10 +99,10 @@ export function PinnedRailGroups({ available, meta, renderItem, collapsed, onNav
           label={label ?? (s.title || s.key)}
           icon={<MessageSquare size={16} />}
           active={onChat && activeSlot === s.key}
-          collapsed={collapsed}
+          collapsed={narrow}
           // `navigate()` alone does not switch sessions while /chat is open.
           onClickOverride={() => { dispatch(switchSlot({ key: s.key, announceOnMissing: true, gesture: true })); navigate('/chat'); onNavigate?.() }}
-          badge={s.running ? <RunningDot collapsed={collapsed} /> : undefined}
+          badge={s.running ? <RunningDot collapsed={narrow} /> : undefined}
         />
       )
     }
@@ -109,14 +111,14 @@ export function PinnedRailGroups({ available, meta, renderItem, collapsed, onNav
       <NavItem
         path={`/members?${MEMBER_PARAM}=${encodeURIComponent(m.name)}`}
         label={label ?? m.name}
-        icon={<CrewAvatar seed={m.name} avatar={m.avatar} size={collapsed ? 20 : 18} state={m.running ? 'working' : 'idle'} />}
+        icon={<CrewAvatar seed={m.name} avatar={m.avatar} size={narrow ? 20 : 18} state={m.running ? 'working' : 'idle'} />}
         active={onMembers && openMate === m.name}
-        collapsed={collapsed}
+        collapsed={narrow}
         onClick={onNavigate}
-        badge={m.running ? <RunningDot collapsed={collapsed} /> : undefined}
+        badge={m.running ? <RunningDot collapsed={narrow} /> : undefined}
       />
     )
-    return renderItem(id, label, covered.has(id))
+    return renderItem(id, label, covered.has(id), expanded)
   }, [slotOf, mateOf, onChat, activeSlot, collapsed, dispatch, navigate, onNavigate, onMembers, openMate, renderItem, covered])
 
   const allAvailable = useMemo(() => [...available, ...live], [available, live])

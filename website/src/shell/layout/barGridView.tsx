@@ -13,22 +13,24 @@ import { GripVertical } from 'lucide-react'
 
 import { NavHistoryArrows } from '../../components/NavHistoryArrows'
 import { i18nT } from '../../i18n/t'
-import { CELL, pushAside, resolveBar, setBarColumns, setItemSpan, spanOf, useBarCells } from '../../lib/barGrid'
+import { CELL, placeOnBar, pushAside, resolveBar, setBarColumns, setItemSpan, spanOf, useBarCells } from '../../lib/barGrid'
 import {
-  HISTORY_ITEM, PROFILE_ITEM, REMOTE_ITEM, SEARCH_ITEM, STATUS_ITEM, useChromeDrag, useLayoutEditing, useShellPlacement, useWidgetsIn,
+  HISTORY_ITEM, NOTIFY_ITEM, PROFILE_ITEM, REMOTE_ITEM, SEARCH_ITEM, STATUS_ITEM, useChromeDrag, useLayoutEditing, useShellPlacement, useWidgetsIn,
   type BarZone,
 } from '../../lib/shellLayout'
 import { ShellProfileMenu } from '../nav/railSettingsFlyout'
 import type { AppShell } from '../appShell'
 import { BarItemButton, startItemDrag, useBarItemActions } from './barItems'
+import { NotificationsBellButton } from '../topbar/shellHeader'
 import { RemoteCrewSwitcher } from './remoteCrews'
 import { SearchTrigger } from './searchTrigger'
 import { SidebarStatus } from './sidebarStatus'
 import { DragOwnedByParent } from './dragOwner'
 import { useGridStyle, useTilesPanel } from '../../lib/editOption'
 import { BarStyleChooser, offersStyle } from './barStyleChooser'
-import { ItemMoreButton, useLayoutItemProps } from './keyboardMove'
+import { ItemMoreButton, useCanvasEditing, useLayoutItemProps } from './keyboardMove'
 import { useDragOnlyEditing } from './dragOnlyEdit'
+import { AreaAddButton, registerShellApps } from './areaAdd'
 import { useBarContextMenu } from './barContextMenu'
 
 /** Items that draw their own outline (search field, Crews chip): no second one. */
@@ -83,38 +85,46 @@ function Measured({ onWidth, children }: { onWidth: (w: number) => void; childre
 }
 
 /** One item's cell. While editing it is draggable, focusable and movable by
- *  keyboard and its menu (keyboardMove.tsx); a click opens its style switch. */
-function BarCell({ id, zone, label, cellRef, editing, chip, faded, left, width, cell, onPointerEnter, onPointerLeave, onPick, children }: {
+ *  keyboard and its menu (keyboardMove.tsx); a click opens its style switch.
+ *  The item's own controls (option 1) sit beside the item element inside the
+ *  cell, not inside it, so each is its own Tab stop. */
+function BarCell({ id, zone, label, cellRef, editing, chip, faded, left, width, cell, onPointerEnter, onPointerLeave, onPick, controls, children }: {
   /** Option 1: drawn as a small outlined chip, like option 3's drawing. */
   chip: boolean
+  /** Show the item's arrows and "⋯" (off while its style switch is open there). */
+  controls: boolean
   id: string; zone: BarZone; label: string; cellRef: (el: HTMLDivElement | null) => void
   editing: boolean; faded: boolean; left: number; width: number; cell: number
   onPointerEnter: () => void; onPointerLeave: () => void; onPick: () => void; children: ReactNode
 }) {
   const kbd = useLayoutItemProps(id, zone, label)
   return (
-    // While editing `kbd` makes this a focusable button with its keyboard path
-    // (Space, arrows, Delete, Shift+F10); lint cannot see the spread role.
-    // eslint-disable-next-line jsx-a11y/no-static-element-interactions, jsx-a11y/click-events-have-key-events
     <div
       ref={cellRef}
-      {...kbd}
       onPointerEnter={editing ? onPointerEnter : undefined}
       onPointerLeave={editing ? onPointerLeave : undefined}
-      onClick={editing && offersStyle(id) ? onPick : undefined}
       data-bar-item={id}
       data-bar-cell={cell}
-      draggable={editing}
-      onDragStart={editing ? e => startItemDrag(e, id) : undefined}
-      className={`absolute flex items-center justify-center outline-none transition-[left] duration-150 motion-reduce:transition-none ${
-        chip ? 'inset-y-1 rounded-md border border-border bg-bg' : 'inset-y-0'} ${
-        faded ? 'opacity-40' : ''
-      } ${editing ? 'group/edit rounded-md cursor-grab active:cursor-grabbing [&_*]:cursor-grab hover:bg-bg-hover focus-visible:ring-2 focus-visible:ring-accent data-[held]:ring-2 data-[held]:ring-accent data-[held]:bg-accent-subtle' : ''}`}
+      className={`absolute transition-[left] duration-150 motion-reduce:transition-none ${chip ? 'inset-y-1' : 'inset-y-0'} ${editing ? 'group/edit' : ''}`}
       style={{ left, width }}
     >
-      {editing && <GripVertical size={12} aria-hidden="true" className="absolute left-0 top-1/2 -translate-y-1/2 text-muted opacity-0 group-hover/edit:opacity-100" />}
-      {children}
-      {editing && <ItemMoreButton id={id} zone={zone} label={label} corner />}
+      {/* While editing `kbd` makes this a focusable button with its keyboard
+          path (Space, arrows, Delete, Shift+F10); lint cannot see the spread role. */}
+      {/* eslint-disable-next-line jsx-a11y/no-static-element-interactions, jsx-a11y/click-events-have-key-events */}
+      <div
+        {...kbd}
+        onClick={editing && offersStyle(id) ? onPick : undefined}
+        draggable={editing}
+        onDragStart={editing ? e => startItemDrag(e, id) : undefined}
+        className={`absolute inset-0 flex items-center justify-center outline-none ${
+          chip ? 'rounded-md border border-border bg-bg' : ''} ${
+          faded ? 'opacity-40' : ''
+        } ${editing ? 'rounded-md cursor-grab active:cursor-grabbing [&_*]:cursor-grab hover:bg-bg-hover focus-visible:ring-2 focus-visible:ring-accent data-[held]:ring-2 data-[held]:ring-accent data-[held]:bg-accent-subtle' : ''}`}
+      >
+        {editing && <GripVertical size={12} aria-hidden="true" className="absolute left-0 top-1/2 -translate-y-1/2 text-muted opacity-0 group-hover/edit:opacity-100" />}
+        {children}
+      </div>
+      {editing && controls && <ItemMoreButton id={id} zone={zone} label={label} />}
     </div>
   )
 }
@@ -136,6 +146,8 @@ export function BarGrid({ zone, shell, renderStatus }: {
   const placement = useShellPlacement()
   const widgets: string[] = useWidgetsIn(zone)
   const { drawable, meta } = useBarItemActions(shell)
+  // The area "+" lists apps not shown; it has no shell of its own.
+  registerShellApps(shell.allAppGroup, shell.terminalEnabled)
   const ids = useMemo(
     () => [...widgets, ...placement[zone].filter(id => drawable(id))],
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -146,9 +158,13 @@ export function BarGrid({ zone, shell, renderStatus }: {
   const span = (id: string) => (px[id] ? Math.max(1, Math.ceil((px[id] + 2) / cellW)) : spanOf(zone, id))
   useEffect(() => { for (const id of ids) if (px[id]) setItemSpan(zone, id, Math.max(1, Math.ceil((px[id] + 2) / cellW))) })
 
-  const editing = useLayoutEditing()
+  // Edit mode is on (`live`), and the items here can be edited (`editing`):
+  // not in option 2, whose window is locked behind its list. Locked, the
+  // bar draws as the real window, with nothing in it to press or focus.
+  const live = useLayoutEditing()
+  const editing = useCanvasEditing()
   // Right-click (or Shift+F10) outside edit mode: move this item or open Edit layout.
-  const barMenu = useBarContextMenu(zone, editing)
+  const barMenu = useBarContextMenu(zone, live)
   const dragOnly = useDragOnlyEditing()
   const drag = useChromeDrag()
   const gridVars = useGridVarsClass()
@@ -162,6 +178,9 @@ export function BarGrid({ zone, shell, renderStatus }: {
     ? pushAside(zone, ids.includes(drag.id!) ? ids : [...ids, drag.id!], cells, span, n, drag.id!, drag.cell!)
     : resolveBar(zone, ids, cells, span, n)
   const drawn = [...ids].sort((a, b) => cols[a] - cols[b])
+  // Option 1: the "+" sits right after the bar's last item, where an added
+  // item goes.
+  const end = ids.reduce((m, id) => Math.max(m, (cols[id] ?? 0) + span(id)), 0)
 
   // "Icon only" or "Icon and label" (barStyleChooser.tsx): offered under an
   // item right after it lands in this bar, and while the pointer rests on it.
@@ -190,7 +209,10 @@ export function BarGrid({ zone, shell, renderStatus }: {
   }, [fresh])
   const hoverOn = (id: string) => { window.clearTimeout(leaveTimer.current); if (offersStyle(id)) setHovered(id) }
   const hoverOff = () => { window.clearTimeout(leaveTimer.current); leaveTimer.current = window.setTimeout(() => setHovered(null), 250) }
-  const chooserFor = editing && drag.id === null ? (hovered ?? fresh) : null
+  // Option 1 offers the style in each item's "⋯" menu, so its switch shows
+  // only right after an item lands or is clicked, not on every hover (it
+  // would cover the item's arrows).
+  const chooserFor = editing && drag.id === null ? ((dragOnly ? null : hovered) ?? fresh) : null
   const chooserAnchor = chooserFor && ids.includes(chooserFor) ? cellEls.current[chooserFor] : null
 
   const render = (id: string): ReactNode => {
@@ -199,6 +221,8 @@ export function BarGrid({ zone, shell, renderStatus }: {
         return <SearchTrigger variant="top" onOpen={shell.commandPalette.openPalette} launcherOwned={!!shell.slotOwners['quick-search']} />
       case STATUS_ITEM:
         return renderStatus ? renderStatus() : <SidebarStatus shell={shell} collapsed={false} />
+      case NOTIFY_ITEM:
+        return <NotificationsBellButton />
       case REMOTE_ITEM:
         return <RemoteCrewSwitcher />
       case HISTORY_ITEM:
@@ -258,18 +282,27 @@ export function BarGrid({ zone, shell, renderStatus }: {
             onPointerEnter={() => hoverOn(id)}
             onPointerLeave={hoverOff}
             onPick={() => setFresh(id)}
+            controls={chooserFor !== id}
           >
             <Measured onWidth={w => setPx(p => (Math.abs((p[id] ?? 0) - w) < 1 ? p : { ...p, [id]: w }))}>
               {/* The cell drags the item, so the widget's own drag is off, and
                   while editing presses pass through to the cell: a menu
                   trigger would otherwise take the press and block the drag. */}
-              <div className={editing ? '[&_*]:pointer-events-none' : 'contents'} {...(editing ? { inert: '' } : {})}>
+              <div className={live ? '[&_*]:pointer-events-none' : 'contents'} {...(live ? { inert: '' } : {})}>
                 <DragOwnedByParent.Provider value>{render(id)}</DragOwnedByParent.Provider>
               </div>
             </Measured>
           </BarCell>
         )
       })}
+      {dragOnly && drag.id === null && (
+        <AreaAddButton
+          zone={zone}
+          onAdd={id => placeOnBar(zone, id, end)}
+          className="absolute top-1/2 -translate-y-1/2"
+          style={{ left: Math.max(2, Math.min(end * cellW + 4, (width > 0 ? width : n * cellW) - 26)) }}
+        />
+      )}
       {chooserFor && chooserAnchor && (
         <BarStyleChooser
           id={chooserFor}
