@@ -1,4 +1,6 @@
 import { act } from 'react'
+import { readFileSync } from 'node:fs'
+import { resolve } from 'node:path'
 import { afterEach, describe, it, expect, vi } from 'vitest'
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { MemoryRouter } from 'react-router-dom'
@@ -16,6 +18,7 @@ import { WIDGET_ITEMS, moveItem, readPlace, readShellPlacement, resetShellLayout
 import { EditOptionSwitcher } from '../shell/layout/editOptionSwitcher'
 import { i18nT } from '../i18n/t'
 import { ThemeProvider } from '../hooks/useTheme'
+import { readIndexCss } from './indexCssSource'
 
 /** Checkpoint 58: the prototype band's Chrome switch and treatment A, Shared frame. */
 
@@ -120,6 +123,35 @@ describe('checkpoint 58: the band switch', () => {
     expect(screen.queryByText(i18nT('nav.prototype_chrome_label'))).toBeNull()
     expect(screen.getByText(i18nT('nav.layout_option_label'))).toBeTruthy()
     expect(screen.getByText(i18nT('nav.layout_columns_label'))).toBeTruthy()
+  })
+})
+
+describe('note 30: the top bar sits on the frame in every A look', () => {
+  // jsdom does not run the real cascade, so this compares selector specificity
+  // from the stylesheet source, like topbarGlassLayer.test.ts.
+  const strip = (s: string) => s.replace(/\/\*[\s\S]*?\*\//g, '')
+  const specificity = (sel: string): number => {
+    const s = sel.replace(/\[[^\]]*\]/g, ' .a ')
+    const ids = (s.match(/#[\w-]+/g) ?? []).length
+    const classes = (s.match(/\.[\w-]+|:[\w-]+/g) ?? []).length
+    const types = (s.replace(/[.#:][\w-]+/g, ' ').match(/[a-z][\w-]*/gi) ?? []).length
+    return ids * 10000 + classes * 100 + types
+  }
+  // Every selector that paints .topbar-glass with an !important background.
+  const solidRules = (css: string) =>
+    [...strip(css).matchAll(/([^{}]+)\{([^{}]*)\}/g)]
+      .filter(([, , body]) => /background:[^;]*!important/.test(body))
+      .flatMap(([, sel]) => sel.split(',').map(x => x.trim()).filter(x => /\.topbar-glass$/.test(x)))
+
+  it("outranks the solid-panel rules, so a-darker's top bar is not painted the page colour", () => {
+    const chromeCss = strip(readFileSync(resolve(__dirname, '../shell/chromeA.css'), 'utf8'))
+    const frame = solidRules(chromeCss)
+    expect(frame).toHaveLength(1)
+    expect(chromeCss).toMatch(/\[data-chrome\] \{\s*background: var\(--proto-frame\) !important;/)
+    expect(chromeCss).toMatch(/\[data-chrome="a-darker"\] \{\s*--proto-frame:/)
+    const others = solidRules(readIndexCss())
+    expect(others.length).toBeGreaterThan(0)
+    for (const sel of others) expect(specificity(frame[0]), sel).toBeGreaterThan(specificity(sel))
   })
 })
 

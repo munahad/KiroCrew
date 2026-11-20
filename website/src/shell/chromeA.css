@@ -37,8 +37,12 @@
 [data-chrome] {
   background: var(--proto-frame) !important;
 }
-/* The bars and sidebar drop their own surfaces and sit on the frame. */
-[data-chrome] header.topbar-glass {
+/* The bars and sidebar drop their own surfaces and sit on the frame.
+   Note 30: the `html` prefix outranks liquid-glass.css's solid-panel rule
+   (`html[data-reduce-transparency="on"] .topbar-glass { background: var(--bg)
+   !important }`, on by default). That rule has the same specificity and loads
+   later, so without the prefix it painted the top bar in the page colour. */
+html [data-chrome] header.topbar-glass {
   background: transparent !important;
   box-shadow: none !important;
   backdrop-filter: none !important;
