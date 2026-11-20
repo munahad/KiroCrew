@@ -184,6 +184,16 @@ export function PreviewEditor({ candidates, columnOf, categoryLabel, repeated, g
     // is on exactly when a press shows a move.
     return canStepInList(id, z, earlier ? -1 : 1, groups)
   }
+  /** Keep keyboard focus on an item after its menu closes, wherever it is
+   *  drawn now: its chip in the drawing, else its palette item or list row,
+   *  else the dialog. Without this focus drops out of the dialog (Escape and
+   *  the Tab trap stop working). */
+  const focusItem = (id: string) => requestAnimationFrame(() => {
+    const d = dialogRef.current
+    const sel = CSS.escape(id)
+    ;(d?.querySelector<HTMLElement>(`[data-preview-chip="${sel}"]`) ?? d?.querySelector<HTMLElement>(`[data-preview-palette-item="${sel}"]`)
+      ?? d?.querySelector<HTMLElement>(`[data-preview-row="${sel}"] button`) ?? d)?.focus()
+  })
   const openMenu = (id: string, el: HTMLElement) => {
     const r = el.getBoundingClientRect()
     setSelected(id)
@@ -212,13 +222,14 @@ export function PreviewEditor({ candidates, columnOf, categoryLabel, repeated, g
 
   /* ── Dialog keyboard: Escape leaves (asking first), Tab stays inside ── */
 
-  useEffect(() => { dialogRef.current?.querySelector<HTMLElement>('[data-autofocus]')?.focus() }, [])
+  // The list's search; Palette has none, so the dialog itself (focus must start inside it).
+  useEffect(() => { (dialogRef.current?.querySelector<HTMLElement>('[data-autofocus]') ?? dialogRef.current)?.focus() }, [])
   const onDialogKey = (e: KeyboardEvent<HTMLDivElement>) => {
     if (e.key === 'Escape') {
       e.preventDefault()
       e.stopPropagation()
       if (confirming) stay()
-      else if (menu) { const id = menu.id; setMenu(null); dialogRef.current?.querySelector<HTMLElement>(`[data-preview-chip="${CSS.escape(id)}"]`)?.focus() }
+      else if (menu) { const id = menu.id; setMenu(null); focusItem(id) }
       else if (selected) setSelected(null)
       else leave()
       return
@@ -228,7 +239,7 @@ export function PreviewEditor({ candidates, columnOf, categoryLabel, repeated, g
       .filter(el => el.offsetParent !== null)
     if (f.length === 0) return
     const first = f[0], last = f[f.length - 1]
-    if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last.focus() }
+    if (e.shiftKey && (document.activeElement === first || document.activeElement === dialogRef.current)) { e.preventDefault(); last.focus() }
     else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus() }
   }
 
@@ -523,10 +534,11 @@ export function PreviewEditor({ candidates, columnOf, categoryLabel, repeated, g
           aria-modal="true"
           aria-labelledby="preview-title"
           aria-describedby="preview-hint"
+          tabIndex={-1}
           onKeyDown={onDialogKey}
           // A fixed size: switching tabs or searching never resizes it; the
           // list scrolls inside.
-          className="pointer-events-auto relative flex h-[min(680px,100%)] w-[min(1080px,100%)] flex-col overflow-hidden rounded-2xl border border-border bg-bg-elevated text-text shadow-2xl"
+          className="pointer-events-auto relative flex outline-none h-[min(680px,100%)] w-[min(1080px,100%)] flex-col overflow-hidden rounded-2xl border border-border bg-bg-elevated text-text shadow-2xl"
           data-testid="layout-preview-editor"
         >
           <header className="flex items-start gap-3 border-b border-border px-5 pt-4 pb-3">
@@ -725,7 +737,7 @@ export function PreviewEditor({ candidates, columnOf, categoryLabel, repeated, g
                       type="button"
                       role="menuitem"
                       tabIndex={-1}
-                      onClick={() => { x.run(); setMenu(null) }}
+                      onClick={() => { x.run(); setMenu(null); focusItem(id) }}
                       className="block w-full rounded-md border-none bg-transparent px-2.5 py-1.5 text-left text-[13px] text-text cursor-pointer hover:bg-bg-hover focus-visible:bg-bg-hover outline-none"
                     >
                       <span className="inline-flex items-center gap-2">{x.icon}{x.text}</span>

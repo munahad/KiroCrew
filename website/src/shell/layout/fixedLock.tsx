@@ -46,9 +46,23 @@ export function FixedLockLabel({ anchor }: { anchor: RefObject<HTMLElement | nul
   useEffect(() => {
     const el = anchor.current
     if (!el) return
-    const show = () => { const r = el.getBoundingClientRect(); setAt({ left: r.right + 6, top: r.top + r.height / 2 }) }
-    const hide = () => { if (!el.matches(':hover') && !el.contains(document.activeElement)) setAt(null) }
-    const blur = (e: FocusEvent) => { if (!el.contains(e.relatedTarget as Node | null)) setAt(null) }
+    // While shown, the label follows the button every frame: a sidebar that
+    // collapses or expands, a scroll or a resize moves it, and the label moved
+    // once, on hover, stayed at the old spot (review of cp59). Hidden when the
+    // button is gone.
+    let frame = 0
+    const measure = () => {
+      if (!el.isConnected) { setAt(null); return }
+      const r = el.getBoundingClientRect()
+      const left = r.right + 6, top = r.top + r.height / 2
+      setAt(a => (a && a.left === left && a.top === top ? a : { left, top }))
+      frame = requestAnimationFrame(measure)
+    }
+    const stop = () => { cancelAnimationFrame(frame); frame = 0 }
+    const show = () => { stop(); measure() }
+    const off = () => { stop(); setAt(null) }
+    const hide = () => { if (!el.matches(':hover') && !el.contains(document.activeElement)) off() }
+    const blur = (e: FocusEvent) => { if (!el.contains(e.relatedTarget as Node | null)) off() }
     el.addEventListener('pointerenter', show)
     el.addEventListener('pointerleave', hide)
     el.addEventListener('focusin', show)
@@ -58,6 +72,7 @@ export function FixedLockLabel({ anchor }: { anchor: RefObject<HTMLElement | nul
       el.removeEventListener('pointerleave', hide)
       el.removeEventListener('focusin', show)
       el.removeEventListener('focusout', blur)
+      stop()
     }
   }, [anchor])
   if (!at) return null

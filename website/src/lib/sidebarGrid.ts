@@ -223,7 +223,27 @@ function listNeighbour(groups: readonly RailGroup[], id: string, delta: -1 | 1):
   if (!ids.includes(id) || isHeaderId(id)) return null
   const foot = FOOT.has(id)
   const order = columnOrder(ids).filter(x => !isHeaderId(x) && FOOT.has(x) === foot)
-  return order[order.indexOf(id) + delta] ?? null
+  const next = order[order.indexOf(id) + delta] ?? null
+  // Note 28 by keyboard: an app never steps past Terminal or "You".
+  return next && delta > 0 && isSidebarApp(id) && isSidebarFoot(next) ? null : next
+}
+
+/**
+ * Note 28 by keyboard, option 1 (rows with gaps): whether stepping app `id`
+ * one row down would put it at or below the foot's top row (Terminal, then
+ * "You"), as the column draws them. The same rule the drag uses.
+ */
+export function appStepBlocked(groups: readonly RailGroup[], id: string, delta: -1 | 1): boolean {
+  if (delta < 0 || !isSidebarApp(id)) return false
+  const ids = columnIdsOf(groups)
+  if (!ids.includes(id)) return false
+  // Drawn as the column draws them: the tool rows just above the foot rows.
+  const tools = readShellPlacement().side
+  const footAt = ids.findIndex(isFootItem)
+  const drawIds = tools.length === 0 ? ids : footAt < 0 ? [...ids, ...tools] : [...ids.slice(0, footAt), ...tools, ...ids.slice(footAt)]
+  const drawn = resolveColumn(drawIds, readSidebarRows(), rowCount)
+  const top = Math.min(Infinity, ...drawIds.filter(x => x !== id && isSidebarFoot(x)).map(x => drawn[x]))
+  return resolveColumn(ids, readSidebarRows(), rowCount)[id] + delta >= top
 }
 
 /** Swap a column row with the next row in the list's order (gaps and titles

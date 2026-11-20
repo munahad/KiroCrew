@@ -35,7 +35,7 @@ import {
   FEATURE2_ITEM, LOGO_ITEM, SEARCH_ITEM, announceLayout, canRemove, isSampleExtra, isWidgetItem, isWindowToggle, moveItem, moveWithinBar, placesOf, readShellPlacement, removeFromBars,
   setSearchStyle, setSidebarMembership, useLayoutEditing, useSearchStyle, zoneOf, type ShellZone,
 } from '../../lib/shellLayout'
-import { canShiftInSidebar, canSwapInSidebar, columnIdsOf, commitColumn, freeRowNear, isHeaderId, swapInSidebar, placeInSidebar, readSidebarRowCount, readSidebarRows, resolveColumn, shiftInSidebar } from '../../lib/sidebarGrid'
+import { appStepBlocked, canShiftInSidebar, canSwapInSidebar, columnIdsOf, commitColumn, freeRowNear, isHeaderId, swapInSidebar, placeInSidebar, readSidebarRowCount, readSidebarRows, resolveColumn, shiftInSidebar } from '../../lib/sidebarGrid'
 import { zoneLabel } from './barItems'
 import { offersStyle } from './barStyleChooser'
 import { hideFromCanvas, restoreLayout, snapshotLayout, type LayoutSnapshot } from './dragOnlyEdit'
@@ -143,6 +143,9 @@ export function stepItem(id: string, zone: ShellZone, key: string, byOrder = fal
     if (moveWithinBar(id, delta)) return 'sidebar'
   } else if (byOrder) {
     return swapInSidebar(groups, id, delta) ? 'sidebar' : null
+  } else if (appStepBlocked(sidebarGroups, id, delta)) {
+    // Note 28: an app stops above Terminal and "You", as at an end.
+    return null
   } else if (canShiftInSidebar(sidebarGroups, id, delta)) {
     shiftInSidebar(sidebarGroups, id, delta)
     return 'sidebar'
@@ -194,7 +197,7 @@ function canStepItem(id: string, zone: ShellZone, d: -1 | 1): boolean {
   }
   const side = readShellPlacement().side
   if (side.includes(id)) { const i = side.indexOf(id); return i + d >= 0 && i + d < side.length }
-  return canShiftInSidebar(sidebarGroups, id, d)
+  return !appStepBlocked(sidebarGroups, id, d) && canShiftInSidebar(sidebarGroups, id, d)
 }
 
 /**
@@ -418,10 +421,8 @@ function LayoutItemMenu() {
   const horizontal = (d: string) => d === 'ArrowLeft' || d === 'ArrowRight'
   const dirs = (Object.keys(dirKey) as (keyof typeof dirKey)[]).filter(d => horizontal(d) === inBar)
   for (const d of m.steps === false ? [] : dirs) {
-    const can = inBar
-      ? (() => { const at = cellOf(m.zone as 'top' | 'bottom', m.id); return !!at && (d === 'ArrowLeft' ? at.col > 0 : at.col < at.max) })()
-      : readShellPlacement().side.includes(m.id) || canShiftInSidebar(sidebarGroups, m.id, d === 'ArrowUp' ? -1 : 1)
-    if (!can) continue
+    // The same check as the step arrows (note 28: apps stop above Terminal and "You").
+    if (!canStepItem(m.id, m.zone, d === 'ArrowLeft' || d === 'ArrowUp' ? -1 : 1)) continue
     items.push({ key: d, icon: ARROW[d], label: i18nT(dirKey[d], { item: m.label }), run: () => {
       const to = stepItem(m.id, m.zone, d)
       if (to) announceStep(m.label, m.zone, to, d)
