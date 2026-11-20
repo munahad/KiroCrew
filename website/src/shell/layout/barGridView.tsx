@@ -15,7 +15,7 @@ import { NavHistoryArrows } from '../../components/NavHistoryArrows'
 import { i18nT } from '../../i18n/t'
 import { CELL, placeOnBar, pushAside, resolveBar, setBarColumns, setItemSpan, spanOf, useBarCells } from '../../lib/barGrid'
 import {
-  HISTORY_ITEM, NOTIFY_ITEM, PROFILE_ITEM, REMOTE_ITEM, SEARCH_ITEM, STATUS_ITEM, useChromeDrag, useLayoutEditing, useShellPlacement, useWidgetsIn,
+  HISTORY_ITEM, LOGO_ITEM, NOTIFY_ITEM, PROFILE_ITEM, REMOTE_ITEM, SEARCH_ITEM, STATUS_ITEM, useChromeDrag, useLayoutEditing, useLogoPlace, useShellPlacement, useWidgetsIn,
   type BarZone,
 } from '../../lib/shellLayout'
 import { ShellProfileMenu } from '../nav/railSettingsFlyout'
@@ -29,7 +29,8 @@ import { DragOwnedByParent } from './dragOwner'
 import { useGridStyle, useTilesPanel } from '../../lib/editOption'
 import { BarStyleChooser, offersStyle } from './barStyleChooser'
 import { ItemMoreButton, useCanvasEditing, useLayoutItemProps } from './keyboardMove'
-import { useDragOnlyEditing } from './dragOnlyEdit'
+import { layoutItemLabel, useDragOnlyEditing } from './dragOnlyEdit'
+import { RailHeaderGlyph } from '../nav/railChrome'
 import { AreaAddButton, registerShellApps } from './areaAdd'
 import { useBarContextMenu } from './barContextMenu'
 
@@ -84,13 +85,22 @@ function Measured({ onWidth, children }: { onWidth: (w: number) => void; childre
   return <div ref={ref} className="w-max flex items-center">{children}</div>
 }
 
+/** Option 1's room for an item's own controls inside its cell, in px: the
+ *  drag handle on its left (14) and ‹ › ⋯ on its right (3 × 18 + gaps). Kept
+ *  for the whole edit session, so nothing shifts when they show on hover. */
+export const BAR_CONTROLS_PX = 14 + 3 * 18 + 12
+
 /** One item's cell. While editing it is draggable, focusable and movable by
  *  keyboard and its menu (keyboardMove.tsx); a click opens its style switch.
  *  The item's own controls (option 1) sit beside the item element inside the
- *  cell, not inside it, so each is its own Tab stop. */
-function BarCell({ id, zone, label, cellRef, editing, chip, faded, left, width, cell, onPointerEnter, onPointerLeave, onPick, controls, children }: {
+ *  cell, not inside it, so each is its own Tab stop. Option 1 (`inline`): the
+ *  handle, the item and its ‹ › ⋯ sit side by side inside the bar, never
+ *  over the item and never hanging below the bar. */
+function BarCell({ id, zone, label, cellRef, editing, chip, inline, faded, left, width, cell, onPointerEnter, onPointerLeave, onPick, controls, children }: {
   /** Option 1: drawn as a small outlined chip, like option 3's drawing. */
   chip: boolean
+  /** Option 1: the controls take their own space inside the cell. */
+  inline: boolean
   /** Show the item's arrows and "⋯" (off while its style switch is open there). */
   controls: boolean
   id: string; zone: BarZone; label: string; cellRef: (el: HTMLDivElement | null) => void
@@ -98,6 +108,7 @@ function BarCell({ id, zone, label, cellRef, editing, chip, faded, left, width, 
   onPointerEnter: () => void; onPointerLeave: () => void; onPick: () => void; children: ReactNode
 }) {
   const kbd = useLayoutItemProps(id, zone, label)
+  const grip = <GripVertical size={12} aria-hidden="true" className={`${inline ? 'shrink-0' : 'absolute left-0 top-1/2 -translate-y-1/2'} text-muted opacity-0 group-hover/edit:opacity-100 group-focus-within/edit:opacity-100`} />
   return (
     <div
       ref={cellRef}
@@ -105,7 +116,7 @@ function BarCell({ id, zone, label, cellRef, editing, chip, faded, left, width, 
       onPointerLeave={editing ? onPointerLeave : undefined}
       data-bar-item={id}
       data-bar-cell={cell}
-      className={`absolute transition-[left] duration-150 motion-reduce:transition-none ${chip ? 'inset-y-1' : 'inset-y-0'} ${editing ? 'group/edit' : ''}`}
+      className={`absolute transition-[left] duration-150 motion-reduce:transition-none ${chip ? 'inset-y-1' : 'inset-y-0'} ${editing ? 'group/edit' : ''} ${inline && editing ? 'flex items-center gap-1' : ''}`}
       style={{ left, width }}
     >
       {/* While editing `kbd` makes this a focusable button with its keyboard
@@ -116,15 +127,19 @@ function BarCell({ id, zone, label, cellRef, editing, chip, faded, left, width, 
         onClick={editing && offersStyle(id) ? onPick : undefined}
         draggable={editing}
         onDragStart={editing ? e => startItemDrag(e, id) : undefined}
-        className={`absolute inset-0 flex items-center justify-center outline-none ${
+        className={inline && editing
+          ? `relative flex h-full min-w-0 flex-1 items-center gap-1 rounded-md outline-none cursor-grab active:cursor-grabbing [&_*]:cursor-grab focus-visible:ring-2 focus-visible:ring-accent data-[held]:ring-2 data-[held]:ring-accent ${faded ? 'opacity-40' : ''}`
+          : `absolute inset-0 flex items-center justify-center outline-none ${
           chip ? 'rounded-md border border-border bg-bg' : ''} ${
           faded ? 'opacity-40' : ''
         } ${editing ? 'rounded-md cursor-grab active:cursor-grabbing [&_*]:cursor-grab hover:bg-bg-hover focus-visible:ring-2 focus-visible:ring-accent data-[held]:ring-2 data-[held]:ring-accent data-[held]:bg-accent-subtle' : ''}`}
       >
-        {editing && <GripVertical size={12} aria-hidden="true" className="absolute left-0 top-1/2 -translate-y-1/2 text-muted opacity-0 group-hover/edit:opacity-100" />}
-        {children}
+        {editing && grip}
+        {inline && editing
+          ? <span className={`flex h-full min-w-0 flex-1 items-center justify-center rounded-md group-hover/edit:bg-bg-hover ${chip ? 'border border-border bg-bg' : ''}`}>{children}</span>
+          : children}
       </div>
-      {editing && controls && <ItemMoreButton id={id} zone={zone} label={label} />}
+      {editing && (inline || controls) && <ItemMoreButton id={id} zone={zone} label={label} inline={inline} />}
     </div>
   )
 }
@@ -138,9 +153,12 @@ export function BarGrid({ zone, shell, renderStatus }: {
 }) {
   const ref = useRef<HTMLDivElement>(null)
   const width = useWidth(ref)
+  const dragOnly = useDragOnlyEditing()
   // No layout yet (first paint, tests): assume a laptop-wide bar.
-  const n = width > 0 ? Math.max(1, Math.floor(width / CELL)) : 30
-  const cellW = width > 0 ? width / n : CELL
+  const all = width > 0 ? Math.max(1, Math.floor(width / CELL)) : 30
+  const cellW = width > 0 ? width / all : CELL
+  // Option 1 keeps the bar's last cell for its "+", so items never cover it.
+  const n = dragOnly ? Math.max(1, all - 1) : all
   useEffect(() => { setBarColumns(zone, n) }, [zone, n])
 
   const placement = useShellPlacement()
@@ -148,15 +166,18 @@ export function BarGrid({ zone, shell, renderStatus }: {
   const { drawable, meta } = useBarItemActions(shell)
   // The area "+" lists apps not shown; it has no shell of its own.
   registerShellApps(shell.allAppGroup, shell.terminalEnabled)
+  const logoPlace = useLogoPlace()
   const ids = useMemo(
-    () => [...widgets, ...placement[zone].filter(id => drawable(id))],
+    () => [...(logoPlace === zone ? [LOGO_ITEM] : []), ...widgets, ...placement[zone].filter(id => drawable(id))],
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [widgets.join(), placement, zone, shell.terminalEnabled, shell.hasRenderableMobileConnect, shell.allAppGroup],
+    [logoPlace, widgets.join(), placement, zone, shell.terminalEnabled, shell.hasRenderableMobileConnect, shell.allAppGroup],
   )
   const cells = useBarCells(zone)
   const [px, setPx] = useState<Record<string, number>>({})
-  const span = (id: string) => (px[id] ? Math.max(1, Math.ceil((px[id] + 2) / cellW)) : spanOf(zone, id))
-  useEffect(() => { for (const id of ids) if (px[id]) setItemSpan(zone, id, Math.max(1, Math.ceil((px[id] + 2) / cellW))) })
+  // Option 1: each item's cells also hold its handle and ‹ › ⋯.
+  const extra = dragOnly ? BAR_CONTROLS_PX : 0
+  const span = (id: string) => (px[id] ? Math.max(1, Math.ceil((px[id] + 2 + extra) / cellW)) : spanOf(zone, id) + (dragOnly ? 2 : 0))
+  useEffect(() => { for (const id of ids) if (px[id]) setItemSpan(zone, id, Math.max(1, Math.ceil((px[id] + 2 + extra) / cellW))) })
 
   // Edit mode is on (`live`), and the items here can be edited (`editing`):
   // not in option 2, whose window is locked behind its list. Locked, the
@@ -164,8 +185,8 @@ export function BarGrid({ zone, shell, renderStatus }: {
   const live = useLayoutEditing()
   const editing = useCanvasEditing()
   // Right-click (or Shift+F10) outside edit mode: move this item or open Edit layout.
-  const barMenu = useBarContextMenu(zone, live)
-  const dragOnly = useDragOnlyEditing()
+  // Option 1 while editing: a right-click on empty bar space offers Remove all.
+  const barMenu = useBarContextMenu(zone, live && !dragOnly)
   const drag = useChromeDrag()
   const gridVars = useGridVarsClass()
   // Drafting shows every bar's cells for the whole drag. Minimal shows a
@@ -178,8 +199,8 @@ export function BarGrid({ zone, shell, renderStatus }: {
     ? pushAside(zone, ids.includes(drag.id!) ? ids : [...ids, drag.id!], cells, span, n, drag.id!, drag.cell!)
     : resolveBar(zone, ids, cells, span, n)
   const drawn = [...ids].sort((a, b) => cols[a] - cols[b])
-  // Option 1: the "+" sits right after the bar's last item, where an added
-  // item goes.
+  // Option 1: an added item goes right after the bar's last item; the "+"
+  // itself always sits in the bar's last cell, kept free for it.
   const end = ids.reduce((m, id) => Math.max(m, (cols[id] ?? 0) + span(id)), 0)
 
   // "Icon only" or "Icon and label" (barStyleChooser.tsx): offered under an
@@ -229,6 +250,12 @@ export function BarGrid({ zone, shell, renderStatus }: {
         return <NavHistoryArrows />
       case PROFILE_ITEM:
         return <ShellProfileMenu shell={shell} compact={zone} />
+      case LOGO_ITEM:
+        return (
+          <span data-layout-logo role="img" aria-label={i18nT('nav.layout_locked_logo')} className="flex h-7 items-center px-1">
+            <RailHeaderGlyph avatar={shell.avatar} boxClass="w-6 h-6" iconSize={16} />
+          </span>
+        )
       default:
         return <BarItemButton id={id} zone={zone} shell={shell} />
     }
@@ -271,10 +298,11 @@ export function BarGrid({ zone, shell, renderStatus }: {
             key={id}
             id={id}
             zone={zone}
-            label={id === SEARCH_ITEM ? i18nT('nav.layout_locked_search') : meta(id)?.label ?? id}
+            label={id === SEARCH_ITEM || id === LOGO_ITEM ? layoutItemLabel(id) : meta(id)?.label ?? layoutItemLabel(id)}
             cellRef={el => { cellEls.current[id] = el }}
             editing={editing}
             chip={dragOnly && !CHIPLESS.has(id)}
+            inline={dragOnly}
             faded={hovering && id === drag.id}
             left={cols[id] * cellW}
             width={span(id) * cellW}
@@ -300,7 +328,7 @@ export function BarGrid({ zone, shell, renderStatus }: {
           zone={zone}
           onAdd={id => placeOnBar(zone, id, end)}
           className="absolute top-1/2 -translate-y-1/2"
-          style={{ left: Math.max(2, Math.min(end * cellW + 4, (width > 0 ? width : n * cellW) - 26)) }}
+          style={{ left: n * cellW + Math.max(0, (cellW - 22) / 2) }}
         />
       )}
       {chooserFor && chooserAnchor && (

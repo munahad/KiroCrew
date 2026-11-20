@@ -4,17 +4,19 @@
  * opens "Customize Toolbar…" the same way.
  *
  * On an item: Move left / Move right (one cell), Move to another area, Remove,
- * then Edit layout…. On empty bar space: Edit layout… only. Opens from the
+ * then Edit layout…. On empty bar space: Remove all from <bar> (never "You"
+ * or the Crews switcher, which are move-only) and Edit layout…. While option 1
+ * edits the window, empty bar space offers Remove all alone (checkpoint 56). Opens from the
  * keyboard too (Shift+F10 or the Menu key on a focused item). Arrow keys move
  * through it; Escape or a press outside closes it and focus returns.
  */
 import { useEffect, useLayoutEffect, useRef, useState, type KeyboardEvent, type MouseEvent } from 'react'
-import { ArrowLeft, ArrowRight, EyeOff, PanelBottom, PanelLeft, PanelTop, Settings2 } from 'lucide-react'
+import { ArrowLeft, ArrowRight, EyeOff, ListX, PanelBottom, PanelLeft, PanelTop, Settings2 } from 'lucide-react'
 
 import { OverlayPortal } from '../../components/overlayRoot'
 import { i18nT } from '../../i18n/t'
-import { cellOf, shiftOnBar } from '../../lib/barGrid'
-import { announceLayout, canRemove, setLayoutEditing, type BarZone } from '../../lib/shellLayout'
+import { barOrder, cellOf, shiftOnBar } from '../../lib/barGrid'
+import { announceLayout, canRemove, isLayoutEditing, placesOf, setLayoutEditing, type BarZone } from '../../lib/shellLayout'
 import { zoneLabel } from './barItems'
 import { hideFromCanvas, layoutItemLabel } from './dragOnlyEdit'
 import { moveInto } from './keyboardMove'
@@ -43,6 +45,8 @@ export function useBarContextMenu(zone: BarZone, editing: boolean) {
   const props = editing ? {} : {
     onContextMenu: (e: MouseEvent<HTMLElement>) => { e.preventDefault(); open(e.target as Element, e.clientX, e.clientY) },
     onKeyDown: (e: KeyboardEvent<HTMLElement>) => {
+      // An item's own menu (edit mode) took the key first.
+      if (e.defaultPrevented) return
       if (e.key === 'ContextMenu' || (e.key === 'F10' && e.shiftKey)) {
         e.preventDefault()
         const r = (e.target as HTMLElement).getBoundingClientRect()
@@ -52,6 +56,12 @@ export function useBarContextMenu(zone: BarZone, editing: boolean) {
   }
   const menu = at ? <BarMenu at={at} close={() => { at.from?.focus?.(); setAt(null) }} /> : null
   return { props, menu }
+}
+
+/** Remove every item a bar holds, except "You" and the Crews switcher. Each
+ *  removal can be undone on its own (Undo, Cmd/Ctrl+Z). */
+export function removeAllFrom(zone: BarZone): void {
+  for (const id of barOrder(zone)) if (canRemove(id)) hideFromCanvas(id)
 }
 
 function BarMenu({ at, close }: { at: At; close: () => void }) {
@@ -77,14 +87,20 @@ function BarMenu({ at, close }: { at: At; close: () => void }) {
     if (cell && cell.col > 0) items.push({ key: 'left', icon: <ArrowLeft size={13} />, text: i18nT('nav.layout_move_left', { item: at.label }), run: () => { if (shiftOnBar(at.zone, id, -1)) announceLayout(i18nT('nav.layout_moved_left', { item: at.label })) } })
     if (cell && cell.col < cell.max) items.push({ key: 'right', icon: <ArrowRight size={13} />, text: i18nT('nav.layout_move_right', { item: at.label }), run: () => { if (shiftOnBar(at.zone, id, 1)) announceLayout(i18nT('nav.layout_moved_right', { item: at.label })) } })
     for (const z of ['top', 'sidebar', 'bottom'] as const) {
-      if (z === at.zone) continue
+      if (z === at.zone || !placesOf(id).includes(z)) continue
       const Icon = z === 'top' ? PanelTop : z === 'bottom' ? PanelBottom : PanelLeft
       items.push({ key: `to-${z}`, icon: <Icon size={13} />, text: i18nT('nav.layout_kbd_move_to', { place: zoneLabel(z) }), run: () => { moveInto(id, z, 'end'); announceLayout(i18nT('nav.layout_moved', { item: at.label, place: zoneLabel(z) })) } })
     }
     if (canRemove(id)) items.push({ key: 'remove', icon: <EyeOff size={13} />, text: i18nT('nav.layout_kbd_remove'), run: () => hideFromCanvas(id, at.label) })
   }
-  items.push({ key: 'edit', icon: <Settings2 size={13} />, text: i18nT('nav.rail_customize'), run: () => setLayoutEditing(true), divider: !!at.id })
+  // Empty bar space: Remove all, when the bar holds anything that can go.
+  if (!at.id && barOrder(at.zone).some(canRemove)) {
+    items.push({ key: 'remove-all', icon: <ListX size={13} />, text: i18nT('nav.layout_remove_all_from', { place: zoneLabel(at.zone) }), run: () => removeAllFrom(at.zone) })
+  }
+  if (!isLayoutEditing()) items.push({ key: 'edit', icon: <Settings2 size={13} />, text: i18nT('nav.rail_customize'), run: () => setLayoutEditing(true), divider: items.length > 0 })
 
+  // Nothing to offer (editing, and nothing here can go): no menu.
+  if (items.length === 0) { queueMicrotask(close); return null }
   const onKey = (e: KeyboardEvent<HTMLDivElement>) => {
     const list = [...(ref.current?.querySelectorAll<HTMLElement>('[role="menuitem"]') ?? [])]
     const i = list.indexOf(document.activeElement as HTMLElement)

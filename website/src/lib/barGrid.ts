@@ -19,7 +19,7 @@ import { useEffect, useState } from 'react'
 
 import { safeGetItem, safeRemoveItem, safeSetItem } from '../utils/safeStorage'
 import {
-  FOCUS_ITEM, HISTORY_ITEM, NOTIFY_ITEM, PROFILE_ITEM, REMOTE_ITEM, SEARCH_ITEM, STATUS_ITEM, WIDGET_ITEMS, moveItem, placesOf, readPlace,
+  FOCUS_ITEM, HISTORY_ITEM, LOGO_ITEM, NOTIFY_ITEM, PROFILE_ITEM, REMOTE_ITEM, SEARCH_ITEM, STATUS_ITEM, WIDGET_ITEMS, moveItem, placesOf, readLogoPlace, readPlace,
   readSearchStyle, readShellPlacement, setSearchStyle, type BarZone,
 } from './shellLayout'
 
@@ -192,7 +192,7 @@ function guessSpan(zone: BarZone, id: string): number {
   if (id === HISTORY_ITEM) return 2
   if (id === REMOTE_ITEM) return 3
   if (id === STATUS_ITEM) return zone === 'top' ? 6 : 4
-  if (id === PROFILE_ITEM || id === NOTIFY_ITEM) return 1
+  if (id === PROFILE_ITEM || id === NOTIFY_ITEM || id === LOGO_ITEM) return 1
   // Its own choice, else its bar's Show setting (icon only to start).
   return (readStyles()[id] ?? readBarStyle(zone)) === 'icon' ? 1 : 3
 }
@@ -201,9 +201,9 @@ export function spanOf(zone: BarZone, id: string): number {
   return spans[zone][id] ?? guessSpan(zone, id)
 }
 
-/** Every item in a bar: its widgets, then its placed items. */
+/** Every item in a bar: the logo (top bar only), its widgets, then its placed items. */
 export function barIds(zone: BarZone): string[] {
-  return [...WIDGET_ITEMS.filter(id => readPlace(id) === zone), ...readShellPlacement()[zone]]
+  return [...(readLogoPlace() === zone ? [LOGO_ITEM] : []), ...WIDGET_ITEMS.filter(id => readPlace(id) === zone), ...readShellPlacement()[zone]]
 }
 
 /* ── Layout ── */

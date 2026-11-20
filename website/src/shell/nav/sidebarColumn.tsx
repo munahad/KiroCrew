@@ -18,7 +18,7 @@ import { GripVertical } from 'lucide-react'
 import { i18nT } from '../../i18n/t'
 import { RAIL_PIN_MIME, insertPin, updateRail, type RailGroup } from '../../lib/railLayout'
 import {
-  announceLayout, isWidgetItem, isWindowToggle, moveItem, readChromeDrag, removeFromBars, setSidebarMembership, useLayoutEditing, useShellPlacement,
+  LOGO_ITEM, announceLayout, isWidgetItem, isWindowToggle, moveItem, readChromeDrag, removeFromBars, setSidebarMembership, useLayoutEditing, useShellPlacement,
 } from '../../lib/shellLayout'
 import {
   columnIdsOf, commitColumn, isFootItem, isHeaderId, placeInSidebar, pushAsideInColumn, resolveColumn, setSidebarRowCount, useSidebarRows,
@@ -159,18 +159,25 @@ export function SidebarColumn({ groups, renderRow, renderHeader, collapsed, labe
   // scrolls) so each one can still be dragged.
   // The rows that fit below the drop host's 24px bottom padding.
   const fit = Math.max(1, Math.floor((frame - 24) / pitch))
-  const overflow = !live && frame > 0 && drawIds.some(id => (at[id] ?? 0) >= fit)
+  // Only the body rows count: the foot rows ("You", the terminal) follow the
+  // column's end, so on their own they never push a row into More. (They
+  // did before checkpoint 56, which hid the last Apps rows with room to spare.)
+  const order = [...drawIds].sort((a, b) => at[a] - at[b])
+  const foot = order.filter(isFoot)
+  const bodyEnd = order.filter(id => !isFoot(id)).reduce((m, id) => Math.max(m, (at[id] ?? 0) + 1), 0)
+  const overflow = !live && frame > 0 && bodyEnd + foot.length > fit
   const more: string[] = []
   let moreRow = -1
   if (overflow) {
-    const order = [...drawIds].sort((a, b) => at[a] - at[b])
-    const foot = order.filter(isFoot)
     moreRow = Math.max(0, fit - 1 - foot.length)
     for (const id of order) if (!isFoot(id) && at[id] >= moreRow) more.push(id)
     foot.forEach((id, i) => { at[id] = moreRow + 1 + i })
+  } else if (!live && frame > 0) {
+    // Everything fits: the foot rows sit at the bottom of what is on screen.
+    foot.forEach((id, i) => { if (at[id] >= fit - foot.length + i) at[id] = Math.max(bodyEnd + i, fit - foot.length + i) })
   }
   const shown = (id: string) => !more.includes(id)
-  const last = overflow ? fit - 1 : Math.max(n - 1, ...drawIds.map(id => at[id] ?? 0))
+  const last = overflow || (!live && frame > 0) ? Math.max(fit - 1, ...drawIds.map(id => at[id] ?? 0)) : Math.max(n - 1, ...drawIds.map(id => at[id] ?? 0))
   const height = (last + 1) * pitch
 
   const rowAt = (y: number) => {
@@ -200,8 +207,9 @@ export function SidebarColumn({ groups, renderRow, renderHeader, collapsed, labe
     setHover(null)
     const id = e.dataTransfer.getData(RAIL_PIN_MIME)
     if (!id) return
-    // Window toggles have their own tool rows at the sidebar's foot.
-    if (isWindowToggle(id)) { moveItem(id, 'sidebar'); return }
+    // Window toggles have their own tool rows at the sidebar's foot; the logo
+    // goes back to the sidebar's head.
+    if (isWindowToggle(id) || id === LOGO_ITEM) { moveItem(id, 'sidebar'); announceLayout(i18nT('nav.layout_moved', { item: labelOf(id), place: zoneLabel('sidebar') })); return }
     const row = rowAt(e.clientY)
     if (!ids.includes(id) && !isHeaderId(id)) {
       // Coming in from a bar, the panel or another page.

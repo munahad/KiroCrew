@@ -4785,7 +4785,7 @@
     "settings": "Settings",
     "task_runner": "Task Runner",
     "webhooks": "Webhooks",
-    "crew_members": "Mates",
+    "crew_members": "Bots",
     "layout_move_up": "Move {{item}} up",
     "layout_move_down": "Move {{item}} down",
     "layout_moved_up": "{{item}} moved up",
@@ -4805,7 +4805,15 @@
     "layout_window_hint": "Drag items to move them. Use ⋯ to remove, + to add.",
     "layout_area_add": "Add an item to {{place}}",
     "layout_added": "{{item}} added to {{place}}",
-    "layout_area_add_none": "Everything that fits here is already shown"
+    "layout_area_add_none": "Everything that fits here is already shown",
+    "layout_undo": "Undo",
+    "layout_removed_short": "{{item}} removed",
+    "layout_restored": "{{item}} put back",
+    "layout_remove_all_from": "Remove all from {{place}}",
+    "layout_unpin_sidebar": "Unpin from sidebar",
+    "demo_app_design_critique": "Design Critique",
+    "demo_app_dev_fleet": "Dev Fleet",
+    "demo_tool_feature_2": "Feature 2"
   },
   "pages": {
     "aidlc": {

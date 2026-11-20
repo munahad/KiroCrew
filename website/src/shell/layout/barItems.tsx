@@ -41,13 +41,14 @@ export function startItemDrag(e: DragEvent, id: string) {
   // data), so places that cannot take it show as unavailable. Cleared on drop
   // or drag end; both, since a moved source can unmount before its dragend.
   setChromeDrag({ id, over: null, lineX: null, cell: null })
+  // Pointer and key events never fire during a native drag, so any of them
+  // also ends it: a source removed mid-drag never sends its dragend.
+  const ends = ['dragend', 'drop', 'pointerdown', 'pointermove', 'mousemove', 'keydown'] as const
   const clear = () => {
     setChromeDrag(null)
-    window.removeEventListener('dragend', clear, true)
-    window.removeEventListener('drop', clear, true)
+    for (const t of ends) window.removeEventListener(t, clear, true)
   }
-  window.addEventListener('dragend', clear, true)
-  window.addEventListener('drop', clear, true)
+  for (const t of ends) window.addEventListener(t, clear, true)
 }
 
 /** What tapping a placed item does, and whether it shows as on: shared by the

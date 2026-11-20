@@ -84,11 +84,25 @@ describe('PreviewEditor drawing', () => {
     expect(within(zone('top')).getByRole('button', { name: 'Notifications' })).toBeTruthy()
   })
 
-  it('offers the logo only Remove, and lists it as Not shown once removed', () => {
+  it('draws the logo in the sidebar head, moves it to the top bar and back, never to the bottom bar', () => {
+    renderEditor()
+    fireEvent.click(within(zone('sidebar')).getByRole('button', { name: 'Logo' }))
+    let menu = screen.getByTestId('preview-chip-menu')
+    expect(within(menu).queryByText(i18nT('nav.layout_kbd_move_to', { place: zoneLabel('bottom') }))).toBeNull()
+    fireEvent.click(within(menu).getByText(i18nT('nav.layout_kbd_move_to', { place: zoneLabel('top') })))
+    expect(where(LOGO_ITEM)).toBe('top')
+    const chip = within(zone('top')).getByRole('button', { name: 'Logo' })
+    expect(chip.getAttribute('draggable')).toBe('true')
+    fireEvent.click(chip)
+    menu = screen.getByTestId('preview-chip-menu')
+    fireEvent.click(within(menu).getByText(i18nT('nav.layout_kbd_move_to', { place: zoneLabel('sidebar') })))
+    expect(where(LOGO_ITEM)).toBe('sidebar')
+  })
+
+  it('offers the logo Remove, and lists it as Not shown once removed', () => {
     renderEditor()
     fireEvent.click(within(zone('sidebar')).getByRole('button', { name: 'Logo' }))
     const menu = screen.getByTestId('preview-chip-menu')
-    expect(within(menu).queryByText(i18nT('nav.layout_kbd_move_to', { place: zoneLabel('top') }))).toBeNull()
     fireEvent.click(within(menu).getByRole('menuitem', { name: i18nT('nav.layout_kbd_remove') }))
     expect(within(zone('sidebar')).queryByRole('button', { name: 'Logo' })).toBeNull()
     expect(document.querySelector('[data-preview-group="none"] [data-preview-row="shell:logo"]')).not.toBeNull()

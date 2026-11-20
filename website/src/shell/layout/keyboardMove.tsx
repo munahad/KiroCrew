@@ -30,9 +30,9 @@ import { useIsMobile } from '../../hooks/useIsMobile'
 import { i18nT } from '../../i18n/t'
 import { useEditOption } from '../../lib/editOption'
 import { cellOf, placeOnBar, setItemStyle, shiftOnBar, useItemStyle } from '../../lib/barGrid'
-import { insertPin, type RailGroup, updateRail } from '../../lib/railLayout'
+import { insertPin, isDemoApp, type RailGroup, updateRail } from '../../lib/railLayout'
 import {
-  LOGO_ITEM, SEARCH_ITEM, announceLayout, canRemove, isWidgetItem, isWindowToggle, moveItem, moveWithinBar, readShellPlacement, removeFromBars,
+  FEATURE2_ITEM, LOGO_ITEM, SEARCH_ITEM, announceLayout, canRemove, isSampleExtra, isWidgetItem, isWindowToggle, moveItem, moveWithinBar, placesOf, readShellPlacement, removeFromBars,
   setSearchStyle, setSidebarMembership, useLayoutEditing, useSearchStyle, zoneOf, type ShellZone,
 } from '../../lib/shellLayout'
 import { canShiftInSidebar, columnIdsOf, commitColumn, isHeaderId, placeInSidebar, readSidebarRowCount, readSidebarRows, resolveColumn, shiftInSidebar } from '../../lib/sidebarGrid'
@@ -196,7 +196,11 @@ function canStepItem(id: string, zone: ShellZone, d: -1 | 1): boolean {
  * collapsed sidebar, the arrows stacked on the row's left edge and "⋯" on its
  * right, either side of the centred icon.
  */
-export function ItemMoreButton({ id, zone, label, narrow = false }: { id: string; zone: ShellZone; label: string; narrow?: boolean }) {
+export function ItemMoreButton({ id, zone, label, narrow = false, inline = false }: {
+  id: string; zone: ShellZone; label: string; narrow?: boolean
+  /** Option 1's bars: a flex sibling inside the cell, in space kept for it. */
+  inline?: boolean
+}) {
   const editing = useLayoutEditing()
   const option = useEditOption()
   const phone = useIsMobile()
@@ -217,7 +221,9 @@ export function ItemMoreButton({ id, zone, label, narrow = false }: { id: string
   // while the item is held for a keyboard move (the arrow keys move it then).
   const show = heldId === id ? 'opacity-0' : 'opacity-0 group-hover/edit:opacity-100 group-focus-within/edit:opacity-100'
   const fade = `absolute z-20 flex ${show} transition-opacity duration-100 motion-reduce:transition-none [&_*]:!cursor-pointer`
-  const arrows = keys.map((k, i) => {
+  // The logo at the sidebar's head is not a row: it has no steps there.
+  const stepless = id === LOGO_ITEM && zone === 'sidebar'
+  const arrows = stepless ? [] : keys.map((k, i) => {
     const d = (i === 0 ? -1 : 1) as -1 | 1
     const Icon = icons[i]
     return (
@@ -267,6 +273,7 @@ export function ItemMoreButton({ id, zone, label, narrow = false }: { id: string
   // Bars: just outside the cell, so a one-cell icon keeps its neighbours
   // clear. The sidebar: inside the row on its right, in the hovered row's
   // own colour, so it covers a trailing glyph (the chevron, say) cleanly.
+  if (inline) return <span className={`${fade.replace('absolute ', 'relative ')} shrink-0 items-center gap-0.5`}>{arrows}{more}</span>
   const place = inBar ? (zone === 'top' ? 'right-0 top-full pt-1' : 'right-0 bottom-full pb-1') : 'right-1 top-1/2 -translate-y-1/2 rounded-md bg-bg-hover pl-1'
   return <span className={`${fade} ${place} items-center gap-0.5`}>{arrows}{more}</span>
 }
@@ -405,7 +412,7 @@ function LayoutItemMenu() {
     } })
   }
   for (const z of ['top', 'sidebar', 'bottom'] as const) {
-    if (z === m.zone || isHeaderId(m.id)) continue
+    if (z === m.zone || isHeaderId(m.id) || !placesOf(m.id).includes(z)) continue
     items.push({ key: `to-${z}`, label: i18nT('nav.layout_kbd_move_to', { place: zoneLabel(z) }), run: () => {
       moveInto(m.id, z, 'end')
       announceLayout(i18nT('nav.layout_moved', { item: m.label, place: zoneLabel(z) }))
@@ -423,7 +430,9 @@ function LayoutItemMenu() {
       }
     } })
   }
-  if (!isHeaderId(m.id) && canRemove(m.id)) items.push({ key: 'hide', label: i18nT('nav.layout_kbd_remove'), run: () => hideFromCanvas(m.id, m.label) })
+  // A sample pinned app in the sidebar is unpinned rather than removed (it goes to the "+" list).
+  const unpin = m.zone === 'sidebar' && (isDemoApp(m.id) || isSampleExtra(m.id)) && m.id !== FEATURE2_ITEM
+  if (!isHeaderId(m.id) && canRemove(m.id)) items.push({ key: 'hide', label: i18nT(unpin ? 'nav.layout_unpin_sidebar' : 'nav.layout_kbd_remove'), run: () => hideFromCanvas(m.id, m.label) })
 
   const onKey = (e: KeyboardEvent<HTMLDivElement>) => {
     const list = [...(ref.current?.querySelectorAll<HTMLElement>('[role="menuitem"]') ?? [])]

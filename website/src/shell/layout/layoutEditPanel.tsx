@@ -17,6 +17,7 @@
  */
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type DragEvent, type KeyboardEvent as ReactKeyboardEvent } from 'react'
 import { useQuery } from '@tanstack/react-query'
+import { shellItemMeta } from './shellItems'
 import { ArrowLeftRight, ArrowLeftToLine, Bell, Check, ChevronDown, ChevronLeft, ChevronRight, ChevronUp, CircleUserRound, EyeOff, Fullscreen, GripVertical, PanelBottom, PanelTop, Lightbulb, Lock, MessageSquare, Minus, MonitorSmartphone, MoreHorizontal, PanelLeft, Plug, Plus, Search, Smartphone, SquareTerminal, X } from 'lucide-react'
 
 import CrewAvatar from '../../components/CrewAvatar'
@@ -35,7 +36,7 @@ import {
   updateRail, type RailGroup,
 } from '../../lib/railLayout'
 import {
-  SHELL_ITEM_MIME, FEEDBACK_ITEM, FOCUS_ITEM, HISTORY_ITEM, LOGO_ITEM, NOTIFY_ITEM, PHONE_ITEM, PROFILE_ITEM, REMOTE_ITEM, SEARCH_ITEM, canRemove, placesOf, removeFromBars, STATUS_ITEM, TERMINAL_ITEM, isTwoPlaceItem, announceLayout, isWindowToggle, moveItem, readChromeDrag, resetShellLayout, setLayoutEditing,
+  SHELL_ITEM_MIME, FEATURE2_ITEM, IN_YOU_MENU, SAMPLE_EXTRA_IDS, isSampleExtra, FEEDBACK_ITEM, FOCUS_ITEM, HISTORY_ITEM, LOGO_ITEM, NOTIFY_ITEM, PROFILE_ITEM, REMOTE_ITEM, SEARCH_ITEM, canRemove, placesOf, removeFromBars, STATUS_ITEM, TERMINAL_ITEM, isTwoPlaceItem, announceLayout, isWindowToggle, moveItem, readChromeDrag, resetShellLayout, setLayoutEditing,
   moveWithinBar, setLayoutWindowLocked, setSearchStyle, useLayoutAnnouncement, useSearchStyle, useShellPlacement, zoneOf, type BarZone, type ShellZone,
 } from '../../lib/shellLayout'
 import { barOrder, cellOf, clearBarCells, placeOnBar, setBarStyle, setItemStyle, shiftOnBar, useBarCells, useBarStyle, useItemStyle } from '../../lib/barGrid'
@@ -87,10 +88,10 @@ export interface Candidate { id: string; category: Exclude<Category, 'all'>; met
 function categoryOf(id: string): Exclude<Category, 'all'> {
   if (id.startsWith(MATE_PIN_PREFIX)) return 'mates'
   if (id.startsWith(SESSION_PIN_PREFIX)) return 'sessions'
-  if (isWindowToggle(id) || isTwoPlaceItem(id) || id === LOGO_ITEM) return 'tools'
+  if (isWindowToggle(id) || isTwoPlaceItem(id) || id === LOGO_ITEM || id === FEATURE2_ITEM) return 'tools'
   // Task Runner, Discover and Library ship in the Apps group, so they read as apps.
   // The two sample pinned apps read as installed apps (Yours).
-  return isAppNavId(id) || isDemoApp(id) || APP_STORE_IDS.has(id) ? 'apps' : 'pages'
+  return isAppNavId(id) || isDemoApp(id) || isSampleExtra(id) || APP_STORE_IDS.has(id) ? 'apps' : 'pages'
 }
 /** The panel's two columns: what comes with every Crew, and what this person
  *  added (their mates, sessions and the apps they installed), the split most
@@ -279,14 +280,16 @@ export function LayoutEditPanel({ groups, hidden, meta }: {
       add(STATUS_ITEM, { label: i18nT('nav.layout_status_item'), icon: <Plug size={16} /> })
       add(NOTIFY_ITEM, { label: i18nT('nav.layout_notifications_item'), icon: <Bell size={16} /> })
       if (terminalEnabled) add(TERMINAL_ITEM, { label: i18nT('app.terminal'), icon: <SquareTerminal size={16} /> })
-      add(PHONE_ITEM, { label: i18nT('app.connect_your_phone'), icon: <Smartphone size={16} /> })
-      add(FEEDBACK_ITEM, { label: i18nT('nav.send_feedback'), icon: <Lightbulb size={16} /> })
+      // Connect your phone and Send feedback are in the You menu, so they are
+      // never offered here (no duplicated features, checkpoint 56).
       add(FOCUS_ITEM, { label: i18nT('app.focus_mode'), icon: <Fullscreen size={16} /> })
+      // Made-up items (prototype only): two apps and a placeholder tool, Not shown to start.
+      for (const id of SAMPLE_EXTRA_IDS) { const m = shellItemMeta(id); if (m) add(id, { label: m.label, icon: m.icon }) }
     } else {
       add(FEEDBACK_ITEM, { label: i18nT('nav.send_feedback'), icon: <Lightbulb size={16} /> })
     }
     for (const id of [...groups.flatMap(g => g.items), ...hidden, ...placement.top, ...placement.bottom, ...(phone ? phoneLayout.extra : [])]) {
-      if (!isEntityPin(id) && !isWindowToggle(id)) add(id, meta(id))
+      if (!isEntityPin(id) && !isWindowToggle(id) && !IN_YOU_MENU.includes(id)) add(id, meta(id))
     }
     for (const m of roster ?? []) add(matePinId(m.slug), { label: m.name, icon: <CrewAvatar seed={m.name} avatar={m.avatar} size={18} /> })
     for (const s of slots) add(sessionPinId(s.key), { label: s.title || s.key, icon: <MessageSquare size={16} /> }, s.key.slice(-6))

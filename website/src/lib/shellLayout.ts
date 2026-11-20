@@ -17,7 +17,7 @@
 import { useEffect, useState } from 'react'
 
 import { safeGetItem, safeRemoveItem, safeSetItem } from '../utils/safeStorage'
-import { insertPin, defaultGroupOf, readRailLayout, updateRail, resetRailLayout } from './railLayout'
+import { insertPin, defaultGroupOf, readRailLayout, updateRail, resetRailLayout, useRailLayout } from './railLayout'
 
 export type ShellZone = 'sidebar' | 'top' | 'bottom'
 export type BarZone = Exclude<ShellZone, 'sidebar'>
@@ -53,9 +53,10 @@ export const PROFILE_ITEM = 'shell:profile'
 /** Notifications (the bell): its own movable widget, split out of the status
  *  cluster, which keeps the connection light and the credits reading. */
 export const NOTIFY_ITEM = 'shell:notifications'
-/** The Crew's logo at the head of the sidebar. Optional: shown there or not
- *  at all (never in a bar). The sidebar's collapse button is separate, so
- *  removing the logo never removes the way to expand a collapsed sidebar. */
+/** The Crew's logo. Starts at the head of the sidebar; it can move to the top
+ *  bar (never the bottom bar) or be removed (checkpoint 56). The sidebar's
+ *  collapse button is separate and stays in the sidebar, so moving or removing
+ *  the logo never removes the way to expand a collapsed sidebar. */
 export const LOGO_ITEM = 'shell:logo'
 export type SearchPlace = ShellZone | 'none'
 export type WidgetPlace = SearchPlace
@@ -65,13 +66,23 @@ export type TwoPlaceItem = WidgetItem
  *  (checkpoint 54) and moves like the others, but can't be removed (55). */
 export const WIDGET_ITEMS: readonly WidgetItem[] = [SEARCH_ITEM, STATUS_ITEM, NOTIFY_ITEM, REMOTE_ITEM, HISTORY_ITEM, PROFILE_ITEM]
 export const isWidgetItem = (id: string): id is WidgetItem => (WIDGET_ITEMS as readonly string[]).includes(id)
+/** Made-up items for the "+" lists and Not shown (prototype only, checkpoint
+ *  56): two apps that are not pinned, and one placeholder tool that opens
+ *  nothing. They start Not shown. Task Runner is the real one. */
+export const SAMPLE_EXTRA_APPS = ['demo-app:design-critique', 'demo-app:dev-fleet'] as const
+export const FEATURE2_ITEM = 'demo-tool:feature-2'
+export const SAMPLE_EXTRA_IDS: readonly string[] = [...SAMPLE_EXTRA_APPS, FEATURE2_ITEM]
+export const isSampleExtra = (id: string) => SAMPLE_EXTRA_IDS.includes(id)
+/** Items that are already in the You menu, so no list offers them (no
+ *  duplicated features): Connect your phone and Send feedback. */
+export const IN_YOU_MENU: readonly string[] = [PHONE_ITEM, FEEDBACK_ITEM]
 /** Whether an editor may offer Remove (Not shown) for an item. "You" (it holds
  *  Settings and Edit layout) and the Crews switcher (checkpoint 55) can move
  *  between areas but are never removed. */
 export const canRemove = (id: string) => id !== PROFILE_ITEM && id !== REMOTE_ITEM
 /** The places an editor may offer for an item, in menu order. */
 export function placesOf(id: string): (ShellZone | 'none')[] {
-  if (id === LOGO_ITEM) return ['sidebar', 'none']
+  if (id === LOGO_ITEM) return ['sidebar', 'top', 'none']
   return canRemove(id) ? ['sidebar', 'top', 'bottom', 'none'] : ['sidebar', 'top', 'bottom']
 }
 /** Older name, kept for existing call sites: now covers every widget. */
@@ -137,19 +148,27 @@ export const useHistoryPlace = () => usePlace(HISTORY_ITEM)
 export const useProfilePlace = () => usePlace(PROFILE_ITEM)
 export const useNotifyPlace = () => usePlace(NOTIFY_ITEM)
 
-/* ── The optional logo ── */
+/* ── The optional logo: the sidebar's head, the top bar, or not shown ── */
+// One key: absent is the sidebar, '1' (as older builds stored it) not shown, 'top' the top bar.
 const LOGO_KEY = 'mc-logo-hidden'
 const LOGO_EVENT = 'mc:logo-changed'
-export const readLogoShown = () => safeGetItem(LOGO_KEY) !== '1'
-export function setLogoShown(on: boolean): void {
-  if (on) safeRemoveItem(LOGO_KEY)
-  else safeSetItem(LOGO_KEY, '1')
+export type LogoPlace = 'sidebar' | 'top' | 'none'
+export function readLogoPlace(): LogoPlace {
+  const v = safeGetItem(LOGO_KEY)
+  return v === '1' ? 'none' : v === 'top' ? 'top' : 'sidebar'
+}
+export function setLogoPlace(place: LogoPlace): void {
+  if (place === 'sidebar') safeRemoveItem(LOGO_KEY)
+  else safeSetItem(LOGO_KEY, place === 'none' ? '1' : 'top')
   window.dispatchEvent(new Event(LOGO_EVENT))
 }
-export function useLogoShown(): boolean {
-  const [on, setOn] = useState(readLogoShown)
+/** Whether the logo is at the sidebar's head. */
+export const readLogoShown = () => readLogoPlace() === 'sidebar'
+export function setLogoShown(on: boolean): void { setLogoPlace(on ? 'sidebar' : 'none') }
+export function useLogoPlace(): LogoPlace {
+  const [p, setP] = useState(readLogoPlace)
   useEffect(() => {
-    const sync = () => setOn(readLogoShown())
+    const sync = () => setP(readLogoPlace())
     window.addEventListener(LOGO_EVENT, sync)
     window.addEventListener('storage', sync)
     return () => {
@@ -157,8 +176,9 @@ export function useLogoShown(): boolean {
       window.removeEventListener('storage', sync)
     }
   }, [])
-  return on
+  return p
 }
+export const useLogoShown = () => useLogoPlace() === 'sidebar'
 
 /* ── Window lock (for option 2's panel) ──
    While an editor wants the window behind it blurred and unclickable, it
@@ -224,7 +244,22 @@ export function useTopBarHasContent(): boolean {
 /** Whether a bar has anything in it: placed items or any widget. */
 export function useBarHasContent(zone: BarZone): boolean {
   const placement = useShellPlacement()
-  return useWidgetsIn(zone).length > 0 || placement[zone].length > 0
+  const logo = useLogoPlace()
+  return useWidgetsIn(zone).length > 0 || placement[zone].length > 0 || logo === zone
+}
+
+/** Whether an area holds anything (checkpoint 56): an empty area is not drawn
+ *  outside edit mode, in all three options. The sidebar's collapse button
+ *  alone does not count; it goes with the sidebar. "You" can't be removed, so
+ *  the area holding it always shows, and Edit layout stays reachable from its
+ *  menu and that area's right-click. */
+export function useAreaHasContent(zone: ShellZone): boolean {
+  const placement = useShellPlacement()
+  const logo = useLogoPlace()
+  const widgets = useWidgetsIn(zone)
+  const rail = useRailLayout()
+  if (zone === 'sidebar') return logo === 'sidebar' || widgets.length > 0 || placement.side.length > 0 || rail.groups.some(g => g.items.length > 0)
+  return widgets.length > 0 || placement[zone].length > 0 || logo === zone
 }
 
 /** Every widget's place, kept current. */
@@ -298,7 +333,7 @@ export function useShellPlacement(): ShellPlacement {
 
 /** Where an item lives now. `null`: nowhere (a hidden page, an unplaced toggle). */
 export function zoneOf(id: string, placement: ShellPlacement, onSidebar: boolean): ShellZone | null {
-  if (id === LOGO_ITEM) return readLogoShown() ? 'sidebar' : null
+  if (id === LOGO_ITEM) { const p = readLogoPlace(); return p === 'none' ? null : p }
   if (isWidgetItem(id)) { const p = readPlace(id); return p === 'none' ? null : p }
   if (placement.top.includes(id)) return 'top'
   if (placement.bottom.includes(id)) return 'bottom'
@@ -352,7 +387,7 @@ function hideInSidebar(id: string): void {
 export function moveItem(id: string, zone: ShellZone | null, index?: number): void {
   // Refuse what the item may not do: remove "You" or put the logo in a bar.
   if (!placesOf(id).includes(zone ?? 'none')) return
-  if (id === LOGO_ITEM) { setLogoShown(zone === 'sidebar'); return }
+  if (id === LOGO_ITEM) { setLogoPlace(zone === 'sidebar' || zone === 'top' ? zone : 'none'); return }
   if (isWidgetItem(id)) {
     writePlace(id, zone ?? 'none')
     return

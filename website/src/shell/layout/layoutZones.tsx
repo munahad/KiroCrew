@@ -28,29 +28,36 @@ import { Ban } from 'lucide-react'
 
 import { i18nT } from '../../i18n/t'
 import {
-  SHELL_ITEM_MIME, announceLayout, canRemove, readChromeDrag, setChromeDrag, useChromeDrag, useLayoutEditing, useShellPlacement, useWidgetsIn,
+  SHELL_ITEM_MIME, announceLayout, readChromeDrag, setChromeDrag, useChromeDrag, useLayoutEditing, useShellPlacement, useWidgetsIn,
   type BarZone, type ShellZone,
 } from '../../lib/shellLayout'
-import { barOrder, cellAt, placeOnBar } from '../../lib/barGrid'
-import { hideFromCanvas, useDragOnlyEditing } from './dragOnlyEdit'
+import { cellAt, placeOnBar } from '../../lib/barGrid'
+import { useDragOnlyEditing } from './dragOnlyEdit'
 import { useEditOption, useGridStyle, useTilesPanel } from '../../lib/editOption'
 import { shellItemMeta, zonesFor } from './shellItems'
 import { zoneLabel } from './barItems'
 
 /** True while any native drag is in flight on the page (including drags from
  *  outside the layout, such as a Mate from the Mates page). */
-function useNativeDragging(): boolean {
+export function useNativeDragging(): boolean {
   const [on, setOn] = useState(false)
   useEffect(() => {
     const start = () => setOn(true)
     const end = () => setOn(false)
+    // A dragged item that is removed or moved mid-drag unmounts, and its
+    // dragend never reaches the window: the drag looked stuck on (every bar
+    // greyed with ⊘, the top bar's outline taking every press). No pointer or
+    // key event fires during a native drag, so any of them means it is over.
+    const after = ['pointerdown', 'pointermove', 'mousemove', 'keydown'] as const
     window.addEventListener('dragstart', start)
-    window.addEventListener('dragend', end)
-    window.addEventListener('drop', end)
+    window.addEventListener('dragend', end, true)
+    window.addEventListener('drop', end, true)
+    for (const t of after) window.addEventListener(t, end, true)
     return () => {
       window.removeEventListener('dragstart', start)
-      window.removeEventListener('dragend', end)
-      window.removeEventListener('drop', end)
+      window.removeEventListener('dragend', end, true)
+      window.removeEventListener('drop', end, true)
+      for (const t of after) window.removeEventListener(t, end, true)
     }
   }, [])
   return on
@@ -59,7 +66,7 @@ function useNativeDragging(): boolean {
 function ZoneOutline({ zone, area, dragging, nativeDrag, allowed, over, lineX, flat, count }: {
   /** Option 1 (drag only): a flat dashed area like option 3's drawing, not raised. */
   flat: boolean
-  /** How many items the area holds (empty areas say so; two or more offer Remove all). */
+  /** How many items the area holds (empty areas say so). */
   count: number
   zone: ShellZone
   area: string
@@ -143,19 +150,7 @@ function ZoneOutline({ zone, area, dragging, nativeDrag, allowed, over, lineX, f
           {i18nT('nav.layout_preview_empty_area')}
         </span>
       )}
-      {/* Only what can go counts ("You" stays), so it never offers to remove one item. */}
-      {flat && bars && barOrder(zone as BarZone).filter(canRemove).length >= 2 && !dragging && (
-        // On the edge facing the page, clear of the bar's own items.
-        <button
-          type="button"
-          onClick={() => { for (const id of barOrder(zone as BarZone)) hideFromCanvas(id) }}
-          style={{ pointerEvents: 'auto' }}
-          className={`absolute right-3 rounded-md border border-border bg-bg-elevated px-1.5 py-px text-[11px] text-muted shadow-sm hover:text-text cursor-pointer ${
-            zone === 'top' ? 'bottom-0 translate-y-1/2' : 'top-0 -translate-y-1/2'}`}
-        >
-          {i18nT('nav.layout_preview_clear_area')}
-        </button>
-      )}
+      {/* Remove all is in the bar's right-click menu on empty space (checkpoint 56). */}
       <span
         aria-hidden="true"
         // One rule for all three: the tag sits on the MIDDLE of the edge that

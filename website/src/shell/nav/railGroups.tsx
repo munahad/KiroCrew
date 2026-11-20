@@ -16,7 +16,7 @@ import { RailContextMenu, groupTitle, type RailItemMeta } from './railCustomize'
 import { LayoutEditPanel } from '../layout/layoutEditPanel'
 import { hideFromCanvas, pageHideZoneAt, setPageHideOver, useDragOnlyEditing } from '../layout/dragOnlyEdit'
 import {
-  HISTORY_ITEM, NOTIFY_ITEM, PROFILE_ITEM, REMOTE_ITEM, SEARCH_ITEM, SIDEBAR_MEMBERSHIP_EVENT, STATUS_ITEM, announceLayout, barZoneAt, isWidgetItem, moveItem,
+  HISTORY_ITEM, NOTIFY_ITEM, PROFILE_ITEM, REMOTE_ITEM, SEARCH_ITEM, SIDEBAR_MEMBERSHIP_EVENT, STATUS_ITEM, announceLayout, barZoneAt, isSampleExtra, isWidgetItem, moveItem,
   setChromeDrag, setLayoutEditing, useChromeDrag, useLayoutEditing, type SidebarMembership,
 } from '../../lib/shellLayout'
 import { cellAt, placeOnBar, styleInBar } from '../../lib/barGrid'
@@ -164,7 +164,9 @@ export function RailGroups({ available, renderItem, collapsed, defaultGroup, met
   // in the rail layout); apps no longer fill the sidebar on their own. The
   // rest are Not shown, and Discover still lists every app.
   const pinnedIds = useMemo(() => new Set(layout.groups.flatMap(x => x.items)), [layout.groups])
-  const shownAvailable = useMemo(() => available.filter(id => !isApp(id) || pinnedIds.has(id)), [available, isApp, pinnedIds])
+  // The made-up extras (Design Critique, Dev Fleet, Feature 2) are like apps:
+  // in the sidebar only once added there.
+  const shownAvailable = useMemo(() => available.filter(id => (!isApp(id) && !isSampleExtra(id)) || pinnedIds.has(id)), [available, isApp, pinnedIds])
   const allGroups = useMemo(() => {
     // Round 1: no user sections. Every row is in one list, in order.
     const g = flattenRailGroups(resolveRailLayout(layout, shownAvailable, defaultGroup))
@@ -215,7 +217,7 @@ export function RailGroups({ available, renderItem, collapsed, defaultGroup, met
   const hidden = useMemo(() => {
     const avail = new Set(available)
     // Installed apps not pinned to the sidebar are Not shown too.
-    const unlisted = available.filter(id => isApp(id) && !pinnedIds.has(id))
+    const unlisted = available.filter(id => (isApp(id) || isSampleExtra(id)) && !pinnedIds.has(id))
     return [...new Set([...layout.hidden.filter(id => avail.has(id)), ...unpinnedApps, ...unlisted])]
   }, [layout.hidden, available, unpinnedApps, isApp, pinnedIds])
 

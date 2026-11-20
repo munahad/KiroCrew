@@ -7,14 +7,14 @@
  */
 import { useCallback, type ReactNode } from 'react'
 import { useQuery } from '@tanstack/react-query'
-import { Compass, Fullscreen, LayoutGrid, Lightbulb, MessageSquare, Smartphone, SquareTerminal } from 'lucide-react'
+import { Boxes, CalendarCheck, Compass, Fullscreen, LayoutGrid, Lightbulb, Megaphone, MessageSquare, Palette, Smartphone, Square, SquareTerminal } from 'lucide-react'
 
 import CrewAvatar from '../../components/CrewAvatar'
 import { membersRosterQuery } from '../../api/membersQuery'
 import { i18nT } from '../../i18n/t'
 import { getBuiltinSurface, surfaceLabel } from '../../surfaces/registry'
 import { useAppSelector } from '../../store'
-import { FEEDBACK_ITEM, FOCUS_ITEM, PHONE_ITEM, TERMINAL_ITEM, type ShellZone } from '../../lib/shellLayout'
+import { FEATURE2_ITEM, FEEDBACK_ITEM, FOCUS_ITEM, PHONE_ITEM, TERMINAL_ITEM, placesOf, type ShellZone } from '../../lib/shellLayout'
 import { MATE_PIN_PREFIX, SESSION_PIN_PREFIX } from '../../lib/railLayout'
 
 export interface ShellItemMeta {
@@ -35,6 +35,12 @@ export function shellItemMeta(id: string, size = 16): ShellItemMeta | null {
   if (id === FOCUS_ITEM) return { label: i18nT('app.focus_mode'), icon: <Fullscreen size={size} /> }
   if (id === 'apps') return { label: i18nT('nav.discover'), icon: <Compass size={size} />, path: '/apps' }
   if (id === 'apps-library') return { label: i18nT('nav.library'), icon: <LayoutGrid size={size} />, path: '/apps/library' }
+  // Made-up items (prototype only): the sample apps open Discover; Feature 2 opens nothing.
+  if (id === 'demo-app:release-notes') return { label: i18nT('nav.demo_app_release_notes'), icon: <Megaphone size={size} />, path: '/apps' }
+  if (id === 'demo-app:standup-bot') return { label: i18nT('nav.demo_app_standup_bot'), icon: <CalendarCheck size={size} />, path: '/apps' }
+  if (id === 'demo-app:design-critique') return { label: i18nT('nav.demo_app_design_critique'), icon: <Palette size={size} />, path: '/apps' }
+  if (id === 'demo-app:dev-fleet') return { label: i18nT('nav.demo_app_dev_fleet'), icon: <Boxes size={size} />, path: '/apps' }
+  if (id === FEATURE2_ITEM) return { label: i18nT('nav.demo_tool_feature_2'), icon: <Square size={size} /> }
   const s = getBuiltinSurface(id)
   return s ? { label: surfaceLabel(s), icon: s.icon, path: s.route } : null
 }
@@ -64,8 +70,8 @@ export function canSitInBar(_id: string): boolean {
   return true
 }
 
-/** Every place an item may go: all three, for every movable item. The logo
- *  and sidebar toggle are not items, so they never reach this. */
-export function zonesFor(_id: string): ShellZone[] {
-  return ['sidebar', 'top', 'bottom']
+/** Every area an item may go to (lib/shellLayout.ts placesOf): all three for
+ *  most items; the logo, the sidebar and the top bar only. */
+export function zonesFor(id: string): ShellZone[] {
+  return placesOf(id).filter((z): z is ShellZone => z !== 'none')
 }

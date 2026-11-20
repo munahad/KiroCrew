@@ -11,11 +11,17 @@
  *
  * One listener for the whole shell, so every icon-only item gets the label
  * without each component wiring its own.
+ *
+ * In option 1's edit mode (checkpoint 56) every item names itself on hover or
+ * keyboard focus, in the same label, ABOVE the item, so it never covers the
+ * item's handle or its ‹ › ⋯ beside it. In the top bar, with no room above,
+ * it shows below the bar instead.
  */
 import { useEffect, useState } from 'react'
 
 import { OverlayPortal } from '../../components/overlayRoot'
 import { isWidgetItem, useLayoutEditing } from '../../lib/shellLayout'
+import { useDragOnlyEditing } from './dragOnlyEdit'
 
 interface Tip { text: string; status?: string; x: number; y: number; side: 'below' | 'above' | 'right' }
 
@@ -34,10 +40,53 @@ const iconOnly = (cell: HTMLElement) => (cell.innerText || '').trim().length ===
 
 export function HoverLabels() {
   const editing = useLayoutEditing()
+  const dragOnly = useDragOnlyEditing()
   const [tip, setTip] = useState<Tip | null>(null)
 
+  // Option 1's edit mode: every item's name, above it.
   useEffect(() => {
-    if (editing) { setTip(null); return }
+    if (!dragOnly) return
+    let timer: number | undefined
+    let current: Element | null = null
+    const hide = () => { window.clearTimeout(timer); current = null; setTip(null) }
+    const show = (target: Element) => {
+      const item = target.closest<HTMLElement>('[data-layout-item]')
+      if (!item) { hide(); return }
+      if (item === current) return
+      current = item
+      const text = item.getAttribute('aria-label') ?? ''
+      if (!text) { hide(); return }
+      // The whole cell or row (item, handle and controls), so the label clears them all.
+      const box = (item.closest('[data-bar-item], [data-column-row], [data-testid="sidebar-logo-item"]') ?? item).getBoundingClientRect()
+      const below = box.top < 36
+      window.clearTimeout(timer)
+      timer = window.setTimeout(() => setTip({ text, x: box.left + box.width / 2, y: below ? box.bottom + 6 : box.top - 6, side: below ? 'below' : 'above' }), 250)
+    }
+    const over = (e: PointerEvent) => { if (e.target instanceof Element) show(e.target) }
+    const focus = (e: FocusEvent) => { if (e.target instanceof Element && (e.target as HTMLElement).matches(':focus-visible')) show(e.target) }
+    const out = (e: PointerEvent) => {
+      const to = e.relatedTarget as Element | null
+      if (!to || !to.closest('[data-layout-item], [data-bar-item], [data-column-row]')) hide()
+    }
+    window.addEventListener('pointerover', over)
+    window.addEventListener('pointerout', out)
+    window.addEventListener('focusin', focus)
+    window.addEventListener('pointerdown', hide, true)
+    window.addEventListener('dragstart', hide, true)
+    window.addEventListener('scroll', hide, true)
+    return () => {
+      hide()
+      window.removeEventListener('pointerover', over)
+      window.removeEventListener('pointerout', out)
+      window.removeEventListener('focusin', focus)
+      window.removeEventListener('pointerdown', hide, true)
+      window.removeEventListener('dragstart', hide, true)
+      window.removeEventListener('scroll', hide, true)
+    }
+  }, [dragOnly])
+
+  useEffect(() => {
+    if (editing) { if (!dragOnly) setTip(null); return }
     let held: HTMLElement | null = null
     let timer: number | undefined
     const release = () => {
@@ -95,15 +144,16 @@ export function HoverLabels() {
       window.removeEventListener('keydown', key)
       window.removeEventListener('scroll', hide, true)
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [editing])
 
-  if (!tip || editing) return null
+  if (!tip || (editing && !dragOnly)) return null
   const transform = tip.side === 'right' ? 'translateY(-50%)' : tip.side === 'above' ? 'translate(-50%, -100%)' : 'translateX(-50%)'
   return (
     <OverlayPortal>
       <div
         role="tooltip"
-        data-testid="hover-label"
+        data-testid={editing ? 'edit-hover-label' : 'hover-label'}
         className="pointer-events-none fixed z-[9999] flex max-w-[320px] items-center gap-2 rounded-md border border-border bg-card px-2.5 py-1 text-[13px] font-medium text-text shadow-lg"
         style={{ left: tip.x, top: tip.y, transform }}
       >

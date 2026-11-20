@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
-import { ArrowLeftToLine, PanelLeft } from 'lucide-react'
+import { ArrowLeftToLine, GripVertical, PanelLeft } from 'lucide-react'
 import { GithubIcon, DiscordIcon } from '../../components/BrandIcon'
 import type { getThemeBranding } from '../../themeBranding'
 import { i18nT } from '../../i18n/t'
@@ -8,6 +8,10 @@ import { uiLocation } from '../../uiLocations/uiLocation'
 import { useGuideRevealScope } from '../../guide/GuideRevealScope'
 import { OverlayPortal } from '../../components/overlayRoot'
 import { useNavTip } from './navTip'
+import { LOGO_ITEM } from '../../lib/shellLayout'
+import { ItemMoreButton, useLayoutItemProps } from '../layout/keyboardMove'
+import { useDragOnlyEditing } from '../layout/dragOnlyEdit'
+import { startItemDrag } from '../layout/barItems'
 
 /** Glyph inside the nav-rail header's expand/collapse button — the same
  *  load-proof contract as MobileNavGlyph, with the rail's own geometry. When
@@ -189,6 +193,32 @@ function BrandText({ botName }: { botName: string }) {
   )
 }
 
+/** The logo at the sidebar's head. In option 1's edit mode (checkpoint 56) it
+ *  is an item like any other: a drag handle and a ⋯ menu (Move to Top bar,
+ *  Remove) on hover or focus, draggable to the top bar, and the keyboard path
+ *  of every item (Space to pick up, Delete to remove). */
+function EditableLogo({ collapsed, children }: { collapsed: boolean; children: React.ReactNode }) {
+  const on = useDragOnlyEditing()
+  const label = i18nT('nav.layout_locked_logo')
+  const kbd = useLayoutItemProps(LOGO_ITEM, 'sidebar', label)
+  if (!on) return <>{children}</>
+  return (
+    <div data-testid="sidebar-logo-item" className={`group/edit relative flex min-w-0 items-center gap-1 ${collapsed ? '' : 'flex-1'}`}>
+      {/* eslint-disable-next-line jsx-a11y/no-static-element-interactions -- `kbd` makes it a focusable button with its keyboard path */}
+      <div
+        {...kbd}
+        draggable
+        onDragStart={e => startItemDrag(e, LOGO_ITEM)}
+        className="flex min-w-0 flex-1 items-center gap-1 rounded-md outline-none cursor-grab active:cursor-grabbing [&_*]:cursor-grab hover:bg-bg-hover focus-visible:ring-2 focus-visible:ring-accent"
+      >
+        {!collapsed && <GripVertical size={12} aria-hidden="true" className="shrink-0 text-muted opacity-0 group-hover/edit:opacity-100 group-focus-within/edit:opacity-100" />}
+        {children}
+      </div>
+      <ItemMoreButton id={LOGO_ITEM} zone="sidebar" label={label} inline />
+    </div>
+  )
+}
+
 /**
  * The desktop sidebar's header (round 1): the optional logo, and the collapse
  * button as its own control. The logo used to BE the collapse toggle, so a
@@ -212,10 +242,12 @@ export function RailHeader({ effectiveCollapsed, toggleNav, avatar, branding, bo
   return (
     <div data-testid="sidebar-header" className={`relative flex mb-1.5 ${effectiveCollapsed ? 'flex-col items-center gap-1 mt-1' : 'items-center gap-2 min-h-7'}`}>
       {showLogo && (
-        <span data-layout-logo className={`flex items-center gap-2.5 min-w-0 ${effectiveCollapsed ? '' : 'flex-1 pl-0.5'}`}>
-          <RailHeaderGlyph avatar={avatar} boxClass={branding?.logoClass ?? (effectiveCollapsed ? 'w-9 h-9' : 'w-7 h-7')} iconSize={effectiveCollapsed ? 24 : 18} />
-          {!effectiveCollapsed && <BrandText botName={botName} />}
-        </span>
+        <EditableLogo collapsed={effectiveCollapsed}>
+          <span data-layout-logo className={`flex items-center gap-2.5 min-w-0 ${effectiveCollapsed ? '' : 'flex-1 pl-0.5'}`}>
+            <RailHeaderGlyph avatar={avatar} boxClass={branding?.logoClass ?? (effectiveCollapsed ? 'w-9 h-9' : 'w-7 h-7')} iconSize={effectiveCollapsed ? 24 : 18} />
+            {!effectiveCollapsed && <BrandText botName={botName} />}
+          </span>
+        </EditableLogo>
       )}
       {!showLogo && !effectiveCollapsed && <span className="flex-1" />}
       <button

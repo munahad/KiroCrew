@@ -2,9 +2,9 @@ import { afterEach, describe, expect, it } from 'vitest'
 
 import {
   HISTORY_ITEM, LOGO_ITEM, NOTIFY_ITEM, PROFILE_ITEM, REMOTE_ITEM, STATUS_ITEM, WIDGET_ITEMS, canRemove, isWidgetItem, moveItem, placesOf, readLogoShown,
-  readPlace, resetShellLayout,
+  readPlace, readShellPlacement, resetShellLayout, zoneOf,
 } from './shellLayout'
-import { barOrder } from './barGrid'
+import { barIds, barOrder } from './barGrid'
 
 afterEach(() => { resetShellLayout(); localStorage.clear() })
 
@@ -51,12 +51,16 @@ describe('round 1 shared store rules', () => {
     expect(readPlace(STATUS_ITEM)).toBe(status)
   })
 
-  it('makes the logo optional, in the sidebar or nowhere', () => {
+  it('lets the logo sit in the sidebar or the top bar, never the bottom bar, or be removed', () => {
     expect(readLogoShown()).toBe(true)
     moveItem(LOGO_ITEM, 'top')
-    expect(readLogoShown()).toBe(true)
-    moveItem(LOGO_ITEM, null)
     expect(readLogoShown()).toBe(false)
+    expect(zoneOf(LOGO_ITEM, readShellPlacement(), false)).toBe('top')
+    expect(barIds('top')).toContain(LOGO_ITEM)
+    moveItem(LOGO_ITEM, 'bottom')
+    expect(zoneOf(LOGO_ITEM, readShellPlacement(), false)).toBe('top')
+    moveItem(LOGO_ITEM, null)
+    expect(zoneOf(LOGO_ITEM, readShellPlacement(), false)).toBeNull()
     moveItem(LOGO_ITEM, 'sidebar')
     expect(readLogoShown()).toBe(true)
   })

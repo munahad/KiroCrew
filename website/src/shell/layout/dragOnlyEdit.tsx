@@ -10,19 +10,20 @@
  *
  * Desktop only: the phone has no layout editing (round 1).
  */
-import { useEffect, useRef } from 'react'
+import { useEffect, useRef, useState } from 'react'
 
 import { Btn } from '../../components/ui'
 import { OverlayPortal } from '../../components/overlayRoot'
 import { i18nT } from '../../i18n/t'
 import { useIsMobile } from '../../hooks/useIsMobile'
 import { useRailWidth } from '../../hooks/useRailWidth'
+import { IS_MAC } from '../../hooks/useKeyboardShortcuts'
 import { noteRemoved, useEditOption } from '../../lib/editOption'
 import {
   MATE_PIN_PREFIX, RAIL_LAYOUT_CHANGED_EVENT, RAIL_LAYOUT_KEY, SESSION_PIN_PREFIX, isEntityPin, removePin, updateRail,
 } from '../../lib/railLayout'
 import {
-  HISTORY_ITEM, NOTIFY_ITEM, PROFILE_ITEM, REMOTE_ITEM, SEARCH_ITEM, STATUS_ITEM, canRemove, announceLayout, moveItem, removeFromBars, resetShellLayout,
+  HISTORY_ITEM, LOGO_ITEM, NOTIFY_ITEM, PROFILE_ITEM, REMOTE_ITEM, SEARCH_ITEM, STATUS_ITEM, canRemove, announceLayout, isLayoutEditing, moveItem, removeFromBars, resetShellLayout,
   setLayoutEditing, useLayoutAnnouncement, useLayoutEditing,
 } from '../../lib/shellLayout'
 import { clearBarCells } from '../../lib/barGrid'
@@ -30,7 +31,7 @@ import { clearSidebarRows } from '../../lib/sidebarGrid'
 import { safeGetItem, safeRemoveItem, safeSetItem } from '../../utils/safeStorage'
 import { shellItemMeta } from './shellItems'
 import { STATUS_BAR_EDIT_HEIGHT } from '../statusbar/shellStatusBar'
-import { readHeldItem, useHeldItem } from './keyboardMove'
+import { putBack, readHeldItem, spotOf, useHeldItem, type ItemSpot } from './keyboardMove'
 
 /** True while Edit layout is on and option 1 (on the window) is the one shown. */
 export function useDragOnlyEditing(): boolean {
@@ -60,6 +61,8 @@ const STORES: readonly [key: string, event: string][] = [
   ['mc-remote-place', 'mc:two-place-changed'],
   ['mc-history-place', 'mc:two-place-changed'],
   ['mc-profile-place', 'mc:two-place-changed'],
+  ['mc-notify-place', 'mc:two-place-changed'],
+  ['mc-logo-hidden', 'mc:logo-changed'],
   [RAIL_LAYOUT_KEY, RAIL_LAYOUT_CHANGED_EVENT],
   ['mc-sidebar-rows', 'mc:sidebar-rows-changed'],
   ['mc-bar-cells-top', 'mc:bar-cells-changed'],
@@ -90,6 +93,7 @@ const WIDGET_LABEL_KEY: Record<string, string> = {
   [PROFILE_ITEM]: 'nav.profile_menu_name',
   [STATUS_ITEM]: 'nav.layout_status_item',
   [NOTIFY_ITEM]: 'nav.layout_notifications_item',
+  [LOGO_ITEM]: 'nav.layout_locked_logo',
 }
 
 /** A name for an announcement when the caller has none to hand. */
@@ -102,11 +106,36 @@ export function layoutItemLabel(id: string): string {
   return id
 }
 
+/* ── Undo (option 1, checkpoint 56) ──
+   Every removal in this edit session, newest last. Undo (the message's button
+   or Cmd/Ctrl+Z) puts back the newest one, in its exact old spot, and leaves
+   every other change alone, so removals are undone one at a time. Cleared on
+   Done. */
+interface Removed { id: string; label: string; spot: ItemSpot | null; at: number }
+const UNDO_EVENT = 'mc:layout-removed-stack'
+let removedStack: Removed[] = []
+function setRemovedStack(next: Removed[]): void {
+  removedStack = next
+  window.dispatchEvent(new Event(UNDO_EVENT))
+}
+export const readRemovedStack = (): readonly Removed[] => removedStack
+function useRemovedStack(): Removed[] {
+  const [h, setH] = useState(removedStack)
+  useEffect(() => {
+    const sync = () => setH(removedStack)
+    window.addEventListener(UNDO_EVENT, sync)
+    return () => window.removeEventListener(UNDO_EVENT, sync)
+  }, [])
+  return h
+}
+export function clearRemovedStack(): void { if (removedStack.length) setRemovedStack([]) }
+
 /** Remove one item from the window (Not shown). `label`: its name as shown.
- *  The area's "+" brings it back. */
+ *  The area's "+" brings it back; in edit mode Undo does too. */
 export function hideFromCanvas(id: string, label = layoutItemLabel(id)): void {
   // "You" and the fixed items are never removed (round 1, lib/shellLayout.ts).
   if (!canRemove(id)) return
+  const spot = spotOf(id)
   if (isEntityPin(id)) {
     removeFromBars(id)
     updateRail(l => removePin(l, id))
@@ -114,7 +143,18 @@ export function hideFromCanvas(id: string, label = layoutItemLabel(id)): void {
     moveItem(id, null)
   }
   noteRemoved(id)
+  if (isLayoutEditing()) setRemovedStack([...removedStack.filter(h => h.id !== id), { id, label, spot, at: Date.now() }])
   announceLayout(i18nT('nav.layout_removed', { item: label }))
+}
+
+/** Put back the newest removal, in its old spot. Returns whether one was. */
+export function undoRemove(): boolean {
+  const h = removedStack[removedStack.length - 1]
+  if (!h) return false
+  setRemovedStack(removedStack.slice(0, -1))
+  if (h.spot) putBack(h.id, h.spot)
+  announceLayout(i18nT('nav.layout_restored', { item: h.label }))
+  return true
 }
 
 /* ── The page ── */
@@ -148,6 +188,9 @@ export function PageHideZone() {
 
 /* ── Done and Reset ── */
 
+/** Long enough to reach by keyboard or switch; paused while pointed at or focused. */
+const UNDO_MS = 10_000
+
 /** A small floating bar over the page: what to do, Reset and Done. The only
  *  control option 1 adds besides each item's own and each area's "+".
  *
@@ -174,18 +217,40 @@ export function DragOnlyBar() {
   }, [on])
   // Escape leaves edit mode, unless it is cancelling a keyboard move or a
   // control (an open menu or add list) handled it first.
+  // Cmd/Ctrl+Z puts back the newest removal.
   useEffect(() => {
     if (!on) return
     const onKey = (e: KeyboardEvent) => {
       if (e.key === 'Escape' && !readHeldItem() && !e.defaultPrevented) setLayoutEditing(false)
+      if ((e.metaKey || e.ctrlKey) && !e.shiftKey && !e.altKey && e.key.toLowerCase() === 'z' && removedStack.length) {
+        const t = e.target
+        if (t instanceof Element && t.closest('input, textarea, [contenteditable="true"]')) return
+        e.preventDefault()
+        undoRemove()
+      }
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
   }, [on])
+  // Undo never outlives edit mode.
+  useEffect(() => { if (!on) clearRemovedStack() }, [on])
+  // The message names the newest removal; it fades after a while (paused
+  // while pointed at or focused), and Cmd/Ctrl+Z keeps working until Done.
+  const stack = useRemovedStack()
+  const last = stack[stack.length - 1] ?? null
+  const [shownAt, setShownAt] = useState<number | null>(null)
+  const [paused, setPaused] = useState(false)
+  useEffect(() => { setShownAt(last ? Date.now() : null) }, [last])
+  useEffect(() => {
+    if (shownAt === null || paused) return
+    const t = window.setTimeout(() => setShownAt(null), UNDO_MS)
+    return () => window.clearTimeout(t)
+  }, [shownAt, paused])
 
   if (!on) return null
   const reset = () => {
     resetShellLayout(); clearBarCells(); clearSidebarRows()
+    clearRemovedStack()
     announceLayout(i18nT('nav.layout_reset_done'))
   }
   return (
@@ -198,6 +263,22 @@ export function DragOnlyBar() {
         // the bottom-bar items' arrows and "⋯", which show just above them.
         style={{ left: railWidth, bottom: STATUS_BAR_EDIT_HEIGHT + 36 }}
       >
+        {last && shownAt !== null && (
+          // Pausing the fade on hover and focus (WCAG 2.2.1); the removal itself is read out by the live region above.
+          // eslint-disable-next-line jsx-a11y/no-static-element-interactions
+          <div
+            data-testid="drag-only-undo"
+            onPointerEnter={() => setPaused(true)}
+            onPointerLeave={() => setPaused(false)}
+            onFocus={() => setPaused(true)}
+            onBlur={() => setPaused(false)}
+            className="pointer-events-auto flex max-w-full items-center gap-2 rounded-xl border border-border bg-bg-elevated py-1.5 pl-3 pr-1.5 text-[13px] text-text shadow-xl"
+          >
+            <span className="min-w-0 truncate">{i18nT('nav.layout_removed_short', { item: last.label })}</span>
+            <span aria-hidden="true" className="text-muted">·</span>
+            <Btn onClick={() => undoRemove()} aria-keyshortcuts={IS_MAC ? 'Meta+Z' : 'Control+Z'}>{i18nT('nav.layout_undo')}</Btn>
+          </div>
+        )}
         <div
           ref={barRef}
           tabIndex={-1}

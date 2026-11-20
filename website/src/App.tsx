@@ -87,7 +87,7 @@ import { guideTarget } from './uiLocations/targetRegistry'
 import { useAppShell } from './shell/appShell'
 import { ShellHeader } from './shell/topbar/shellHeader'
 import { ShellStatusBar } from './shell/statusbar/shellStatusBar'
-import { useBarHasContent, useLayoutEditing, useLayoutWindowLocked, setLayoutEditing } from './lib/shellLayout'
+import { useAreaHasContent, useBarHasContent, useLayoutEditing, useLayoutWindowLocked, setLayoutEditing } from './lib/shellLayout'
 import { LayoutZoneOutlines } from './shell/layout/layoutZones'
 import { EditOptionSwitcher } from './shell/layout/editOptionSwitcher'
 import { HoverLabels } from './shell/layout/hoverLabels'
@@ -95,6 +95,7 @@ import { DragGhost } from './shell/layout/dragGhost'
 import { DragOnlyBar, PageHideZone, usePageStandIn } from './shell/layout/dragOnlyEdit'
 import { LayoutItemKeyboard } from './shell/layout/keyboardMove'
 import { ShellNavRail } from './shell/nav/navRail'
+import { OPEN_RAIL_CUSTOMIZE_EVENT } from './shell/nav/railSettingsFlyout'
 import { NavItem, NavBadge } from './shell/nav/navRow'
 
 // Lazy on purpose: the update-found popup (its policy module, Trans runtime
@@ -315,6 +316,10 @@ export default function App() {
   // Drawn when anything is placed in it (items or widgets), or while editing.
   const bottomBarHasContent = useBarHasContent('bottom')
   const showBottomBar = bottomBarHasContent || layoutEditing
+  // Checkpoint 56: the top bar and the sidebar hide too when empty, outside
+  // edit mode (desktop). While editing they come back as empty drop areas.
+  const topHasContent = useAreaHasContent('top')
+  const sidebarHasContent = useAreaHasContent('sidebar')
   const {
     isEmbed, isPopout, initialPopoutPath, updateAvailable, terminalEnabled, terminalPoppedOut,
     bottomTerminalOpen, mobileConnect, activeSlotProject, terminalPosition, navigate, mayLeaveForNavigation,
@@ -333,6 +338,16 @@ export default function App() {
   // While editing, the middle row gives up the Edit layout panel's width, so the
   // docked panel never covers the page (the top and bottom bars stay full width).
   const editRoom = layoutEditing && !isMobile && !focusActive
+  const hideTop = !isMobile && !focusActive && !layoutEditing && !topHasContent
+  const hideNav = !isMobile && !focusActive && !layoutEditing && !sidebarHasContent
+  // The You menu's Edit layout must work with the sidebar (whose rail usually
+  // listens for it) hidden.
+  useEffect(() => {
+    if (isMobile) return
+    const open = () => setLayoutEditing(true)
+    window.addEventListener(OPEN_RAIL_CUSTOMIZE_EVENT, open)
+    return () => window.removeEventListener(OPEN_RAIL_CUSTOMIZE_EVENT, open)
+  }, [isMobile])
   // Design exploration: the desktop top bar is drawn only when it has something
   // in it (search, status, placed items, or a pending update), or while editing
   // as a drop target. Empty, its row collapses and each page's own header is
@@ -654,8 +669,8 @@ export default function App() {
             : `"topbar topbar topbar" "nav content actbar"${focusActive ? '' : ' "status status status"'}`,
         ...(!isMobile && {
           gridTemplateColumns: bottomDock
-            ? `${focusActive ? 0 : railWidthFor({ isMobile, collapsed: effectiveCollapsed })}px minmax(0,1fr)`
-            : `${focusActive ? 0 : railWidthFor({ isMobile, collapsed: effectiveCollapsed })}px minmax(0,1fr) auto`,
+            ? `${focusActive || hideNav ? 0 : railWidthFor({ isMobile, collapsed: effectiveCollapsed })}px minmax(0,1fr)`
+            : `${focusActive || hideNav ? 0 : railWidthFor({ isMobile, collapsed: effectiveCollapsed })}px minmax(0,1fr) auto`,
           // Transition fires only when the template string itself changes (the
           // collapse toggle) — content-driven resizes of the auto track (e.g.
           // the Activity panel opening) don't alter the value, so keeping this
@@ -665,6 +680,10 @@ export default function App() {
         // Focus mode collapses the chrome tracks. Inline so it beats the Tailwind
         // `grid-rows-[42px_...]` class rather than having to fight it there, and
         // so the one platform that needs a gutter (see FOCUS_INSET) can keep it.
+        // An empty top bar (checkpoint 56): its row collapses.
+        ...(hideTop && {
+          gridTemplateRows: bottomDock ? '0px minmax(0,1fr) auto auto' : '0px minmax(0,1fr) auto',
+        }),
         ...(focusActive && {
           gridTemplateRows: bottomDock
             ? `${FOCUS_INSET}px minmax(0,1fr) auto`
@@ -762,7 +781,7 @@ export default function App() {
         </>
       )}
 
-      <ShellHeader shell={shell} />
+      {!hideTop && <ShellHeader shell={shell} />}
 
       {agentSwitchNotice && <AgentSwitchNoticeBanner notice={agentSwitchNotice} />}
 
@@ -818,7 +837,7 @@ export default function App() {
         </>
       )}
 
-      <ShellNavRail shell={shell} />
+      {!hideNav && <ShellNavRail shell={shell} />}
 
       {/* Content */}
       <div

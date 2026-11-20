@@ -16,13 +16,13 @@
  * pages (and option 2's list). Add them here if review asks for it.
  */
 import { useEffect, useId, useLayoutEffect, useRef, useState, type CSSProperties, type ReactNode } from 'react'
-import { ArrowLeftRight, Bell, Fullscreen, Lightbulb, PanelLeft, Plug, Plus, Search, Smartphone, SquareTerminal } from 'lucide-react'
+import { ArrowLeftRight, Bell, Fullscreen, PanelLeft, Plug, Plus, Search, SquareTerminal } from 'lucide-react'
 
 import { OverlayPortal } from '../../components/overlayRoot'
 import { i18nT } from '../../i18n/t'
-import { readRailLayout } from '../../lib/railLayout'
+import { isDemoApp, readRailLayout } from '../../lib/railLayout'
 import {
-  FEEDBACK_ITEM, FOCUS_ITEM, HISTORY_ITEM, LOGO_ITEM, NOTIFY_ITEM, PHONE_ITEM, SEARCH_ITEM, STATUS_ITEM, TERMINAL_ITEM,
+  FEATURE2_ITEM, FOCUS_ITEM, HISTORY_ITEM, IN_YOU_MENU, LOGO_ITEM, NOTIFY_ITEM, SAMPLE_EXTRA_APPS, SEARCH_ITEM, STATUS_ITEM, TERMINAL_ITEM, isSampleExtra,
   announceLayout, placesOf, readShellPlacement, zoneOf, type ShellZone,
 } from '../../lib/shellLayout'
 import { columnIdsOf } from '../../lib/sidebarGrid'
@@ -52,7 +52,8 @@ export function notShownFor(zone: ShellZone): AddItem[] {
   const out: AddItem[] = []
   const seen = new Set<string>()
   const add = (id: string, label: string | undefined, icon: ReactNode, kind: string) => {
-    if (!label || seen.has(id)) return
+    // Never what the You menu already holds (no duplicated features).
+    if (!label || seen.has(id) || IN_YOU_MENU.includes(id)) return
     seen.add(id)
     if (!placesOf(id).includes(zone)) return
     if (zoneOf(id, placement, onSidebar.has(id)) !== null) return
@@ -65,16 +66,23 @@ export function notShownFor(zone: ShellZone): AddItem[] {
   add(STATUS_ITEM, i18nT('nav.layout_status_item'), <Plug size={16} />, tools)
   add(NOTIFY_ITEM, i18nT('nav.layout_notifications_item'), <Bell size={16} />, tools)
   if (terminalOn) add(TERMINAL_ITEM, i18nT('app.terminal'), <SquareTerminal size={16} />, tools)
-  add(PHONE_ITEM, i18nT('app.connect_your_phone'), <Smartphone size={16} />, tools)
-  add(FEEDBACK_ITEM, i18nT('nav.send_feedback'), <Lightbulb size={16} />, tools)
   add(FOCUS_ITEM, i18nT('app.focus_mode'), <Fullscreen size={16} />, tools)
+  // Made-up placeholder (prototype only): a plain icon that opens nothing.
+  const f2 = shellItemMeta(FEATURE2_ITEM)
+  if (f2) add(FEATURE2_ITEM, f2.label, f2.icon, tools)
   const pages = i18nT('nav.layout_cat_pages')
   for (const id of readRailLayout().hidden) {
     const m = shellItemMeta(id)
-    if (m) add(id, m.label, m.icon, pages)
+    if (m) add(id, m.label, m.icon, isDemoApp(id) || isSampleExtra(id) ? (id === FEATURE2_ITEM ? tools : i18nT('nav.layout_cat_apps')) : pages)
   }
   const apps = i18nT('nav.layout_cat_apps')
   for (const a of shellApps) add(a.id, a.label, a.icon, apps)
+  // Made-up apps (prototype only), not pinned to start with. A real
+  // installed app of the same name is listed instead.
+  for (const id of SAMPLE_EXTRA_APPS) {
+    const m = shellItemMeta(id)
+    if (m && !out.some(x => x.label === m.label)) add(id, m.label, m.icon, apps)
+  }
   return out.sort((a, b) => a.label.localeCompare(b.label))
 }
 
@@ -124,7 +132,7 @@ function AddList({ zone, anchor, onAdd, onClose }: {
   const [, setTick] = useState(0)
   const inputRef = useRef<HTMLInputElement>(null)
   const popRef = useRef<HTMLDivElement>(null)
-  const [pos, setPos] = useState<{ left: number; top: number; maxHeight: number } | null>(null)
+  const [pos, setPos] = useState<{ left: number; top?: number; bottom?: number; maxHeight: number } | null>(null)
   const listId = useId()
 
   // Read fresh on every render: the stores change under it as items are added.
@@ -134,16 +142,28 @@ function AddList({ zone, anchor, onAdd, onClose }: {
   useEffect(() => { setActive(a => Math.min(a, Math.max(0, results.length - 1))) }, [results.length])
   useEffect(() => { setActive(0) }, [q])
 
-  // Under the "+", or above it when there is no room below (the bottom bar).
+  // Right next to its "+", never over it (checkpoint 56): upward from the
+  // bottom bar, its bottom edge just above the "+"; below the "+" in the top
+  // bar, kept on screen; beside it in the sidebar, its top level with the "+"
+  // (or its bottom, near the window's foot).
   useLayoutEffect(() => {
     const r = anchor.current?.getBoundingClientRect()
     if (!r) return
-    const below = window.innerHeight - r.bottom - 12
-    const above = r.top - 12
-    const maxHeight = Math.min(360, Math.max(below, above))
-    const top = below >= Math.min(240, above) ? r.bottom + 4 : Math.max(8, r.top - 4 - maxHeight)
-    setPos({ left: Math.max(8, Math.min(r.left, window.innerWidth - 280)), top, maxHeight })
-  }, [anchor])
+    const W = 260, GAP = 6
+    if (zone === 'bottom') {
+      setPos({ left: Math.max(8, Math.min(r.left, window.innerWidth - W - 8)), bottom: window.innerHeight - r.top + GAP, maxHeight: Math.min(360, r.top - GAP - 8) })
+    } else if (zone === 'top') {
+      // At the bar's right end, its right edge lines up with the "+".
+      const left = r.left + W > window.innerWidth - 8 ? r.right - W : r.left
+      setPos({ left: Math.max(8, left), top: r.bottom + GAP, maxHeight: Math.min(360, window.innerHeight - r.bottom - GAP - 8) })
+    } else {
+      const left = Math.min(r.right + GAP, window.innerWidth - W - 8)
+      const room = window.innerHeight - r.top - 8
+      setPos(room >= 240
+        ? { left, top: r.top, maxHeight: Math.min(360, room) }
+        : { left, bottom: window.innerHeight - r.bottom, maxHeight: Math.min(360, r.bottom - 8) })
+    }
+  }, [anchor, zone])
   const placed = pos !== null
   useEffect(() => { if (placed) inputRef.current?.focus() }, [placed])
   // A press outside closes it.
@@ -197,7 +217,7 @@ function AddList({ zone, anchor, onAdd, onClose }: {
         ref={popRef}
         data-testid={`layout-area-add-list-${zone}`}
         className="fixed z-[86] flex w-[260px] flex-col overflow-hidden rounded-xl border border-border bg-bg-elevated text-text shadow-2xl"
-        style={pos ? { left: pos.left, top: pos.top, maxHeight: pos.maxHeight } : { visibility: 'hidden' }}
+        style={pos ? { left: pos.left, top: pos.top, bottom: pos.bottom, maxHeight: pos.maxHeight } : { visibility: 'hidden' }}
       >
         <label className="m-2 flex items-center gap-2 rounded-lg border border-border bg-bg px-2.5 py-1.5 focus-within:border-accent">
           <Search size={14} aria-hidden="true" className="shrink-0 text-muted" />

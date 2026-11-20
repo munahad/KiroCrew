@@ -1,7 +1,7 @@
 import { surfaceLabel } from '../../surfaces/registry'
 import { railWidthFor } from '../../hooks/useRailWidth'
 import { FOCUS_INSET } from '../../hooks/useFocusMode'
-import { CalendarCheck, Coins, Compass, LayoutGrid, Megaphone, SquareTerminal, Smartphone, Search as SearchIcon } from 'lucide-react'
+import { Coins, Compass, LayoutGrid, Pin, SquareTerminal, Smartphone, Search as SearchIcon } from 'lucide-react'
 import { motion } from 'framer-motion'
 import { toggleBottomTerminal } from '../../hooks/useBottomTerminal'
 import { focusPopout as focusTerminalPopout } from '../../utils/terminalPopout'
@@ -15,7 +15,7 @@ import { PinnedRailGroups } from './railPins'
 import { forwardRailContextMenu, pinAtPoint } from './railPinDrop'
 import { RAIL_PIN_MIME } from '../../lib/railLayout'
 import {
-  isWidgetItem, isWindowToggle, moveItem, removeFromBars, setSidebarMembership, useLayoutEditing, useLogoShown, useShellPlacement, useWidgetsIn,
+  FEATURE2_ITEM, SAMPLE_EXTRA_IDS, isSampleExtra, isWidgetItem, isWindowToggle, moveItem, removeFromBars, setSidebarMembership, useLayoutEditing, useLogoShown, useShellPlacement, useWidgetsIn,
 } from '../../lib/shellLayout'
 import { ShellWidget } from '../layout/shellWidgets'
 import { DragOwnedByParent } from '../layout/dragOwner'
@@ -50,9 +50,8 @@ import { coversPaneProps } from '../../hooks/paneVisibility'
 const STATIC_RAIL_IDS = new Set(['chat', 'members', 'schedule', 'artifacts', 'apps', 'apps-library'])
 const railDefaultIsStatic = (id: string) => STATIC_RAIL_IDS.has(id) || id.startsWith('capabilities-')
 /** The two made-up pinned apps' names and icons (prototype only). */
-const demoAppMeta = (id: string) => id === 'demo-app:release-notes'
-  ? { label: i18nT('nav.demo_app_release_notes'), icon: <Megaphone size={16} /> }
-  : { label: i18nT('nav.demo_app_standup_bot'), icon: <CalendarCheck size={16} /> }
+/** A made-up item's label and icon (prototype only; shellItems.tsx). */
+const demoAppMeta = (id: string) => shellItemMeta(id)!
 const railDefaultGroup = (id: string) => (railDefaultIsStatic(id) ? defaultGroupOf(id) : 'apps')
 
 /**
@@ -211,7 +210,7 @@ export function ShellNavRail({ shell }: { shell: AppShell }) {
                 // phone drawer keeps its own fixed search and account rows.
                 ...(isMobile ? [] : sidebarWidgets),
                 ...advertisedNavItems.filter(n => n.group === 'Main').map(n => n.id),
-                'apps', 'apps-library', ...DEMO_APP_IDS,
+                'apps', 'apps-library', ...DEMO_APP_IDS, ...SAMPLE_EXTRA_IDS,
                 ...sortedAppGroup.map(n => n.id),
               ]}
               defaultGroup={railDefaultGroup}
@@ -219,7 +218,7 @@ export function ShellNavRail({ shell }: { shell: AppShell }) {
               meta={id => {
                 if (id === 'apps') return { label: i18nT('nav.discover'), icon: <Compass size={16} /> }
                 if (id === 'apps-library') return { label: i18nT('nav.library'), icon: <LayoutGrid size={16} /> }
-                if (isDemoApp(id)) return demoAppMeta(id)
+                if (isDemoApp(id) || isSampleExtra(id)) return demoAppMeta(id)
                 if (isWindowToggle(id)) return shellItemMeta(id)
                 const n = advertisedNavItems.find(x => x.id === id) ?? allAppGroup.find(x => x.id === id)
                 return n ? { label: surfaceLabel(n), icon: n.icon } : null
@@ -255,10 +254,20 @@ export function ShellNavRail({ shell }: { shell: AppShell }) {
                     badge={<NavBadge navId="apps" collapsed={narrow} appBadges={discoverBadges} />}
                   />
                 )
-                if (isDemoApp(id)) {
-                  // A made-up pinned app (prototype only): it opens Discover.
+                if (isDemoApp(id) || isSampleExtra(id)) {
+                  // A made-up item (prototype only). The sample apps open
+                  // Discover and read as pinned: a small pin on hover. Feature 2
+                  // is a placeholder that opens nothing.
                   const m = demoAppMeta(id)
-                  return <NavItem navId={id} path="/apps" label={label ?? m.label} icon={m.icon} active={false} collapsed={narrow} onClick={closeMobileNav} />
+                  const feature = id === FEATURE2_ITEM
+                  return (
+                    <div className="group/pin relative">
+                      <NavItem navId={id} path={feature ? '#' : '/apps'} label={label ?? m.label} icon={m.icon} active={false} collapsed={narrow} onClick={closeMobileNav} {...(feature ? { onClickOverride: () => {} } : {})} />
+                      {!feature && !narrow && !layoutEditing && (
+                        <Pin size={12} aria-hidden="true" data-testid="sidebar-pin-mark" className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 rotate-45 text-muted opacity-0 group-hover/pin:opacity-100 group-focus-within/pin:opacity-100" />
+                      )}
+                    </div>
+                  )
                 }
                 if (id === 'apps-library') return (
                   <NavItem

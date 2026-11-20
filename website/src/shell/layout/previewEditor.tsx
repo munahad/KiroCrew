@@ -33,8 +33,8 @@ import { i18nT } from '../../i18n/t'
 import { barOrder, cellOf, setItemStyle, useItemStyle } from '../../lib/barGrid'
 import type { RailGroup } from '../../lib/railLayout'
 import {
-  LOGO_ITEM, NOTIFY_ITEM, SEARCH_ITEM, SHELL_ITEM_MIME, announceLayout, canRemove, moveItem, placesOf, readLogoShown, readPlace,
-  readShellPlacement, setLayoutEditing, setLogoShown, setSearchStyle, useLogoShown, useSearchStyle,
+  LOGO_ITEM, NOTIFY_ITEM, SEARCH_ITEM, SHELL_ITEM_MIME, announceLayout, canRemove, moveItem, placesOf, readLogoPlace, readPlace,
+  readShellPlacement, setLayoutEditing, setLogoPlace, setSearchStyle, useLogoShown, useSearchStyle,
   type ShellZone,
 } from '../../lib/shellLayout'
 import { setEditOptionGuard } from '../../lib/editOption'
@@ -80,13 +80,13 @@ export function PreviewEditor({ candidates, columnOf, categoryLabel, repeated, g
   // The layout as it was on open: Cancel and Discard put it back. The logo
   // and the bell keep their own stores, outside the shared snapshot.
   const initial = useRef(snapshotLayout())
-  const initialOwn = useRef({ logo: readLogoShown(), bell: readPlace(NOTIFY_ITEM) })
-  const own = () => ({ logo: readLogoShown(), bell: readPlace(NOTIFY_ITEM) })
+  const initialOwn = useRef({ logo: readLogoPlace(), bell: readPlace(NOTIFY_ITEM) })
+  const own = () => ({ logo: readLogoPlace(), bell: readPlace(NOTIFY_ITEM) })
   const dirty = () => JSON.stringify([snapshotLayout(), own()]) !== JSON.stringify([initial.current, initialOwn.current])
   const revert = () => {
     restoreLayout(initial.current)
     const { logo, bell } = initialOwn.current
-    setLogoShown(logo)
+    setLogoPlace(logo)
     moveItem(NOTIFY_ITEM, bell === 'none' ? null : bell)
   }
   // A band switch waiting on "Keep your changes?"; null when leaving edit mode.
@@ -156,7 +156,8 @@ export function PreviewEditor({ candidates, columnOf, categoryLabel, repeated, g
   const dropAt = (id: string, zone: ShellZone, index: number) => {
     // Refuse what the item may not do (the logo in a bar).
     if (!placesOf(id).includes(zone)) return
-    if (id === LOGO_ITEM) { place(id, zone, labelOf(id)); return }
+    // The logo at the sidebar's head is not a row: it goes back to the head.
+    if (id === LOGO_ITEM && zone === 'sidebar') { place(id, zone, labelOf(id)); return }
     const order = inZone(zone).filter(x => x !== id)
     const before = order[index]
     if (zone === 'top' || zone === 'bottom') moveInto(id, zone, before ? (cellOf(zone, before)?.col ?? 'end') : 'end')
@@ -185,7 +186,7 @@ export function PreviewEditor({ candidates, columnOf, categoryLabel, repeated, g
   }
   const step = (id: string, key: string) => {
     const from = where(id)
-    if (from === 'none' || id === LOGO_ITEM) return
+    if (from === 'none' || (id === LOGO_ITEM && from === 'sidebar')) return
     const to = stepItem(id, from, key)
     if (to) {
       announceStep(labelOf(id), from, to, key)
@@ -285,9 +286,9 @@ export function PreviewEditor({ candidates, columnOf, categoryLabel, repeated, g
         <button
           type="button"
           data-preview-chip={id}
-          // The logo stays at the sidebar's head: shown or not, never dragged.
-          draggable={id !== LOGO_ITEM}
-          onDragStart={e => { setMenu(null); if (id === LOGO_ITEM) e.preventDefault(); else startItemDrag(e, id) }}
+          // The logo drags between the sidebar's head and the top bar (checkpoint 56).
+          draggable
+          onDragStart={e => { setMenu(null); startItemDrag(e, id) }}
           onClick={e => (menu?.id === id ? setMenu(null) : openMenu(id, e.currentTarget))}
           onKeyDown={e => {
             if (e.key.startsWith('Arrow')) { e.preventDefault(); step(id, e.key) }
@@ -298,7 +299,7 @@ export function PreviewEditor({ candidates, columnOf, categoryLabel, repeated, g
           aria-label={x.meta.label}
           aria-describedby="preview-chip-hint"
           title={x.meta.label}
-          className={`flex h-6 min-w-0 flex-1 items-center gap-1.5 rounded-md border px-1.5 pr-5 text-[11px] ${id === LOGO_ITEM ? 'cursor-pointer' : 'cursor-grab active:cursor-grabbing'} ${
+          className={`flex h-6 min-w-0 flex-1 items-center gap-1.5 rounded-md border px-1.5 pr-5 text-[11px] cursor-grab active:cursor-grabbing ${
             on ? 'border-accent bg-accent-subtle text-text-strong' : lit ? 'border-accent/60 bg-bg-hover text-text' : 'border-border bg-bg text-text hover:bg-bg-hover'}`}
         >
           <span className="flex h-3.5 w-3.5 shrink-0 items-center justify-center [&_svg]:h-3.5 [&_svg]:w-3.5">{x.meta.icon}</span>
@@ -485,8 +486,8 @@ export function PreviewEditor({ candidates, columnOf, categoryLabel, repeated, g
                             <li
                               key={id}
                               data-preview-row={id}
-                              draggable={id !== LOGO_ITEM}
-                              onDragStart={e => { if (id === LOGO_ITEM) e.preventDefault(); else startItemDrag(e, id) }}
+                              draggable
+                              onDragStart={e => startItemDrag(e, id)}
                               onPointerEnter={() => setHot(id)}
                               onPointerLeave={() => setHot(h => (h === id ? null : h))}
                               className={`group/row flex items-center gap-2 rounded-lg px-2 py-1.5 cursor-grab active:cursor-grabbing ${lit ? 'bg-bg-hover ring-1 ring-accent/60' : 'hover:bg-bg-hover'}`}

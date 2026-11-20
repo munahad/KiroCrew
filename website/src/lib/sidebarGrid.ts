@@ -107,7 +107,12 @@ export function pushAsideInColumn(ids: readonly string[], rows: Rows, n: number,
 /** Drop `id` at `row` and save every item's row, so the column stays as it looks. */
 export function placeInSidebar(ids: readonly string[], id: string, row: number): Rows {
   const all = ids.includes(id) ? ids : [...ids, id]
-  const out = { ...readSidebarRows(), ...pushAsideInColumn(all, readSidebarRows(), rowCount, id, row) }
+  // The foot rows ("You", status, the bell) keep following the column's end
+  // unless they are the one dropped, so a drop elsewhere never pins "You"
+  // above the terminal row (default foot: Terminal, then You).
+  const placed = pushAsideInColumn(all, readSidebarRows(), rowCount, id, row)
+  for (const x of Object.keys(placed)) if (x !== id && FOOT.has(x) && !(x in readSidebarRows())) delete placed[x]
+  const out = { ...readSidebarRows(), ...placed }
   writeSidebarRows(out)
   return out
 }
