@@ -1,0 +1,103 @@
+/*
+ * Design exploration (checkpoint 58): chrome treatment A, Shared frame
+ * (Codex style). App.tsx puts data-chrome="a-lighter" | "a-darker" on the
+ * dashboard shell outside edit mode (lib/chromeLook.ts). The top bar, sidebar
+ * and bottom bar then sit on one frame background, and the page (with any side
+ * panel of its own, and the docked Activity panel) is a rounded panel set into
+ * the frame with a small inset.
+ *
+ * Only theme tokens: the frame and page colours are mixes of --bg,
+ * --bg-elevated and --text, so they follow every palette in light and dark.
+ *
+ * The frame follows the edited layout: where the top bar, sidebar or bottom
+ * bar is hidden (empty, see App.tsx hideTop / hideNav / showBottomBar), the
+ * page panel gets the inset on that side instead of touching the bar.
+ */
+
+/* ── Frame and page colours ──
+   The default (no data-mode) is the dark palette, like design-tokens.css. */
+[data-chrome="a-lighter"] {
+  --proto-frame: color-mix(in srgb, var(--text) 8%, var(--bg));
+  --proto-page: var(--bg);
+}
+[data-chrome="a-darker"] {
+  --proto-frame: var(--bg);
+  --proto-page: color-mix(in srgb, var(--text) 5%, var(--bg-elevated));
+}
+[data-mode="light"] [data-chrome="a-lighter"] {
+  --proto-frame: var(--bg-elevated);
+  --proto-page: color-mix(in srgb, var(--text) 5%, var(--bg));
+}
+[data-mode="light"] [data-chrome="a-darker"] {
+  --proto-frame: color-mix(in srgb, var(--text) 7%, var(--bg));
+  --proto-page: var(--bg-elevated);
+}
+
+/* ── The frame: one background for the window and its bars ── */
+[data-chrome] {
+  background: var(--proto-frame) !important;
+}
+/* The bars and sidebar drop their own surfaces and sit on the frame. */
+[data-chrome] header.topbar-glass {
+  background: transparent !important;
+  box-shadow: none !important;
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+  border-color: transparent !important;
+}
+[data-chrome] nav.focus-chrome-rail {
+  background: transparent;
+  border-color: transparent;
+  box-shadow: none;
+}
+[data-chrome] [data-shell-bottom-bar] {
+  border-top-color: transparent;
+}
+
+/* ── The page panel ── */
+[data-chrome] > [data-chrome-page],
+[data-chrome] > #activity-bar-slot:not(:empty) {
+  /* Pages that paint bg-bg themselves match the panel. */
+  --bg: var(--proto-page);
+  background: var(--proto-page);
+  border: 1px solid var(--border);
+  overflow: clip;
+}
+[data-chrome] > [data-chrome-page] {
+  border-radius: 12px;
+  margin: 0 8px 0 0;
+}
+[data-chrome][data-chrome-no-top] > [data-chrome-page] { margin-top: 8px; }
+[data-chrome][data-chrome-no-bottom] > [data-chrome-page] { margin-bottom: 8px; }
+[data-chrome][data-chrome-no-nav] > [data-chrome-page] { margin-left: 8px; }
+
+/* The docked Activity panel (a page's own side panel, on the right) joins the
+   page panel: one rounded shape, with the panel's own divider inside it. */
+[data-chrome] > #activity-bar-slot:not(:empty) {
+  height: auto;
+  border-left: 0;
+  border-radius: 0 12px 12px 0;
+  margin: 0 8px 0 0;
+}
+[data-chrome][data-chrome-no-top] > #activity-bar-slot:not(:empty) { margin-top: 8px; }
+[data-chrome][data-chrome-no-bottom] > #activity-bar-slot:not(:empty) { margin-bottom: 8px; }
+[data-chrome] > #activity-bar-slot:not(:empty) ~ [data-chrome-page] {
+  margin-right: 0;
+  border-right: 0;
+  border-radius: 12px 0 0 12px;
+}
+
+/* Side panel docked to the bottom: the panel sits under the page instead. */
+[data-chrome-dock="bottom"] > #activity-bar-slot:not(:empty) {
+  border-left: 1px solid var(--border);
+  border-top: 0;
+  border-radius: 0 0 12px 12px;
+  margin-top: 0 !important;
+}
+[data-chrome-dock="bottom"] > #activity-bar-slot:not(:empty) ~ [data-chrome-page] {
+  margin-right: 8px;
+  margin-bottom: 0 !important;
+  border-right: 1px solid var(--border);
+  border-bottom: 0;
+  border-radius: 12px 12px 0 0;
+}

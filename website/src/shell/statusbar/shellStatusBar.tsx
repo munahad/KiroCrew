@@ -22,6 +22,7 @@ export function ShellStatusBar({ shell }: { shell: AppShell }) {
   return (
     <div
       role="toolbar"
+      data-shell-bottom-bar=""
       aria-label={zoneLabel('bottom')}
       className="flex items-center px-2 text-muted border-t border-border"
       style={{ gridArea: 'status', height: editing ? STATUS_BAR_EDIT_HEIGHT : STATUS_BAR_HEIGHT }}

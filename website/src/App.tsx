@@ -90,6 +90,9 @@ import { ShellStatusBar } from './shell/statusbar/shellStatusBar'
 import { useAreaHasContent, useBarHasContent, useLayoutEditing, useLayoutWindowLocked, setLayoutEditing } from './lib/shellLayout'
 import { LayoutZoneOutlines } from './shell/layout/layoutZones'
 import { EditOptionSwitcher } from './shell/layout/editOptionSwitcher'
+import { PROTOTYPE_TWO_PANELS_PATH, useChromeLook } from './lib/chromeLook'
+import PrototypeSidePanelPage from './pages/prototypeSidePanelPage'
+import './shell/chromeA.css'
 import { HoverLabels } from './shell/layout/hoverLabels'
 import { DragGhost } from './shell/layout/dragGhost'
 import { DragOnlyBar, PageHideZone, usePageStandIn } from './shell/layout/dragOnlyEdit'
@@ -340,6 +343,12 @@ export default function App() {
   const editRoom = layoutEditing && !isMobile && !focusActive
   const hideTop = !isMobile && !focusActive && !layoutEditing && !topHasContent
   const hideNav = !isMobile && !focusActive && !layoutEditing && !sidebarHasContent
+  // Design exploration (checkpoint 58): chrome treatment A, Shared frame, is
+  // drawn outside edit mode only, so edit mode keeps its own look. The frame
+  // follows the layout: chromeA.css insets the page panel where an area is
+  // hidden or empty (data-chrome-no-*).
+  const chromeLook = useChromeLook()
+  const chromeA = !isMobile && !focusActive && !layoutEditing && chromeLook !== 'current' ? chromeLook : null
   // The You menu's Edit layout must work with the sidebar (whose rail usually
   // listens for it) hidden.
   useEffect(() => {
@@ -648,6 +657,11 @@ export default function App() {
       ref={shellRef}
       data-testid="dashboard-shell"
       data-layout-locked={windowLocked ? '' : undefined}
+      data-chrome={chromeA ?? undefined}
+      data-chrome-no-top={chromeA && hideTop ? '' : undefined}
+      data-chrome-no-nav={chromeA && hideNav ? '' : undefined}
+      data-chrome-no-bottom={chromeA && !showBottomBar ? '' : undefined}
+      data-chrome-dock={chromeA && bottomDock ? 'bottom' : undefined}
       className={`relative z-[1] h-full grid ${shellEntered ? '' : 'animate-rise'} overflow-hidden bg-bg p-safe ${isMacElectron || isMacPreview ? `mac-electron ${macFullscreen ? 'mac-fullscreen' : ''}` : ''} ${isWinElectron ? 'win-electron' : ''} ${isLinuxFramelessElectron ? 'linux-electron' : ''} ${isMobile ? 'grid-cols-[minmax(0,1fr)] grid-rows-[42px_minmax(0,1fr)]' : bottomDock ? 'grid-rows-[42px_minmax(0,1fr)_auto_auto]' : 'grid-rows-[42px_minmax(0,1fr)_auto]'}`}
       // Retire the entrance animation once it has played, so re-showing this
       // pane cannot replay it. Guarded on BOTH the keyframe name and the event
@@ -842,6 +856,7 @@ export default function App() {
       {/* Content */}
       <div
         className="flex flex-col min-h-0 min-w-0"
+        data-chrome-page=""
         // Focus mode reclaims the 236px rail column, which leaves everything in
         // this column — the chat sessions drawer first — flush against the
         // window's left edge, while the same surfaces stay inset 8px at the
@@ -953,6 +968,9 @@ export default function App() {
                 so this one arm serves /aws-control and /aws-control/usage alike —
                 an app carries sub-segments for its own path navigation, same
                 shape as /settings/<tab>. */}
+            {/* Design exploration (checkpoint 58): a sample page with its own
+                side panel, opened from the prototype band. */}
+            <Route path={PROTOTYPE_TWO_PANELS_PATH} element={<PrototypeSidePanelPage />} />
             <Route path="/:builtinApp/*" element={<BuiltinAppRoute />} />
             <Route path="*" element={<ChatRedirect />} />
           </Routes>

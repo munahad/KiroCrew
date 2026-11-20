@@ -80,6 +80,8 @@ describe('note 17: option 2 is always Gradual', () => {
     setEditOption('panel')
     setDisclosure('all')
     expect(readDisclosure()).toBe('gradual')
+    // Checkpoint 58: the band shows its Edit layout switches in edit mode only.
+    act(() => setLayoutEditing(true))
     render(<EditOptionSwitcher />)
     expect(screen.queryByText(i18nT('nav.layout_disclosure_label'))).toBeNull()
     expect(screen.getByText(i18nT('nav.layout_columns_label'))).toBeTruthy()
@@ -111,6 +113,7 @@ describe('note 18: option 2 Columns 2 | 3', () => {
   it('switches from the band, stores the choice, and starts at 2', () => {
     setEditOption('panel')
     expect(readPanelColumns()).toBe('2')
+    act(() => setLayoutEditing(true))
     render(<EditOptionSwitcher />)
     fireEvent.click(screen.getByRole('radio', { name: '3' }))
     expect(readPanelColumns()).toBe('3')

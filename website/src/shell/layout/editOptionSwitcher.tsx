@@ -12,8 +12,11 @@
  * options, one tab stop), styled as segments.
  */
 import { useId } from 'react'
+import { useInRouterContext, useNavigate } from 'react-router-dom'
 
 import { i18nT } from '../../i18n/t'
+import { CHROME_LOOKS, PROTOTYPE_TWO_PANELS_PATH, setChromeLook, useChromeLook } from '../../lib/chromeLook'
+import { useLayoutEditing } from '../../lib/shellLayout'
 import {
   DISCLOSURE_STYLES, EDIT_OPTIONS, GRID_STYLES, PANEL_COLUMNS, PANEL_STYLES, REVEAL_SWITCH, TILES_ENABLED, requestEditOption, setDisclosure, setGridStyle,
   setPanelColumns, setPanelStyle, useDisclosure, useEditOption, useGridChoice, usePanelColumns, usePanelStyle,
@@ -71,17 +74,55 @@ const GRID_KEY = { drafting: 'nav.layout_grid_drafting', minimal: 'nav.layout_gr
 const DISCLOSURE_KEY = { all: 'nav.layout_disclosure_all', gradual: 'nav.layout_disclosure_gradual' } as const
 const PANEL_STYLE_KEY = { list: 'nav.layout_panel_style_list', tiles: 'nav.layout_panel_style_tiles' } as const
 
+function TwoPanelsLink() {
+  const navigate = useNavigate()
+  return (
+    <button
+      type="button"
+      data-testid="prototype-two-panels-link"
+      onClick={() => navigate(PROTOTYPE_TWO_PANELS_PATH)}
+      className="rounded-md px-3 py-0.5 text-[12px] font-medium focus-visible:outline focus-visible:outline-2"
+      style={{ border: `1.5px solid ${INK}`, outlineColor: INK }}
+    >
+      {i18nT('nav.prototype_two_panels_link')}
+    </button>
+  )
+}
+
+const CHROME_KEY = { current: 'nav.prototype_chrome_current', 'a-lighter': 'nav.prototype_chrome_a_lighter', 'a-darker': 'nav.prototype_chrome_a_darker' } as const
+
 export function EditOptionSwitcher() {
+  const editing = useLayoutEditing()
+  const chrome = useChromeLook()
   const option = useEditOption()
   const grid = useGridChoice()
   const disclosure = useDisclosure()
   const columns = usePanelColumns()
   const panelStyle = usePanelStyle()
+  const inRouter = useInRouterContext()
+  const band = { background: BAND, color: INK, borderBottom: `1px solid ${INK}` }
+  // Checkpoint 58: outside edit mode the band compares chrome treatments
+  // (Current | A, Shared frame); in edit mode it shows only the Edit layout
+  // switches, as before.
+  if (!editing) {
+    return (
+      <div
+        data-testid="edit-option-switcher"
+        className="relative z-[90] flex h-9 shrink-0 items-center justify-center gap-6 px-3 font-mono"
+        style={band}
+      >
+        <Segments label={i18nT('nav.prototype_chrome_label')} options={CHROME_LOOKS} value={chrome} onChange={setChromeLook} labelOf={c => i18nT(CHROME_KEY[c])} />
+        {/* A page with its own side panel beside the sidebar, for judging A
+            with two side panels open (pages/prototypeSidePanelPage.tsx). */}
+        {inRouter && <TwoPanelsLink />}
+      </div>
+    )
+  }
   return (
     <div
       data-testid="edit-option-switcher"
       className="relative z-[90] flex h-9 shrink-0 items-center justify-center gap-6 px-3 font-mono"
-      style={{ background: BAND, color: INK, borderBottom: `1px solid ${INK}` }}
+      style={band}
     >
       <Segments label={i18nT('nav.layout_option_label')} options={EDIT_OPTIONS} value={option} onChange={requestEditOption} labelOf={o => i18nT(OPTION_KEY[o])} />
       {/* The second switch belongs to the option under review: the panel
