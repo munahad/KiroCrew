@@ -15,8 +15,9 @@ import { useEffect, useState } from 'react'
 
 import { safeGetItem, safeRemoveItem, safeSetItem } from '../utils/safeStorage'
 import { normalize } from './barGrid'
-import { FALLBACK_GROUP_ID, applyVisibleOrder, readRailLayout, writeRailLayout, type RailGroup } from './railLayout'
-import { NOTIFY_ITEM, PROFILE_ITEM, STATUS_ITEM, isWindowToggle } from './shellLayout'
+import { FALLBACK_GROUP_ID, applyVisibleOrder, isDemoApp, readRailLayout, writeRailLayout, type RailGroup } from './railLayout'
+import { NOTIFY_ITEM, PROFILE_ITEM, SAMPLE_EXTRA_APPS, STATUS_ITEM, isWindowToggle, readShellPlacement } from './shellLayout'
+import { isAppNavId } from '../appNotificationBadges'
 
 const KEY = 'mc-sidebar-rows'
 const EVENT = 'mc:sidebar-rows-changed'
@@ -67,6 +68,26 @@ const FOOT = new Set<string>([STATUS_ITEM, NOTIFY_ITEM, PROFILE_ITEM])
 const one = () => 1
 /** Whether an item keeps to the column's foot (status, the bell, "You"). */
 export const isFootItem = (id: string) => FOOT.has(id)
+
+/* ── Apps stay above the sidebar's foot (checkpoint 59, note 28) ── */
+
+/** An item of the sidebar's Apps group: Discover, Library, Task Runner, the
+ *  sample pinned apps and installed apps. */
+export const isSidebarApp = (id: string) =>
+  isAppNavId(id) || isDemoApp(id) || (SAMPLE_EXTRA_APPS as readonly string[]).includes(id) || id === 'apps' || id === 'apps-library' || id === 'projects'
+/** The sidebar's foot: the tool rows (the terminal) and the foot rows ("You"). */
+export const isSidebarFoot = (id: string) => isFootItem(id) || readShellPlacement().side.includes(id)
+/**
+ * Whether `id` may not land at `index` of the sidebar's order `order` (the
+ * other items, top to bottom, without `id`): an app below the foot's first
+ * row (Terminal, then "You"). Every option asks this while dragging, so the
+ * spot shows no landing line and the not-allowed pointer.
+ */
+export function appBlockedAt(id: string, order: readonly string[], index: number): boolean {
+  if (!isSidebarApp(id)) return false
+  const foot = order.findIndex(isSidebarFoot)
+  return foot >= 0 && index > foot
+}
 
 /** The row each item is drawn at. `ids` in list order. */
 export function resolveColumn(ids: readonly string[], rows: Rows, n: number): Rows {

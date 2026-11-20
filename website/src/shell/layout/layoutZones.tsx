@@ -95,10 +95,13 @@ function ZoneOutline({ zone, area, dragging, nativeDrag, allowed, over, lineX, f
     if (readChromeDrag().over === bar) setChromeDrag({ over: null, lineX: null, cell: null })
   }
   const onDrop = (e: DragEvent) => {
-    if (!bar || !allowed || !e.dataTransfer.types.includes(SHELL_ITEM_MIME)) return
-    e.preventDefault()
+    if (!bar || !e.dataTransfer.types.includes(SHELL_ITEM_MIME)) return
     const id = e.dataTransfer.getData(SHELL_ITEM_MIME)
-    if (!id) return
+    // Checkpoint 59 (note 26): judged from the dropped item, not from the
+    // drag state. The window's own drop listeners clear that state, and React
+    // re-renders before this handler runs, so `allowed` already reads false.
+    if (!id || !zonesFor(id).includes(bar)) return
+    e.preventDefault()
     // The item takes the cells under the pointer; what was there moves aside.
     placeOnBar(bar, id, cellAt(bar, e.clientX, id) ?? 0)
     announceLayout(i18nT('nav.layout_moved', { item: shellItemMeta(id)?.label ?? id, place: zoneLabel(bar) }))
@@ -135,7 +138,10 @@ function ZoneOutline({ zone, area, dragging, nativeDrag, allowed, over, lineX, f
           // sidebar, UP from the bottom bar (below it is the window's edge,
           // which would clip it and leave that bar looking flat).
           : `${minimal ? 'border-transparent' : 'border-text/40'} ${zone === 'bottom' ? 'shadow-[0_-8px_22px_-8px_rgba(0,0,0,0.4)]' : 'shadow-[0_8px_22px_-8px_rgba(0,0,0,0.4)]'}`}`}
-      {...(catches ? { onDragOver, onDragLeave, onDrop } : {})}
+      // The handlers stay on option 1's bar outlines: `catches` (pointer
+      // events) turns off in the same re-render that runs before the drop
+      // reaches React (note 26).
+      {...(catches || (bar && flat) ? { onDragOver, onDragLeave, onDrop } : {})}
     >
       {/* Where the item will land: a line in the gap it snaps to. */}
       {over && allowed && lineX != null && box && (

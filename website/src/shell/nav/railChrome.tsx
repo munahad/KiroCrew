@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
 import { ArrowLeftToLine, GripVertical, PanelLeft } from 'lucide-react'
 import { GithubIcon, DiscordIcon } from '../../components/BrandIcon'
@@ -9,7 +9,7 @@ import { useGuideRevealScope } from '../../guide/GuideRevealScope'
 import { OverlayPortal } from '../../components/overlayRoot'
 import { useNavTip } from './navTip'
 import { LOGO_ITEM, useLayoutEditing } from '../../lib/shellLayout'
-import { FixedLock } from '../layout/fixedLock'
+import { FixedLock, FixedLockLabel } from '../layout/fixedLock'
 import { ItemMoreButton, useLayoutItemProps } from '../layout/keyboardMove'
 import { useDragOnlyEditing } from '../layout/dragOnlyEdit'
 import { startItemDrag } from '../layout/barItems'
@@ -249,6 +249,7 @@ export function RailHeader({ effectiveCollapsed, toggleNav, avatar, branding, bo
   const label = effectiveCollapsed ? i18nT('app.expand_sidebar') : i18nT('app.collapse_sidebar')
   const editing = useLayoutEditing()
   const dragEditing = useDragOnlyEditing()
+  const fixedRef = useRef<HTMLSpanElement>(null)
   // Collapsed with the logo: the logo alone opens the sidebar.
   const logoToggles = showLogo && effectiveCollapsed
   const toggle = () => { dismissTip(); toggleNav() }
@@ -303,8 +304,10 @@ export function RailHeader({ effectiveCollapsed, toggleNav, avatar, branding, bo
       {!logoToggles && (
         // Editing (any option): the button is fixed; a faded lock where a
         // handle would sit says so on hover or focus (note 20).
-        <span className={`group/fixed relative flex shrink-0 items-center ${editing ? 'gap-0.5' : ''} ${effectiveCollapsed ? '' : 'self-start -mr-1.5'}`}>
-          {editing && <FixedLock className={effectiveCollapsed ? 'absolute -left-3.5 top-1/2 -translate-y-1/2' : ''} labelSide={effectiveCollapsed ? 'right' : 'below-end'} />}
+        <span ref={fixedRef} className={`group/fixed relative flex shrink-0 items-center ${editing ? 'gap-0.5' : ''} ${effectiveCollapsed ? '' : 'self-start -mr-1.5'}`}>
+          {editing && <FixedLock className={effectiveCollapsed ? 'absolute -left-3.5 top-1/2 -translate-y-1/2' : ''} labelSide="none" />}
+          {/* Note 27: the label to the button's right, so the sidebar's left edge never clips it. */}
+          {editing && <FixedLockLabel anchor={fixedRef} />}
           <button
             type="button"
             onClick={toggle}

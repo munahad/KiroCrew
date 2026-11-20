@@ -4,11 +4,11 @@
  * (a fixed collapse button, a move-only Crews switcher, an optional logo, "You" never
  * removed, the bell on its own).
  */
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { act, cleanup, fireEvent, render, screen, within } from '@testing-library/react'
 
 import { i18nT } from '../../i18n/t'
-import { readEditOption, requestEditOption, setEditOption } from '../../lib/editOption'
+import { readEditOption, requestEditOption, setEditOption, setPreviewSide } from '../../lib/editOption'
 import {
   LOGO_ITEM, NOTIFY_ITEM, PROFILE_ITEM, REMOTE_ITEM, SEARCH_ITEM, STATUS_ITEM, isLayoutEditing, moveItem, readShellPlacement, setLayoutEditing, zoneOf, type ShellZone,
 } from '../../lib/shellLayout'
@@ -16,6 +16,8 @@ import { zoneLabel } from './barItems'
 import { PreviewEditor } from './previewEditor'
 import type { Candidate } from './layoutEditPanel'
 
+// These tests cover the List side; checkpoint 59's Palette is in checkpoint59.test.tsx.
+beforeEach(() => setPreviewSide('list'))
 afterEach(() => { cleanup(); localStorage.clear() })
 
 const ITEMS: [string, string][] = [

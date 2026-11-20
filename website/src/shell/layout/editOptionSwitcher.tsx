@@ -19,7 +19,7 @@ import { CHROME_LOOKS, PROTOTYPE_TWO_PANELS_PATH, setChromeLook, useChromeLook }
 import { useLayoutEditing } from '../../lib/shellLayout'
 import {
   DISCLOSURE_STYLES, EDIT_OPTIONS, GRID_STYLES, PANEL_COLUMNS, PANEL_STYLES, REVEAL_SWITCH, TILES_ENABLED, requestEditOption, setDisclosure, setGridStyle,
-  setPanelColumns, setPanelStyle, useDisclosure, useEditOption, useGridChoice, usePanelColumns, usePanelStyle,
+  PREVIEW_SIDES, setPanelColumns, setPanelStyle, setPreviewSide, useDisclosure, useEditOption, useGridChoice, usePanelColumns, usePanelStyle, usePreviewSide,
 } from '../../lib/editOption'
 
 // Prototype-tool palette, intentionally outside the theme (see above).
@@ -89,6 +89,8 @@ function TwoPanelsLink() {
   )
 }
 
+const PREVIEW_SIDE_KEY = { palette: 'nav.layout_preview_side_palette', list: 'nav.layout_preview_side_list' } as const
+
 const CHROME_KEY = { current: 'nav.prototype_chrome_current', 'a-lighter': 'nav.prototype_chrome_a_lighter', 'a-darker': 'nav.prototype_chrome_a_darker' } as const
 
 export function EditOptionSwitcher() {
@@ -99,6 +101,7 @@ export function EditOptionSwitcher() {
   const disclosure = useDisclosure()
   const columns = usePanelColumns()
   const panelStyle = usePanelStyle()
+  const previewSide = usePreviewSide()
   const inRouter = useInRouterContext()
   const band = { background: BAND, color: INK, borderBottom: `1px solid ${INK}` }
   // Checkpoint 58: outside edit mode the band compares chrome treatments
@@ -136,6 +139,9 @@ export function EditOptionSwitcher() {
       {TILES_ENABLED && option === 'panel' && <Segments label={i18nT('nav.layout_panel_style_label')} options={PANEL_STYLES} value={panelStyle} onChange={setPanelStyle} labelOf={p => i18nT(PANEL_STYLE_KEY[p])} />}
       {REVEAL_SWITCH && option === 'panel' && panelStyle === 'list' && <Segments label={i18nT('nav.layout_disclosure_label')} options={DISCLOSURE_STYLES} value={disclosure} onChange={setDisclosure} labelOf={d => i18nT(DISCLOSURE_KEY[d])} />}
       {option === 'panel' && panelStyle === 'list' && <Segments label={i18nT('nav.layout_columns_label')} options={PANEL_COLUMNS} value={columns} onChange={setPanelColumns} labelOf={n => n} />}
+      {/* Checkpoint 59 (note 29): option 3 compares a palette of the items not
+          shown (the drawing is the only place to move items) with its list. */}
+      {option === 'preview' && <Segments label={i18nT('nav.layout_preview_side_label')} options={PREVIEW_SIDES} value={previewSide} onChange={setPreviewSide} labelOf={s => i18nT(PREVIEW_SIDE_KEY[s])} />}
       {option === 'drag' && <Segments label={i18nT('nav.layout_grid_label')} options={GRID_STYLES} value={grid} onChange={setGridStyle} labelOf={g => i18nT(GRID_KEY[g])} />}
     </div>
   )

@@ -33,16 +33,16 @@ import { i18nT } from '../../i18n/t'
 import { barOrder, cellOf, setItemStyle, useItemStyle } from '../../lib/barGrid'
 import type { RailGroup } from '../../lib/railLayout'
 import {
-  LOGO_ITEM, NOTIFY_ITEM, SEARCH_ITEM, SHELL_ITEM_MIME, announceLayout, canRemove, moveItem, placesOf, readLogoPlace, readPlace,
+  LOGO_ITEM, NOTIFY_ITEM, SEARCH_ITEM, SHELL_ITEM_MIME, announceLayout, canRemove, moveItem, placesOf, readChromeDrag, readLogoPlace, readPlace,
   readShellPlacement, setLayoutEditing, setLogoPlace, setSearchStyle, useLogoShown, useSearchStyle,
   type ShellZone,
 } from '../../lib/shellLayout'
-import { setEditOptionGuard } from '../../lib/editOption'
-import { columnIdsOf, columnOrder, isFootItem, isHeaderId } from '../../lib/sidebarGrid'
+import { setEditOptionGuard, usePreviewSide } from '../../lib/editOption'
+import { appBlockedAt, columnIdsOf, columnOrder, isFootItem, isHeaderId } from '../../lib/sidebarGrid'
 import { zoneLabel, startItemDrag } from './barItems'
 import { offersStyle } from './barStyleChooser'
 import { restoreLayout, snapshotLayout } from './dragOnlyEdit'
-import { FixedLock } from './fixedLock'
+import { FixedLock, FixedLockLabel } from './fixedLock'
 import { safeGetItem } from '../../utils/safeStorage'
 import { announceStep, canStepInList, moveInto, spotOf, stepItem } from './keyboardMove'
 import type { Candidate } from './layoutEditPanel'
@@ -78,6 +78,9 @@ export function PreviewEditor({ candidates, columnOf, categoryLabel, repeated, g
   const dialogRef = useRef<HTMLDivElement>(null)
   const styleOf = useItemStyle()
   const searchStyle = useSearchStyle()
+  // Note 29: Palette (the drawing is the only place to move items; beside it,
+  // the items not shown) or List (every item, as before).
+  const side = usePreviewSide()
 
   // The layout as it was on open: Cancel and Discard put it back. The logo
   // and the bell keep their own stores, outside the shared snapshot.
@@ -249,11 +252,21 @@ export function PreviewEditor({ candidates, columnOf, categoryLabel, repeated, g
     })
     return i < 0 ? chips.length : i
   }
+  /** Note 28: an app dragged below the sidebar's Terminal and "You". */
+  const blockedAt = (zone: ShellZone, index: number, id: string | null) => {
+    if (zone !== 'sidebar' || !id) return false
+    const order = inZone('sidebar')
+    const before = order.slice(0, index).filter(x => x !== id).length
+    return appBlockedAt(id, order.filter(x => x !== id), before)
+  }
   const zoneDrop = (zone: ShellZone) => ({
     onDragOver: (e: DragEvent) => {
       if (!e.dataTransfer.types.includes(SHELL_ITEM_MIME)) return
-      e.preventDefault()
       e.stopPropagation()
+      // A spot the item may not take: no landing line, and no preventDefault,
+      // so the browser shows its not-allowed pointer (⊘).
+      if (blockedAt(zone, indexAt(e, zone), readChromeDrag().id)) { if (over) setOver(null); return }
+      e.preventDefault()
       e.dataTransfer.dropEffect = 'move'
       const index = indexAt(e, zone)
       if (over?.zone !== zone || over.index !== index) setOver({ zone, index })
@@ -264,7 +277,7 @@ export function PreviewEditor({ candidates, columnOf, categoryLabel, repeated, g
       const id = e.dataTransfer.getData(SHELL_ITEM_MIME)
       const index = indexAt(e, zone)
       setOver(null)
-      if (id) dropAt(id, zone, index)
+      if (id && !blockedAt(zone, index, id)) dropAt(id, zone, index)
     },
   })
   useEffect(() => {
@@ -331,11 +344,13 @@ export function PreviewEditor({ candidates, columnOf, categoryLabel, repeated, g
   )
   /** An item no editor moves (the Crews switcher, the collapse button): drawn
    *  in place, with no drag and no menu. */
+  const fixedRef = useRef<HTMLSpanElement>(null)
   const fixed = (label: string, icon: ReactNode, testId: string, iconOnlyChip = false) => (
     // Focusable so keyboard users reach its lock and hear it is fixed
     // (checkpoint 57): on hover or focus, a faded lock where a chip's handle
     // would sit, and "Fixed in sidebar, can't be moved". No drag, no menu.
     <span
+      ref={fixedRef}
       data-preview-fixed={testId}
       // eslint-disable-next-line jsx-a11y/no-noninteractive-tabindex
       tabIndex={0}
@@ -343,7 +358,9 @@ export function PreviewEditor({ candidates, columnOf, categoryLabel, repeated, g
       aria-label={i18nT('nav.layout_fixed_collapse')}
       className="group/fixed relative flex shrink-0 items-center gap-0.5 rounded-md outline-none focus-visible:ring-2 focus-visible:ring-accent"
     >
-      <FixedLock labelSide="below-end" />
+      <FixedLock labelSide="none" />
+      {/* Note 27: the label to the right, where the drawing's edge never clips it. */}
+      <FixedLockLabel anchor={fixedRef} />
       <span className={`flex h-6 min-w-0 shrink-0 items-center gap-1.5 rounded-md border border-dotted border-border px-1.5 text-[11px] text-muted ${iconOnlyChip ? 'w-6 justify-center px-0' : ''}`}>
         <span aria-hidden="true" className="flex h-3.5 w-3.5 shrink-0 items-center justify-center [&_svg]:h-3.5 [&_svg]:w-3.5">{icon}</span>
         <span aria-hidden="true" className={iconOnlyChip ? 'sr-only' : 'min-w-0 truncate'}>{label}</span>
@@ -400,6 +417,91 @@ export function PreviewEditor({ candidates, columnOf, categoryLabel, repeated, g
     )
   }
 
+  /* ── The palette (note 29): the items not shown ── */
+
+  const [paletteOver, setPaletteOver] = useState(false)
+  useEffect(() => {
+    const clear = () => setPaletteOver(false)
+    window.addEventListener('dragend', clear)
+    return () => window.removeEventListener('dragend', clear)
+  }, [])
+  /** A chip dragged back onto the palette is removed (only what may be removed). */
+  const paletteTakes = (id: string | null) => !!id && where(id) !== 'none' && canRemove(id)
+  const palette = () => {
+    const notShown = candidates.filter(x => where(x.id) === 'none')
+    const cats = [...new Set(notShown.map(x => x.category))]
+    return (
+      // A chip dropped here is removed: a pointer convenience, its ⋯ Remove is the keyboard path.
+      // eslint-disable-next-line jsx-a11y/no-noninteractive-element-interactions
+      <section
+        className={`flex min-h-0 w-[300px] min-w-[240px] shrink-0 flex-col rounded-lg border-2 border-dashed p-2 transition-colors ${paletteOver ? 'border-accent bg-accent-subtle/40' : 'border-transparent'}`}
+        aria-labelledby="preview-palette-title"
+        data-testid="preview-palette"
+        onDragOver={e => {
+          if (!e.dataTransfer.types.includes(SHELL_ITEM_MIME) || !paletteTakes(readChromeDrag().id)) return
+          e.preventDefault()
+          e.dataTransfer.dropEffect = 'move'
+          if (!paletteOver) setPaletteOver(true)
+        }}
+        onDragLeave={e => { if (!e.currentTarget.contains(e.relatedTarget as Node | null)) setPaletteOver(false) }}
+        onDrop={e => {
+          e.preventDefault()
+          setPaletteOver(false)
+          const id = e.dataTransfer.getData(SHELL_ITEM_MIME)
+          if (paletteTakes(id)) hide(id)
+        }}
+      >
+        <h3 id="preview-palette-title" className="m-0 px-1 text-[13px] font-semibold text-text">
+          {i18nT('nav.layout_zone_none')} <span className="font-normal text-muted">{notShown.length}</span>
+        </h3>
+        <p className="m-0 mt-0.5 mb-2 px-1 text-[12px] text-muted">{paletteOver ? i18nT('nav.layout_preview_palette_drop') : i18nT('nav.layout_preview_palette_hint')}</p>
+        <div className="min-h-0 flex-1 overflow-y-auto" data-testid="preview-palette-items">
+          {notShown.length === 0 && <p className="m-0 px-2 py-6 text-center text-[13px] text-muted">{i18nT('nav.layout_preview_palette_empty')}</p>}
+          {cats.map(c => (
+            <div key={c} role="group" aria-label={categoryLabel(c)} className="mb-2">
+              <h4 className="m-0 px-1 pb-1 text-[11px] font-medium uppercase tracking-wide text-muted">{categoryLabel(c)}</h4>
+              <ul className="m-0 flex list-none flex-wrap gap-1 p-0">
+                {notShown.filter(x => x.category === c).map(x => (
+                  <li key={x.id} className="group/chip relative flex min-w-0 max-w-full">
+                    <button
+                      type="button"
+                      data-preview-palette-item={x.id}
+                      draggable
+                      onDragStart={e => { setMenu(null); startItemDrag(e, x.id) }}
+                      // Enter or a click: the menu of places to add it to.
+                      onClick={e => (menu?.id === x.id ? setMenu(null) : openMenu(x.id, e.currentTarget))}
+                      aria-haspopup="menu"
+                      aria-expanded={menu?.id === x.id}
+                      title={x.detail && repeated.has(x.meta.label) ? `${x.meta.label} · ${x.detail}` : x.meta.label}
+                      className={`flex h-7 min-w-0 max-w-full items-center gap-1.5 rounded-md border px-2 pr-6 text-[12px] cursor-grab active:cursor-grabbing ${
+                        menu?.id === x.id ? 'border-accent bg-accent-subtle text-text-strong' : 'border-border bg-bg text-text hover:bg-bg-hover'}`}
+                    >
+                      <span aria-hidden="true" className="flex h-3.5 w-3.5 shrink-0 items-center justify-center [&_svg]:h-3.5 [&_svg]:w-3.5">{x.meta.icon}</span>
+                      <span className="min-w-0 truncate">{x.meta.label}</span>
+                    </button>
+                    {/* "⋯": the same menu (the chip itself opens it by keyboard). */}
+                    <button
+                      type="button"
+                      tabIndex={-1}
+                      aria-hidden="true"
+                      draggable={false}
+                      title={i18nT('nav.layout_item_more')}
+                      data-testid="preview-palette-more"
+                      onClick={e => { e.stopPropagation(); if (menu?.id === x.id) setMenu(null); else openMenu(x.id, e.currentTarget.previousElementSibling as HTMLElement) }}
+                      className="absolute right-1 top-1/2 flex h-4 w-4 -translate-y-1/2 items-center justify-center rounded border-none bg-transparent text-muted hover:text-text cursor-pointer opacity-60 group-hover/chip:opacity-100"
+                    >
+                      <MoreHorizontal size={12} aria-hidden="true" />
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          ))}
+        </div>
+      </section>
+    )
+  }
+
   // The drawing keeps the window's own proportions.
   const ratio = typeof window !== 'undefined' ? Math.min(1.9, Math.max(1.2, window.innerWidth / window.innerHeight)) : 1.6
   const menuItem = menu ? byId.get(menu.id) : undefined
@@ -444,8 +546,9 @@ export function PreviewEditor({ candidates, columnOf, categoryLabel, repeated, g
           </header>
 
           <div className="flex min-h-0 flex-1 gap-5 overflow-hidden px-5 py-4">
+            {side === 'palette' && palette()}
             {/* The list: Built in and Yours, searchable. */}
-            <section className="flex min-h-0 w-[300px] min-w-[240px] shrink-0 flex-col" aria-label={i18nT('nav.layout_preview_items')}>
+            {side === 'list' && <section className="flex min-h-0 w-[300px] min-w-[240px] shrink-0 flex-col" aria-label={i18nT('nav.layout_preview_items')}>
               <div role="tablist" aria-label={i18nT('nav.layout_preview_items')} className="mb-2 flex gap-4 border-b border-border">
                 {(['builtin', 'yours'] as const).map(t => (
                   <button
@@ -557,7 +660,7 @@ export function PreviewEditor({ candidates, columnOf, categoryLabel, repeated, g
                   )
                 })}
               </div>
-            </section>
+            </section>}
 
             {/* The drawing of the window. */}
             <section className="flex min-h-0 min-w-0 flex-1 flex-col overflow-y-auto" aria-label={i18nT('nav.layout_preview_drawing')}>
@@ -573,7 +676,7 @@ export function PreviewEditor({ candidates, columnOf, categoryLabel, repeated, g
                 </div>
               </div>
 
-              <p className="m-0 mt-3 text-[12px] text-muted">{i18nT('nav.layout_preview_menu_hint')}</p>
+              <p className="m-0 mt-3 text-[12px] text-muted">{i18nT(side === 'palette' ? 'nav.layout_preview_palette_hint_drawing' : 'nav.layout_preview_menu_hint')}</p>
             </section>
           </div>
 
@@ -584,13 +687,13 @@ export function PreviewEditor({ candidates, columnOf, categoryLabel, repeated, g
             <Btn primary onClick={done}>{i18nT('nav.rail_done')}</Btn>
           </footer>
 
-          {menu && menuItem && menuAt !== 'none' && (
+          {menu && menuItem && (menuAt !== 'none' || side === 'palette') && (
             <>
               <div className="fixed inset-0 z-[88]" aria-hidden="true" onPointerDown={() => setMenu(null)} />
               <div
                 role="menu"
                 tabIndex={-1}
-                aria-label={i18nT('nav.layout_kbd_menu', { item: menuItem.meta.label })}
+                aria-label={i18nT(menuAt === 'none' ? 'nav.layout_preview_palette_menu' : 'nav.layout_kbd_menu', { item: menuItem.meta.label })}
                 data-testid="preview-chip-menu"
                 className="fixed z-[89] min-w-[200px] max-w-[280px] rounded-lg border border-border bg-bg-elevated p-1 text-text shadow-xl"
                 style={{ left: Math.min(menu.x, window.innerWidth - 290), top: Math.min(menu.y, window.innerHeight - 220) }}
@@ -606,14 +709,16 @@ export function PreviewEditor({ candidates, columnOf, categoryLabel, repeated, g
                   const label = menuItem.meta.label
                   const inBar = menuAt === 'top' || menuAt === 'bottom'
                   const items: { key: string; text: string; run: () => void; icon?: JSX.Element }[] = []
-                  if (canStep(id, true)) items.push({ key: 'earlier', icon: inBar ? <ArrowLeft size={13} aria-hidden="true" /> : <ArrowUp size={13} aria-hidden="true" />, text: i18nT(inBar ? 'nav.layout_move_left' : 'nav.layout_move_up', { item: label }), run: () => step(id, earlierKey(menuAt)) })
-                  if (canStep(id, false)) items.push({ key: 'later', icon: inBar ? <ArrowRight size={13} aria-hidden="true" /> : <ArrowDown size={13} aria-hidden="true" />, text: i18nT(inBar ? 'nav.layout_move_right' : 'nav.layout_move_down', { item: label }), run: () => step(id, laterKey(menuAt)) })
-                  for (const z of ZONES) if (z !== menuAt && placesOf(id).includes(z)) items.push({ key: `to-${z}`, text: i18nT('nav.layout_kbd_move_to', { place: zoneLabel(z) }), run: () => dropAt(id, z, inZone(z).length) })
+                  // A palette item (note 29): where it can be added, the keyboard path for its drag.
+                  if (menuAt === 'none') for (const z of ZONES) if (placesOf(id).includes(z)) items.push({ key: `add-${z}`, text: i18nT('nav.layout_preview_add_to', { place: zoneLabel(z) }), run: () => place(id, z, label) })
+                  if (menuAt !== 'none' && canStep(id, true)) items.push({ key: 'earlier', icon: inBar ? <ArrowLeft size={13} aria-hidden="true" /> : <ArrowUp size={13} aria-hidden="true" />, text: i18nT(inBar ? 'nav.layout_move_left' : 'nav.layout_move_up', { item: label }), run: () => step(id, earlierKey(menuAt)) })
+                  if (menuAt !== 'none' && canStep(id, false)) items.push({ key: 'later', icon: inBar ? <ArrowRight size={13} aria-hidden="true" /> : <ArrowDown size={13} aria-hidden="true" />, text: i18nT(inBar ? 'nav.layout_move_right' : 'nav.layout_move_down', { item: label }), run: () => step(id, laterKey(menuAt)) })
+                  if (menuAt !== 'none') for (const z of ZONES) if (z !== menuAt && placesOf(id).includes(z)) items.push({ key: `to-${z}`, text: i18nT('nav.layout_kbd_move_to', { place: zoneLabel(z) }), run: () => dropAt(id, z, inZone(z).length) })
                   if (inBar && offersStyle(id)) {
                     const icon = iconOnly(id)
                     items.push({ key: 'style', text: i18nT(icon ? (id === SEARCH_ITEM ? 'nav.layout_search_field' : 'nav.layout_style_label') : 'nav.layout_search_icon'), run: () => setIconOnly(id, !icon) })
                   }
-                  if (canRemove(id)) items.push({ key: 'remove', text: i18nT('nav.layout_kbd_remove'), run: () => hide(id) })
+                  if (menuAt !== 'none' && canRemove(id)) items.push({ key: 'remove', text: i18nT('nav.layout_kbd_remove'), run: () => hide(id) })
                   return items.map(x => (
                     <button
                       key={x.key}

@@ -40,7 +40,7 @@ import {
   setLayoutWindowLocked, setSearchStyle, useLayoutAnnouncement, useSearchStyle, useShellPlacement, zoneOf, type BarZone, type ShellZone,
 } from '../../lib/shellLayout'
 import { barOrder, cellOf, clearBarCells, placeOnBar, setBarStyle, setItemStyle, useBarCells, useBarStyle, useItemStyle } from '../../lib/barGrid'
-import { clearSidebarRows, columnIdsOf, columnOrder, isFootItem, useSidebarRows } from '../../lib/sidebarGrid'
+import { appBlockedAt, clearSidebarRows, columnIdsOf, columnOrder, isFootItem, useSidebarRows } from '../../lib/sidebarGrid'
 import { useTerminalEnabled } from '../../utils/terminalRegistry'
 import { useRailWidth } from '../../hooks/useRailWidth'
 import { MOBILE_BREAKPOINT, useIsMobile } from '../../hooks/useIsMobile'
@@ -404,12 +404,23 @@ export function LayoutEditPanel({ groups, hidden, meta }: {
       : i18nT('nav.layout_moved', { item: label, place: zoneLabel(to) }))
   }
 
+  /** Note 28: whether `id` may not land beside row `beside` (before it, or
+   *  after it; `null`: at the section's end) of the sidebar's list. */
+  const listBlocked = (section: ShellZone | 'none', rows: Candidate[], id: string | null, beside: string | null, before: boolean) => {
+    if (section !== 'sidebar' || !id || phone) return false
+    const order = rows.map(r => r.id).filter(x => x !== id)
+    const i = beside === null ? order.length : order.indexOf(beside) + (before ? 0 : 1)
+    return appBlockedAt(id, order, i)
+  }
   /** Drop on a place section's own space (its heading, its padding, an empty
    *  slot): the item goes to the end of that place, or into the line already
    *  shown beside that section's last row. */
   const listSectionDrop = (section: ShellZone | 'none', rows: Candidate[], shut: boolean) => ({
     onDragOver: (e: DragEvent) => {
       if (shut || !e.dataTransfer.types.includes(SHELL_ITEM_MIME)) return
+      // Note 28: an app at the sidebar's end (below Terminal and "You"): no
+      // line, and the browser's not-allowed pointer.
+      if (listBlocked(section, rows, readChromeDrag().id, null, false)) { e.stopPropagation(); if (rowAt) setRowAt(null); if (tileOver) setTileOver(null); return }
       e.preventDefault()
       e.dataTransfer.dropEffect = 'move'
       const last = rows[rows.length - 1]
@@ -427,7 +438,7 @@ export function LayoutEditPanel({ groups, hidden, meta }: {
       const id = e.dataTransfer.getData(SHELL_ITEM_MIME)
       const at = rowAt
       setRowAt(null); setTileOver(null)
-      if (!id) return
+      if (!id || listBlocked(section, rows, id, at && rows.some(r => r.id === at.id) ? at.id : null, at?.before ?? false)) return
       if (at && rows.some(r => r.id === at.id)) dropBeside(id, at.id, at.before, section)
       else { const x = candidates.find(c => c.id === id); if (x) place(id, section, x.meta.label) }
     },
@@ -445,7 +456,7 @@ export function LayoutEditPanel({ groups, hidden, meta }: {
 
   /** One list row: drags within and between sections (one purple line
    *  marks where it lands), with its arrows and "⋯" inline. */
-  const rowFor = (x: Candidate, section: ShellZone | 'none', shut: boolean) => {
+  const rowFor = (x: Candidate, section: ShellZone | 'none', shut: boolean, sectionRows: readonly Candidate[] = []) => {
           const at = where(x.id)
           const inBar = at === 'top' || at === 'bottom'
           return (
@@ -470,6 +481,7 @@ export function LayoutEditPanel({ groups, hidden, meta }: {
                 e.dataTransfer.dropEffect = 'move'
                 const r = e.currentTarget.getBoundingClientRect()
                 const before = e.clientY < r.top + r.height / 2
+                if (listBlocked(section, [...sectionRows], readChromeDrag().id, x.id, before)) { e.dataTransfer.dropEffect = 'none'; if (rowAt) setRowAt(null); return }
                 if (rowAt?.id !== x.id || rowAt.before !== before) setRowAt({ id: x.id, before })
                 if (tileOver) setTileOver(null)
               }}
@@ -480,7 +492,7 @@ export function LayoutEditPanel({ groups, hidden, meta }: {
                 const id = e.dataTransfer.getData(SHELL_ITEM_MIME)
                 const before = rowAt?.id === x.id ? rowAt.before : true
                 endRowDrag()
-                if (id) dropBeside(id, x.id, before, section)
+                if (id && !listBlocked(section, [...sectionRows], id, x.id, before)) dropBeside(id, x.id, before, section)
               }}
               className="group/row relative flex flex-col gap-1 pl-3 pr-1.5 py-1.5 rounded-lg hover:bg-bg-hover cursor-grab active:cursor-grabbing"
             >
@@ -606,7 +618,7 @@ export function LayoutEditPanel({ groups, hidden, meta }: {
             {i18nT('nav.layout_tiles_empty')}
           </li>
         )}
-        {rows.map(x => rowFor(x, section, shut))}
+        {rows.map(x => rowFor(x, section, shut, rows))}
             </ul>
           </li>
           )
@@ -645,7 +657,7 @@ export function LayoutEditPanel({ groups, hidden, meta }: {
               {i18nT('nav.layout_tiles_empty')}
             </li>
           )}
-          {rows.map(x => rowFor(x, zone, false))}
+          {rows.map(x => rowFor(x, zone, false, rows))}
         </ul>
         <div className="mt-2" data-testid={`layout-col-add-${zone}`}>
           <HiddenItemPicker
@@ -692,7 +704,9 @@ export function LayoutEditPanel({ groups, hidden, meta }: {
   if (preview) return (
     <PreviewEditor
       candidates={candidates}
-      columnOf={columnOf}
+      // Note 28: the two sample pinned apps are in the drawing's sidebar, so
+      // option 3's list shows them with it, under Built in.
+      columnOf={x => (isDemoApp(x.id) ? 'builtin' : columnOf(x))}
       categoryLabel={c => categoryLabel(c)}
       repeated={repeated}
       groups={groups}

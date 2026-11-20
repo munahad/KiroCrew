@@ -270,3 +270,40 @@ export function readRecentlyRemoved(): string[] {
 export function noteRemoved(id: string): void {
   safeSetItem(RECENT_KEY, JSON.stringify([id, ...readRecentlyRemoved().filter(x => x !== id)].slice(0, RECENT_MAX)))
 }
+
+/* ── Option 3's side panel (prototype band, checkpoint 59, note 29) ── */
+
+/**
+ *   palette — the drawing is the only place items are placed or moved;
+ *             beside it, a palette of the items that are not shown.
+ *   list    — the list of every item beside the drawing (as before).
+ */
+export type PreviewSide = 'palette' | 'list'
+export const PREVIEW_SIDES: readonly PreviewSide[] = ['palette', 'list']
+
+const PREVIEW_SIDE_KEY = 'mc-layout-preview-side'
+const PREVIEW_SIDE_EVENT = 'mc:layout-preview-side-changed'
+
+export function readPreviewSide(): PreviewSide {
+  return safeGetItem(PREVIEW_SIDE_KEY) === 'list' ? 'list' : 'palette'
+}
+
+export function setPreviewSide(side: PreviewSide): void {
+  if (side === readPreviewSide()) return
+  safeSetItem(PREVIEW_SIDE_KEY, side)
+  window.dispatchEvent(new Event(PREVIEW_SIDE_EVENT))
+}
+
+export function usePreviewSide(): PreviewSide {
+  const [side, setSide] = useState(readPreviewSide)
+  useEffect(() => {
+    const sync = () => setSide(readPreviewSide())
+    window.addEventListener(PREVIEW_SIDE_EVENT, sync)
+    window.addEventListener('storage', sync)
+    return () => {
+      window.removeEventListener(PREVIEW_SIDE_EVENT, sync)
+      window.removeEventListener('storage', sync)
+    }
+  }, [])
+  return side
+}

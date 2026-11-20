@@ -10,7 +10,7 @@ import { afterEach, describe, expect, it } from 'vitest'
 import { cleanup, fireEvent, render, screen, within } from '@testing-library/react'
 
 import { i18nT } from '../../i18n/t'
-import { readDisclosure, readPanelColumns, setDisclosure, setEditOption, setPanelColumns } from '../../lib/editOption'
+import { readDisclosure, readPanelColumns, setDisclosure, setEditOption, setPanelColumns, setPreviewSide } from '../../lib/editOption'
 import {
   FOCUS_ITEM, HISTORY_ITEM, LOGO_ITEM, NOTIFY_ITEM, PROFILE_ITEM, REMOTE_ITEM, SEARCH_ITEM, SHELL_ITEM_MIME, STATUS_ITEM, moveItem, readShellPlacement, resetShellLayout, setLayoutEditing, zoneOf, type ShellZone,
 } from '../../lib/shellLayout'
@@ -229,6 +229,7 @@ describe('note 21: Move up / down in the item menus, options 2 and 3', () => {
 
 describe('note 22: option 3 list rows step left and right in a bar', () => {
   it('gives Top bar rows ‹ › named left and right, sidebar rows up and down', () => {
+    setPreviewSide('list')
     renderPreview()
     const list = screen.getByTestId('preview-list')
     const top = list.querySelector<HTMLElement>('[data-preview-group="top"]')!
@@ -251,7 +252,10 @@ describe('note 20: the collapse button is fixed, with a lock on hover or focus',
     const btn = screen.getByTestId('sidebar-collapse-toggle')
     expect(btn.getAttribute('aria-label')).toBe(i18nT('nav.layout_fixed_collapse'))
     const wrap = btn.parentElement!
-    expect(within(wrap).getByTestId('fixed-lock').textContent).toBe(i18nT('nav.layout_fixed_sidebar'))
+    expect(within(wrap).getByTestId('fixed-lock')).toBeTruthy()
+    // Checkpoint 59 (note 27): its label shows beside the button, in the overlay layer.
+    fireEvent.pointerEnter(wrap)
+    expect(screen.getByTestId('fixed-lock-label').textContent).toBe(i18nT('nav.layout_fixed_sidebar'))
     expect(wrap.querySelector('[draggable="true"], [data-testid="layout-item-more"], [data-testid^="layout-item-step"]')).toBeNull()
   })
 

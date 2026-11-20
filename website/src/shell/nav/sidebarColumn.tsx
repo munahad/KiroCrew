@@ -21,7 +21,7 @@ import {
   LOGO_ITEM, announceLayout, isWidgetItem, isWindowToggle, moveItem, readChromeDrag, removeFromBars, setSidebarMembership, useLayoutEditing, useShellPlacement,
 } from '../../lib/shellLayout'
 import {
-  columnIdsOf, commitColumn, isFootItem, isHeaderId, placeInSidebar, pushAsideInColumn, resolveColumn, setSidebarRowCount, useSidebarRows,
+  columnIdsOf, commitColumn, isFootItem, isHeaderId, isSidebarApp, placeInSidebar, pushAsideInColumn, resolveColumn, setSidebarRowCount, useSidebarRows,
 } from '../../lib/sidebarGrid'
 import { CHIPLESS, GRID_EDGE, GRID_FILL, GRID_LINE, useGridVarsClass } from '../layout/barGridView'
 import { useDragOnlyEditing } from '../layout/dragOnlyEdit'
@@ -180,6 +180,13 @@ export function SidebarColumn({ groups, renderRow, renderHeader, collapsed, labe
   const last = overflow || (!live && frame > 0) ? Math.max(fit - 1, ...drawIds.map(id => at[id] ?? 0)) : Math.max(n - 1, ...drawIds.map(id => at[id] ?? 0))
   const height = (last + 1) * pitch
 
+  /** Note 28: whether app `id` would land at or below the foot's top row. */
+  const appBelowFoot = (id: string, row: number) => {
+    if (!isSidebarApp(id)) return false
+    const now = resolveColumn(drawIds, rows, n)
+    const tops = drawIds.filter(x => x !== id && isFoot(x)).map(x => now[x] ?? Infinity)
+    return tops.length > 0 && row >= Math.min(...tops)
+  }
   const rowAt = (y: number) => {
     const r = ref.current?.getBoundingClientRect()
     return r ? Math.max(0, Math.floor((y - r.top) / pitch)) : 0
@@ -195,6 +202,9 @@ export function SidebarColumn({ groups, renderRow, renderHeader, collapsed, labe
     e.dataTransfer.dropEffect = 'move'
     const id = readChromeDrag().id ?? draggingHeader.current
     const row = rowAt(e.clientY)
+    // Note 28: an app at or below the foot's top row (Terminal, "You"): no
+    // landing spot, and the browser's not-allowed pointer (⊘).
+    if (id && appBelowFoot(id, row)) { e.dataTransfer.dropEffect = 'none'; if (hover) setHover(null); return }
     if (hover?.row !== row || hover?.id !== id) setHover({ id, row })
   }
   const onDragLeave = (e: DragEvent) => {
@@ -206,7 +216,7 @@ export function SidebarColumn({ groups, renderRow, renderHeader, collapsed, labe
     e.stopPropagation()
     setHover(null)
     const id = e.dataTransfer.getData(RAIL_PIN_MIME)
-    if (!id) return
+    if (!id || appBelowFoot(id, rowAt(e.clientY))) return
     // Window toggles have their own tool rows at the sidebar's foot; the logo
     // goes back to the sidebar's head.
     if (isWindowToggle(id) || id === LOGO_ITEM) { moveItem(id, 'sidebar'); announceLayout(i18nT('nav.layout_moved', { item: labelOf(id), place: zoneLabel('sidebar') })); return }
