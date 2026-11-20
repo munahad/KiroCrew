@@ -23,7 +23,7 @@ import { notShownFor, registerShellApps } from './areaAdd'
 import { useBarContextMenu } from './barContextMenu'
 import { BarGrid } from './barGridView'
 import { startItemDrag, zoneLabel } from './barItems'
-import { DragOnlyBar, hideFromCanvas, readRemovedStack, undoRemove } from './dragOnlyEdit'
+import { DragOnlyBar, clearRemovedStack, hideFromCanvas, readRemovedStack, undoRemove } from './dragOnlyEdit'
 import { ItemMoreButton, LayoutItemKeyboard } from './keyboardMove'
 import { useNativeDragging } from './layoutZones'
 
@@ -33,6 +33,7 @@ afterEach(() => {
   cleanup()
   act(() => setLayoutEditing(false))
   resetShellLayout()
+  clearRemovedStack()
   localStorage.clear()
 })
 
@@ -94,7 +95,8 @@ describe('note 6: the logo in option 1', () => {
     expect(item.querySelector('[draggable="true"]')).not.toBeNull()
     fireEvent.click(within(item).getByRole('button', { name: i18nT('nav.layout_kbd_menu', { item: i18nT('nav.layout_locked_logo') }) }))
     let menu = screen.getByTestId('layout-item-menu')
-    expect(within(menu).queryByText(i18nT('nav.layout_kbd_move_to', { place: zoneLabel('bottom') }))).toBeNull()
+    // Checkpoint 57 (note 15): the bottom bar too.
+    expect(within(menu).getByText(i18nT('nav.layout_kbd_move_to', { place: zoneLabel('bottom') }))).toBeTruthy()
     fireEvent.click(within(menu).getByText(i18nT('nav.layout_kbd_move_to', { place: zoneLabel('top') })))
     expect(where(LOGO_ITEM)).toBe('top')
     moveItem(LOGO_ITEM, 'sidebar')
@@ -103,7 +105,7 @@ describe('note 6: the logo in option 1', () => {
     fireEvent.click(within(menu).getByText(i18nT('nav.layout_kbd_remove')))
     expect(where(LOGO_ITEM)).toBeNull()
     expect(notShownFor('top').map(x => x.id)).toContain(LOGO_ITEM)
-    expect(notShownFor('bottom').map(x => x.id)).not.toContain(LOGO_ITEM)
+    expect(notShownFor('bottom').map(x => x.id)).toContain(LOGO_ITEM)
   })
 })
 
@@ -112,7 +114,8 @@ describe('note 8: Undo in option 1', () => {
     editOption1()
     render(<DragOnlyBar />)
     act(() => { hideFromCanvas(SEARCH_ITEM); hideFromCanvas(NOTIFY_ITEM) })
-    expect(screen.getByTestId('drag-only-undo').textContent).toContain(i18nT('nav.layout_removed_short', { item: i18nT('nav.layout_notifications_item') }))
+    // Two removed: the count (checkpoint 57), with the list beside Undo.
+    expect(screen.getByTestId('drag-only-undo').textContent).toContain(i18nT('nav.layout_removed_count', { count: 2 }))
     act(() => { fireEvent.keyDown(window, { key: 'z', metaKey: true }) })
     expect(where(NOTIFY_ITEM)).toBe('top')
     expect(where(SEARCH_ITEM)).toBeNull()

@@ -54,7 +54,7 @@ export const PROFILE_ITEM = 'shell:profile'
  *  cluster, which keeps the connection light and the credits reading. */
 export const NOTIFY_ITEM = 'shell:notifications'
 /** The Crew's logo. Starts at the head of the sidebar; it can move to the top
- *  bar (never the bottom bar) or be removed (checkpoint 56). The sidebar's
+ *  bar (checkpoint 56) or the bottom bar (57), or be removed. The sidebar's
  *  collapse button is separate and stays in the sidebar, so moving or removing
  *  the logo never removes the way to expand a collapsed sidebar. */
 export const LOGO_ITEM = 'shell:logo'
@@ -82,7 +82,6 @@ export const IN_YOU_MENU: readonly string[] = [PHONE_ITEM, FEEDBACK_ITEM]
 export const canRemove = (id: string) => id !== PROFILE_ITEM && id !== REMOTE_ITEM
 /** The places an editor may offer for an item, in menu order. */
 export function placesOf(id: string): (ShellZone | 'none')[] {
-  if (id === LOGO_ITEM) return ['sidebar', 'top', 'none']
   return canRemove(id) ? ['sidebar', 'top', 'bottom', 'none'] : ['sidebar', 'top', 'bottom']
 }
 /** Older name, kept for existing call sites: now covers every widget. */
@@ -149,17 +148,17 @@ export const useProfilePlace = () => usePlace(PROFILE_ITEM)
 export const useNotifyPlace = () => usePlace(NOTIFY_ITEM)
 
 /* ── The optional logo: the sidebar's head, the top bar, or not shown ── */
-// One key: absent is the sidebar, '1' (as older builds stored it) not shown, 'top' the top bar.
+// One key: absent is the sidebar, '1' (as older builds stored it) not shown, 'top' or 'bottom' a bar.
 const LOGO_KEY = 'mc-logo-hidden'
 const LOGO_EVENT = 'mc:logo-changed'
-export type LogoPlace = 'sidebar' | 'top' | 'none'
+export type LogoPlace = 'sidebar' | 'top' | 'bottom' | 'none'
 export function readLogoPlace(): LogoPlace {
   const v = safeGetItem(LOGO_KEY)
-  return v === '1' ? 'none' : v === 'top' ? 'top' : 'sidebar'
+  return v === '1' ? 'none' : v === 'top' || v === 'bottom' ? v : 'sidebar'
 }
 export function setLogoPlace(place: LogoPlace): void {
   if (place === 'sidebar') safeRemoveItem(LOGO_KEY)
-  else safeSetItem(LOGO_KEY, place === 'none' ? '1' : 'top')
+  else safeSetItem(LOGO_KEY, place === 'none' ? '1' : place)
   window.dispatchEvent(new Event(LOGO_EVENT))
 }
 /** Whether the logo is at the sidebar's head. */
@@ -385,9 +384,9 @@ function hideInSidebar(id: string): void {
  * within a bar; omitted, it goes at the end.
  */
 export function moveItem(id: string, zone: ShellZone | null, index?: number): void {
-  // Refuse what the item may not do: remove "You" or put the logo in a bar.
+  // Refuse what the item may not do: remove "You" or the Crews switcher.
   if (!placesOf(id).includes(zone ?? 'none')) return
-  if (id === LOGO_ITEM) { setLogoPlace(zone === 'sidebar' || zone === 'top' ? zone : 'none'); return }
+  if (id === LOGO_ITEM) { setLogoPlace(zone ?? 'none'); return }
   if (isWidgetItem(id)) {
     writePlace(id, zone ?? 'none')
     return

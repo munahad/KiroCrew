@@ -37,22 +37,23 @@ import {
 } from '../../lib/railLayout'
 import {
   SHELL_ITEM_MIME, FEATURE2_ITEM, IN_YOU_MENU, SAMPLE_EXTRA_IDS, isSampleExtra, FEEDBACK_ITEM, FOCUS_ITEM, HISTORY_ITEM, LOGO_ITEM, NOTIFY_ITEM, PROFILE_ITEM, REMOTE_ITEM, SEARCH_ITEM, canRemove, placesOf, removeFromBars, STATUS_ITEM, TERMINAL_ITEM, isTwoPlaceItem, announceLayout, isWindowToggle, moveItem, readChromeDrag, resetShellLayout, setLayoutEditing,
-  moveWithinBar, setLayoutWindowLocked, setSearchStyle, useLayoutAnnouncement, useSearchStyle, useShellPlacement, zoneOf, type BarZone, type ShellZone,
+  setLayoutWindowLocked, setSearchStyle, useLayoutAnnouncement, useSearchStyle, useShellPlacement, zoneOf, type BarZone, type ShellZone,
 } from '../../lib/shellLayout'
-import { barOrder, cellOf, clearBarCells, placeOnBar, setBarStyle, setItemStyle, shiftOnBar, useBarCells, useBarStyle, useItemStyle } from '../../lib/barGrid'
-import { canShiftInSidebar, clearSidebarRows, columnIdsOf, columnOrder, isFootItem, shiftInSidebar, useSidebarRows } from '../../lib/sidebarGrid'
+import { barOrder, cellOf, clearBarCells, placeOnBar, setBarStyle, setItemStyle, useBarCells, useBarStyle, useItemStyle } from '../../lib/barGrid'
+import { clearSidebarRows, columnIdsOf, columnOrder, isFootItem, useSidebarRows } from '../../lib/sidebarGrid'
 import { useTerminalEnabled } from '../../utils/terminalRegistry'
 import { useRailWidth } from '../../hooks/useRailWidth'
 import { MOBILE_BREAKPOINT, useIsMobile } from '../../hooks/useIsMobile'
 import { forPhone, phoneBarIds, phoneHide, phoneShow, phoneStep, resetPhoneLayout, usePhoneLayout } from '../../lib/phoneLayout'
 import type { RailItemMeta } from '../nav/railCustomize'
 import { startItemDrag, zoneLabel } from './barItems'
-import { noteRemoved, readEditOption, useDisclosure, useEditOption, usePanelStyle } from '../../lib/editOption'
+import { noteRemoved, readEditOption, useDisclosure, useEditOption, usePanelColumns, usePanelStyle } from '../../lib/editOption'
 import { offersStyle } from './barStyleChooser'
 import { PreviewEditor } from './previewEditor'
 import { HiddenItemPicker } from './hiddenItemPicker'
-import { moveInto, spotOf } from './keyboardMove'
+import { canStepInList, moveInto, spotOf, stepItem } from './keyboardMove'
 import { STATUS_BAR_EDIT_HEIGHT } from '../statusbar/shellStatusBar'
+import { FixedLock } from './fixedLock'
 import './layoutLock.css'
 
 
@@ -214,6 +215,9 @@ export function LayoutEditPanel({ groups, hidden, meta }: {
   // Reveal does not apply to it.
   const tiles = usePanelStyle() === 'tiles' && !phone
   const gradual = useDisclosure() === 'gradual' && !phone && !tiles
+  // Columns (prototype band, checkpoint 57): 3 is one column per place (Top
+  // bar | Sidebar | Bottom bar) instead of Built in | Yours.
+  const threeCols = usePanelColumns() === '3' && !phone && !tiles
   const preview = useEditOption() === 'preview' && !phone
   // Option 2 is the list only (round 1): while it edits, the window behind is
   // blurred, dimmed and locked (layoutLock.css), and still updates live as
@@ -333,25 +337,19 @@ export function LayoutEditPanel({ groups, hidden, meta }: {
     const z = where(id)
     return z === 'top' || z === 'bottom' ? z : null
   }
-  /** Can this row move one step? In a bar, one cell left or right; in the
-   *  sidebar, one row up or down. Either way a neighbour is pushed aside. */
+  /** Can this row move one step? In a bar, past the next item (the list
+   *  shows the bar's order, so a move into a gap would show no change,
+   *  checkpoint 57); in the sidebar, one row up or down. */
   const canStep = (id: string, delta: -1 | 1): boolean => {
     if (phone) {
       const part = phoneParts.find(p => p.includes(id))
       const i = part ? part.indexOf(id) : -1
       return !!part && i + delta >= 0 && i + delta < part.length
     }
-    const bar = barOf(id)
-    if (bar) {
-      const at = cellOf(bar, id)
-      return !!at && at.col + delta >= 0 && at.col + delta <= at.max
-    }
-    for (const list of [placement.top, placement.bottom, placement.side]) {
-      const i = list.indexOf(id)
-      if (i >= 0) return i + delta >= 0 && i + delta < list.length
-    }
-    // A sidebar row moves one row in the column, gaps included.
-    return canShiftInSidebar(groups, id, delta)
+    // One step past the next row of the list, gaps and group titles skipped
+    // (checkpoint 57): a move into a gap would show no change here.
+    const z = where(id)
+    return z !== 'none' && canStepInList(id, z, delta, groups)
   }
   const step = (id: string, delta: -1 | 1, label: string) => {
     if (phone) {
@@ -360,14 +358,11 @@ export function LayoutEditPanel({ groups, hidden, meta }: {
       return
     }
     const bar = barOf(id)
-    if (bar) {
-      if (shiftOnBar(bar, id, delta)) announceLayout(i18nT(delta < 0 ? 'nav.layout_moved_left' : 'nav.layout_moved_right', { item: label }))
-      return
-    }
-    // Tool rows move within their own list; every other sidebar row moves
-    // one row in the column, gaps included.
-    const moved = moveWithinBar(id, delta) || shiftInSidebar(groups, id, delta)
-    if (moved) announceLayout(i18nT(delta < 0 ? 'nav.layout_moved_up' : 'nav.layout_moved_down', { item: label }))
+    const z = where(id)
+    if (z === 'none') return
+    const moved = stepItem(id, z, bar ? (delta < 0 ? 'ArrowLeft' : 'ArrowRight') : (delta < 0 ? 'ArrowUp' : 'ArrowDown'), true, groups)
+    if (moved && bar) announceLayout(i18nT(delta < 0 ? 'nav.layout_moved_left' : 'nav.layout_moved_right', { item: label }))
+    else if (moved) announceLayout(i18nT(delta < 0 ? 'nav.layout_moved_up' : 'nav.layout_moved_down', { item: label }))
   }
 
   const where = (id: string): ShellZone | 'none' => {
@@ -448,46 +443,9 @@ export function LayoutEditPanel({ groups, hidden, meta }: {
     return !!x && columnOf(x) !== key
   }
 
-  /** The place sections (top bar, sidebar, bottom bar, not shown) for one
-   *  list of items; `key` keeps their heading ids unique per column. Option 2
-   *  edits here only: rows drag within and between sections (one purple line
-   *  marks where a row lands), and each row has its arrows and "⋯" inline. */
-  const sectionsFor = (list: Candidate[], key: string) => (
-    <>
-        {(phone ? PHONE_SECTIONS : SECTIONS).map(section => {
-          const rows = list.filter(x => where(x.id) === section).sort((a, b) => orderOf(a.id, section) - orderOf(b.id, section))
-          const shut = shutFor(key)
-          // An empty place shows only while a row of this column is dragged,
-          // as a slot to drop into, so a bar with nothing in it can be filled.
-          if (rows.length === 0 && (!rowDragging || shut)) return null
-          const headingId = `layout-section-${key}-${section}`
-          const Heading = phone ? 'h3' : 'h4'
-          // Gradual: what is not shown is one "Add an item" button opening a
-          // searchable list, instead of a long section. A search in the
-          // panel itself still lists every match in place.
-          if (gradual && !q && section === 'none') return (
-            <li key={section} className={`mt-2 rounded-lg ${tileOver === section ? 'ring-2 ring-accent' : ''}`} {...listSectionDrop(section, [], shut)}>
-              <HiddenItemPicker
-                items={rows.map(x => ({ id: x.id, label: x.meta.label, icon: x.meta.icon, kind: categoryLabel(x.category), detail: x.detail && repeated.has(x.meta.label) ? x.detail : undefined }))}
-                onAdd={(id, label) => place(id, 'sidebar', label)}
-              />
-            </li>
-          )
-          return (
-          <li key={section} className="mt-1 first:mt-0" data-layout-section={section} {...listSectionDrop(section, rows, shut)}>
-            <Heading id={headingId} className="m-0 mt-2 mb-1 mx-2 text-[11px] font-medium uppercase tracking-wide text-muted">
-              {placeLabel(section)} <span className="opacity-70 normal-case">{rows.length}</span>
-            </Heading>
-            <ul aria-labelledby={headingId} className="m-0 p-0 list-none">
-        {rows.length === 0 && (
-          <li
-            data-testid="layout-list-empty-slot"
-            className={`mx-2 mb-1 rounded-lg border-2 border-dashed px-2 py-2 text-center text-[12px] ${tileOver === section ? 'border-accent text-text' : 'border-border text-muted'}`}
-          >
-            {i18nT('nav.layout_tiles_empty')}
-          </li>
-        )}
-        {rows.map(x => {
+  /** One list row: drags within and between sections (one purple line
+   *  marks where it lands), with its arrows and "⋯" inline. */
+  const rowFor = (x: Candidate, section: ShellZone | 'none', shut: boolean) => {
           const at = where(x.id)
           const inBar = at === 'top' || at === 'bottom'
           return (
@@ -607,13 +565,97 @@ export function LayoutEditPanel({ groups, hidden, meta }: {
               </div>
             </li>
           )
-        })}
+  }
+
+  /** The place sections (top bar, sidebar, bottom bar, not shown) for one
+   *  list of items; `key` keeps their heading ids unique per column. Option 2
+   *  edits here only: rows drag within and between sections (one purple line
+   *  marks where a row lands), and each row has its arrows and "⋯" inline. */
+  const sectionsFor = (list: Candidate[], key: string) => (
+    <>
+        {(phone ? PHONE_SECTIONS : SECTIONS).map(section => {
+          const rows = list.filter(x => where(x.id) === section).sort((a, b) => orderOf(a.id, section) - orderOf(b.id, section))
+          const shut = shutFor(key)
+          // An empty place shows only while a row of this column is dragged,
+          // as a slot to drop into, so a bar with nothing in it can be filled.
+          if (rows.length === 0 && (!rowDragging || shut)) return null
+          const headingId = `layout-section-${key}-${section}`
+          const Heading = phone ? 'h3' : 'h4'
+          // Gradual: what is not shown is one "Add an item" button opening a
+          // searchable list, instead of a long section. A search in the
+          // panel itself still lists every match in place.
+          if (gradual && !q && section === 'none') return (
+            <li key={section} className={`mt-2 rounded-lg ${tileOver === section ? 'ring-2 ring-accent' : ''}`} {...listSectionDrop(section, [], shut)}>
+              <HiddenItemPicker
+                items={rows.map(x => ({ id: x.id, label: x.meta.label, icon: x.meta.icon, kind: categoryLabel(x.category), detail: x.detail && repeated.has(x.meta.label) ? x.detail : undefined }))}
+                onAdd={(id, label) => place(id, 'sidebar', label)}
+              />
+            </li>
+          )
+          return (
+          <li key={section} className="mt-1 first:mt-0" data-layout-section={section} {...listSectionDrop(section, rows, shut)}>
+            <Heading id={headingId} className="m-0 mt-2 mb-1 mx-2 text-[11px] font-medium uppercase tracking-wide text-muted">
+              {placeLabel(section)} <span className="opacity-70 normal-case">{rows.length}</span>
+            </Heading>
+            <ul aria-labelledby={headingId} className="m-0 p-0 list-none">
+        {rows.length === 0 && (
+          <li
+            data-testid="layout-list-empty-slot"
+            className={`mx-2 mb-1 rounded-lg border-2 border-dashed px-2 py-2 text-center text-[12px] ${tileOver === section ? 'border-accent text-text' : 'border-border text-muted'}`}
+          >
+            {i18nT('nav.layout_tiles_empty')}
+          </li>
+        )}
+        {rows.map(x => rowFor(x, section, shut))}
             </ul>
           </li>
           )
         })}
     </>
   )
+  /** Option 2, 3 columns: one place per column, in the window's order, with
+   *  the collapse button as a fixed row at the top of the Sidebar column, and
+   *  its own "Add an item" listing what is not shown and fits there. Rows drag
+   *  within and between columns; the window behind follows live. */
+  const placeColumn = (zone: ShellZone) => {
+    const rows = shown.filter(x => where(x.id) === zone).sort((a, b) => orderOf(a.id, zone) - orderOf(b.id, zone))
+    const addable = shown.filter(x => where(x.id) === 'none' && placesFor(x.id).includes(zone))
+    const colId = `layout-col-${zone}`
+    return (
+      <section key={zone} aria-labelledby={colId} className="min-w-0 flex flex-col" data-layout-column={zone}>
+        <h3 id={colId} className="m-0 mx-2 mt-1 mb-1 text-[13px] font-semibold text-text">
+          {zoneLabel(zone)} <span className="font-normal text-muted">{rows.length}</span>
+        </h3>
+        <ul aria-labelledby={colId} data-layout-section={zone} className={`m-0 p-0 list-none rounded-lg ${tileOver === zone ? 'ring-2 ring-accent' : ''}`} {...listSectionDrop(zone, rows, false)}>
+          {zone === 'sidebar' && (
+            // Focusable so keyboard users reach its lock and hear it is fixed.
+            // eslint-disable-next-line jsx-a11y/no-noninteractive-tabindex
+            <li data-testid="layout-col-locked-collapse" tabIndex={0} aria-label={i18nT('nav.layout_fixed_collapse')} className="group/fixed relative flex items-center gap-2 pl-3 pr-1.5 py-1.5 rounded-lg outline-none focus-visible:ring-2 focus-visible:ring-accent">
+              {/* Where a row's grip sits, a faded lock instead (checkpoint 57). */}
+              <FixedLock className="absolute left-0 top-1/2 -translate-y-1/2" />
+              <span className="w-5 h-5 flex items-center justify-center shrink-0 text-muted"><ArrowLeftToLine size={16} aria-hidden="true" /></span>
+              <span className="flex-1 min-w-0 block truncate text-[13px] text-text">{i18nT('nav.layout_locked_toggle')}</span>
+            </li>
+          )}
+          {rows.length === 0 && (
+            <li
+              data-testid="layout-list-empty-slot"
+              className={`mx-2 mb-1 rounded-lg border-2 border-dashed px-2 py-2 text-center text-[12px] ${tileOver === zone ? 'border-accent text-text' : 'border-border text-muted'}`}
+            >
+              {i18nT('nav.layout_tiles_empty')}
+            </li>
+          )}
+          {rows.map(x => rowFor(x, zone, false))}
+        </ul>
+        <div className="mt-2" data-testid={`layout-col-add-${zone}`}>
+          <HiddenItemPicker
+            items={addable.map(x => ({ id: x.id, label: x.meta.label, icon: x.meta.icon, kind: categoryLabel(x.category), detail: x.detail && repeated.has(x.meta.label) ? x.detail : undefined }))}
+            onAdd={(id, label) => place(id, zone, label)}
+          />
+        </div>
+      </section>
+    )
+  }
   const lockedRows = (
     <>
         {/* Always-here items, after everything you can move: their place and a
@@ -624,19 +666,13 @@ export function LayoutEditPanel({ groups, hidden, meta }: {
           </li>
         )}
         {category === 'all' && LOCKED.filter(l => !q || i18nT(l.key).toLowerCase().includes(q)).map(l => (
-          <li key={l.key} className="flex items-center gap-2 px-2 py-1.5 rounded-lg">
-            <span className="w-[13px] shrink-0" aria-hidden="true" />
+          // Focusable so keyboard users reach its lock and hear it is fixed (checkpoint 57).
+          // eslint-disable-next-line jsx-a11y/no-noninteractive-tabindex
+          <li key={l.key} tabIndex={0} aria-label={i18nT('nav.layout_fixed_collapse')} data-testid="layout-locked-collapse" className="group/fixed flex items-center gap-2 px-2 py-1.5 rounded-lg outline-none focus-visible:ring-2 focus-visible:ring-accent">
+            <FixedLock className="w-[13px] shrink-0 justify-center" />
             <span className="w-5 h-5 flex items-center justify-center shrink-0 text-muted">{l.icon}</span>
             <span className="flex-1 min-w-0">
               <span className="block truncate text-[13px] text-text">{i18nT(l.key)}</span>
-            </span>
-            <span
-              className="shrink-0 inline-flex items-center gap-1 px-1.5 py-0.5 rounded border border-dashed border-border text-[11px] text-muted"
-              title={i18nT('nav.layout_locked_title')}
-            >
-              <Lock size={11} aria-hidden="true" />
-              {zoneLabel(l.zone)}
-              <span className="sr-only">{i18nT('nav.layout_locked_title')}</span>
             </span>
           </li>
         ))}
@@ -1058,7 +1094,7 @@ export function LayoutEditPanel({ groups, hidden, meta }: {
       aria-modal={locked || undefined}
       onKeyDown={trapTab}
       aria-label={i18nT('nav.rail_customize_title')}
-      className={`pointer-events-auto min-h-0 flex flex-col bg-bg-elevated text-text outline-none overflow-hidden ${phone ? 'w-full h-full' : '@container w-[640px] max-w-full h-[min(560px,100%)] rounded-2xl border border-border shadow-2xl'}`}
+      className={`pointer-events-auto min-h-0 flex flex-col bg-bg-elevated text-text outline-none overflow-hidden ${phone ? 'w-full h-full' : `@container ${threeCols ? 'w-[820px]' : 'w-[640px]'} max-w-full h-[min(560px,100%)] rounded-2xl border border-border shadow-2xl`}`}
       data-testid="layout-edit-panel"
     >
       <header className="flex items-start gap-2 px-4 pt-3 pb-2 border-b border-border">
@@ -1135,7 +1171,11 @@ export function LayoutEditPanel({ groups, hidden, meta }: {
             list, so screen readers hear the place before its items. */}
         {phone
           ? <>{sectionsFor(shown, 'all')}{lockedRows}</>
-          : (
+          : threeCols ? (
+            <li className="grid grid-cols-1 @min-[600px]:grid-cols-3 gap-x-3 gap-y-3" data-testid="layout-three-columns">
+              {(['top', 'sidebar', 'bottom'] as const).map(placeColumn)}
+            </li>
+          ) : (
             // Two columns side by side, one when the panel is narrow (a small
             // window or a large zoom). Each keeps the place sections inside it.
             <li className="grid grid-cols-1 @min-[560px]:grid-cols-2 gap-x-4 gap-y-3">

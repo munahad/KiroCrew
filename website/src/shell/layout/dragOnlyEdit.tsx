@@ -10,7 +10,8 @@
  *
  * Desktop only: the phone has no layout editing (round 1).
  */
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useRef, useState, type KeyboardEvent as ReactKeyboardEvent } from 'react'
+import { ChevronDown } from 'lucide-react'
 
 import { Btn } from '../../components/ui'
 import { OverlayPortal } from '../../components/overlayRoot'
@@ -106,11 +107,14 @@ export function layoutItemLabel(id: string): string {
   return id
 }
 
-/* ── Undo (option 1, checkpoint 56) ──
+/* ── Undo (option 1, checkpoints 56 and 57) ──
    Every removal in this edit session, newest last. Undo (the message's button
-   or Cmd/Ctrl+Z) puts back the newest one, in its exact old spot, and leaves
-   every other change alone, so removals are undone one at a time. Cleared on
-   Done. */
+   or Cmd/Ctrl+Z) puts back the newest one, in its old spot (or the nearest
+   free one in the same area), and leaves every other change alone, so
+   removals are undone one at a time. After two or more, the message's "▾"
+   lists them all, newest first, each with its own Restore, so one in the
+   middle comes back without undoing the later ones (the "+N more" list from
+   before round 1). Cleared on Done. */
 interface Removed { id: string; label: string; spot: ItemSpot | null; at: number }
 const UNDO_EVENT = 'mc:layout-removed-stack'
 let removedStack: Removed[] = []
@@ -147,15 +151,17 @@ export function hideFromCanvas(id: string, label = layoutItemLabel(id)): void {
   announceLayout(i18nT('nav.layout_removed', { item: label }))
 }
 
-/** Put back the newest removal, in its old spot. Returns whether one was. */
-export function undoRemove(): boolean {
-  const h = removedStack[removedStack.length - 1]
+/** Put back one removal (the newest when none is named), in its old spot.
+ *  Returns whether one was. */
+export function restoreRemoved(id?: string): boolean {
+  const h = id ? removedStack.find(x => x.id === id) : removedStack[removedStack.length - 1]
   if (!h) return false
-  setRemovedStack(removedStack.slice(0, -1))
+  setRemovedStack(removedStack.filter(x => x !== h))
   if (h.spot) putBack(h.id, h.spot)
   announceLayout(i18nT('nav.layout_restored', { item: h.label }))
   return true
 }
+export const undoRemove = (): boolean => restoreRemoved()
 
 /* ── The page ── */
 
@@ -263,22 +269,7 @@ export function DragOnlyBar() {
         // the bottom-bar items' arrows and "⋯", which show just above them.
         style={{ left: railWidth, bottom: STATUS_BAR_EDIT_HEIGHT + 36 }}
       >
-        {last && shownAt !== null && (
-          // Pausing the fade on hover and focus (WCAG 2.2.1); the removal itself is read out by the live region above.
-          // eslint-disable-next-line jsx-a11y/no-static-element-interactions
-          <div
-            data-testid="drag-only-undo"
-            onPointerEnter={() => setPaused(true)}
-            onPointerLeave={() => setPaused(false)}
-            onFocus={() => setPaused(true)}
-            onBlur={() => setPaused(false)}
-            className="pointer-events-auto flex max-w-full items-center gap-2 rounded-xl border border-border bg-bg-elevated py-1.5 pl-3 pr-1.5 text-[13px] text-text shadow-xl"
-          >
-            <span className="min-w-0 truncate">{i18nT('nav.layout_removed_short', { item: last.label })}</span>
-            <span aria-hidden="true" className="text-muted">·</span>
-            <Btn onClick={() => undoRemove()} aria-keyshortcuts={IS_MAC ? 'Meta+Z' : 'Control+Z'}>{i18nT('nav.layout_undo')}</Btn>
-          </div>
-        )}
+        {last && shownAt !== null && <UndoMessage stack={stack} onPause={setPaused} />}
         <div
           ref={barRef}
           tabIndex={-1}
@@ -301,5 +292,116 @@ export function DragOnlyBar() {
         </div>
       </div>
     </OverlayPortal>
+  )
+}
+
+/** The removal message: "<Item> removed · Undo", or after two or more,
+ *  "<N> removed · Undo ▾". The "▾" opens a menu of every removal this edit
+ *  session, newest first, each a Restore (WAI-ARIA menu button: Up, Down,
+ *  Home and End move, Escape or Tab closes and returns focus to "▾"). It opens
+ *  upward, as the message sits above the bottom bar. */
+function UndoMessage({ stack, onPause }: { stack: readonly Removed[]; onPause: (on: boolean) => void }) {
+  const [open, setOpen] = useState(false)
+  const toggleRef = useRef<HTMLButtonElement>(null)
+  const menuRef = useRef<HTMLDivElement>(null)
+  const last = stack[stack.length - 1]
+  const many = stack.length > 1
+  useEffect(() => { if (!many) setOpen(false) }, [many])
+  useEffect(() => { onPause(open) }, [open, onPause])
+  useEffect(() => { if (open) menuRef.current?.querySelector<HTMLElement>('[role="menuitem"]')?.focus() }, [open])
+  useEffect(() => {
+    if (!open) return
+    const away = (e: PointerEvent) => {
+      const t = e.target as Node
+      if (!menuRef.current?.contains(t) && !toggleRef.current?.contains(t)) setOpen(false)
+    }
+    window.addEventListener('pointerdown', away, true)
+    return () => window.removeEventListener('pointerdown', away, true)
+  }, [open])
+  const close = () => { setOpen(false); toggleRef.current?.focus() }
+  const restore = (id: string, i: number) => {
+    restoreRemoved(id)
+    // Stay in the list for the next one, if more than one is left.
+    requestAnimationFrame(() => {
+      const items = [...(menuRef.current?.querySelectorAll<HTMLElement>('[role="menuitem"]') ?? [])]
+      ;(items[Math.min(i, items.length - 1)] ?? toggleRef.current)?.focus()
+    })
+  }
+  const onMenuKey = (e: ReactKeyboardEvent<HTMLDivElement>) => {
+    const items = [...(menuRef.current?.querySelectorAll<HTMLElement>('[role="menuitem"]') ?? [])]
+    const i = items.indexOf(document.activeElement as HTMLElement)
+    if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+      e.preventDefault()
+      items[(i + (e.key === 'ArrowDown' ? 1 : items.length - 1)) % items.length]?.focus()
+    } else if (e.key === 'Home' || e.key === 'End') {
+      e.preventDefault()
+      items[e.key === 'Home' ? 0 : items.length - 1]?.focus()
+    } else if (e.key === 'Escape' || e.key === 'Tab') {
+      // Marked handled so edit mode stays on.
+      e.preventDefault()
+      e.stopPropagation()
+      close()
+    }
+  }
+  return (
+    // Pausing the fade on hover and focus (WCAG 2.2.1); the removal itself is read out by the live region.
+    // eslint-disable-next-line jsx-a11y/no-static-element-interactions
+    <div
+      data-testid="drag-only-undo"
+      onPointerEnter={() => onPause(true)}
+      onPointerLeave={() => { if (!open) onPause(false) }}
+      onFocus={() => onPause(true)}
+      onBlur={() => { if (!open) onPause(false) }}
+      className="pointer-events-auto relative flex max-w-full items-center gap-2 rounded-xl border border-border bg-bg-elevated py-1.5 pl-3 pr-1.5 text-[13px] text-text shadow-xl"
+    >
+      <span className="min-w-0 truncate">{many ? i18nT('nav.layout_removed_count', { count: stack.length }) : i18nT('nav.layout_removed_short', { item: last.label })}</span>
+      <span aria-hidden="true" className="text-muted">·</span>
+      <span className="flex items-center gap-0.5">
+        <Btn onClick={() => undoRemove()} aria-keyshortcuts={IS_MAC ? 'Meta+Z' : 'Control+Z'}>{i18nT('nav.layout_undo')}</Btn>
+        {many && (
+          <button
+            ref={toggleRef}
+            type="button"
+            aria-haspopup="menu"
+            aria-expanded={open}
+            aria-controls={open ? 'drag-only-removed-list' : undefined}
+            aria-label={i18nT('nav.layout_removed_list')}
+            title={i18nT('nav.layout_removed_list')}
+            data-testid="drag-only-undo-list"
+            onClick={() => setOpen(o => !o)}
+            className="flex h-[26px] w-[22px] items-center justify-center rounded-md border-none bg-transparent p-0 text-muted hover:bg-text/10 hover:text-text aria-expanded:bg-text/10 aria-expanded:text-text focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent cursor-pointer"
+          >
+            <ChevronDown size={14} aria-hidden="true" />
+          </button>
+        )}
+      </span>
+      {open && (
+        <div
+          ref={menuRef}
+          id="drag-only-removed-list"
+          role="menu"
+          tabIndex={-1}
+          aria-label={i18nT('nav.layout_removed_list')}
+          onKeyDown={onMenuKey}
+          data-testid="drag-only-removed-list"
+          className="absolute bottom-full right-0 mb-2 flex max-h-[280px] w-[260px] flex-col overflow-y-auto rounded-xl border border-border bg-bg-elevated p-1 text-text shadow-2xl"
+        >
+          {[...stack].reverse().map((h, i) => (
+            <button
+              key={h.id}
+              type="button"
+              role="menuitem"
+              tabIndex={-1}
+              aria-label={i18nT('nav.layout_restore_item', { item: h.label })}
+              onClick={() => restore(h.id, i)}
+              className="group/restore flex w-full items-center gap-3 rounded-md border-none bg-transparent px-2.5 py-1.5 text-left text-[13px] text-text cursor-pointer hover:bg-bg-hover focus-visible:bg-bg-hover outline-none"
+            >
+              <span className="min-w-0 flex-1 truncate">{h.label}</span>
+              <span className="shrink-0 text-muted group-hover/restore:text-text group-focus-visible/restore:text-text">{i18nT('nav.layout_restore')}</span>
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
   )
 }

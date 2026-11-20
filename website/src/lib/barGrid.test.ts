@@ -4,7 +4,7 @@
  */
 import { afterEach, describe, expect, it } from 'vitest'
 
-import { barOrder, cellOf, clearBarCells, placeOnBar, pushAside, readCells, resolveBar, setBarColumns, shiftOnBar } from './barGrid'
+import { barOrder, canSwapOnBar, cellOf, clearBarCells, freeCellNear, placeOnBar, pushAside, readCells, resolveBar, setBarColumns, shiftOnBar, swapOnBar } from './barGrid'
 import { moveItem, readShellPlacement, resetShellLayout } from './shellLayout'
 
 const one = () => 1
@@ -68,6 +68,49 @@ describe('placing on a bar', () => {
     placeOnBar('top', 'schedule', 0)
     expect(shiftOnBar('top', 'schedule', -1)).toBe(false)
     expect(shiftOnBar('top', 'schedule', 1)).toBe(true)
-    expect(cellOf('top', 'schedule')?.col).toBe(1)
+    // Back/Forward (two cells) was pushed into the next cell: it swaps past it.
+    expect(cellOf('top', 'schedule')?.col).toBe(2)
+  })
+
+  it('swaps past a neighbour in the next cell, so repeated presses reach the bar\'s end (note 14)', () => {
+    setBarColumns('bottom', 10)
+    moveItem('schedule', 'bottom')
+    moveItem('artifacts', 'bottom')
+    placeOnBar('bottom', 'schedule', 6)
+    placeOnBar('bottom', 'artifacts', 9)
+    // Packed against the right end before: a push could not move it.
+    placeOnBar('bottom', 'schedule', 8)
+    expect(cellOf('bottom', 'schedule')?.col).toBe(8)
+    expect(shiftOnBar('bottom', 'schedule', 1)).toBe(true)
+    expect(barOrder('bottom')).toEqual(['artifacts', 'schedule'])
+    expect(cellOf('bottom', 'schedule')?.col).toBe(9)
+    expect(cellOf('bottom', 'artifacts')?.col).toBe(8)
+    // The real end: nothing further.
+    expect(shiftOnBar('bottom', 'schedule', 1)).toBe(false)
+    expect(shiftOnBar('bottom', 'schedule', -1)).toBe(true)
+    expect(barOrder('bottom')).toEqual(['schedule', 'artifacts'])
+  })
+
+  it('steps past the next item, gaps skipped, for a list of the bar (options 2 and 3)', () => {
+    setBarColumns('bottom', 10)
+    moveItem('schedule', 'bottom')
+    moveItem('artifacts', 'bottom')
+    placeOnBar('bottom', 'schedule', 0)
+    placeOnBar('bottom', 'artifacts', 5)
+    expect(canSwapOnBar('bottom', 'schedule', -1)).toBe(false)
+    expect(canSwapOnBar('bottom', 'schedule', 1)).toBe(true)
+    expect(swapOnBar('bottom', 'schedule', 1)).toBe(true)
+    expect(barOrder('bottom')).toEqual(['artifacts', 'schedule'])
+    expect(canSwapOnBar('bottom', 'schedule', 1)).toBe(false)
+  })
+
+  it('finds the nearest free cell for an item put back (Undo, note 16)', () => {
+    setBarColumns('bottom', 10)
+    moveItem('schedule', 'bottom')
+    moveItem('artifacts', 'bottom')
+    placeOnBar('bottom', 'schedule', 4)
+    expect(freeCellNear('bottom', 'artifacts', 2)).toBe(2)
+    // Cell 4 is taken: the nearest free one, left first on a tie.
+    expect(freeCellNear('bottom', 'artifacts', 4)).toBe(3)
   })
 })

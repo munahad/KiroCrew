@@ -51,14 +51,16 @@ describe('round 1 shared store rules', () => {
     expect(readPlace(STATUS_ITEM)).toBe(status)
   })
 
-  it('lets the logo sit in the sidebar or the top bar, never the bottom bar, or be removed', () => {
+  it('lets the logo sit in the sidebar, the top bar or the bottom bar, or be removed', () => {
     expect(readLogoShown()).toBe(true)
     moveItem(LOGO_ITEM, 'top')
     expect(readLogoShown()).toBe(false)
     expect(zoneOf(LOGO_ITEM, readShellPlacement(), false)).toBe('top')
     expect(barIds('top')).toContain(LOGO_ITEM)
     moveItem(LOGO_ITEM, 'bottom')
-    expect(zoneOf(LOGO_ITEM, readShellPlacement(), false)).toBe('top')
+    expect(zoneOf(LOGO_ITEM, readShellPlacement(), false)).toBe('bottom')
+    expect(barIds('bottom')).toContain(LOGO_ITEM)
+    expect(barIds('top')).not.toContain(LOGO_ITEM)
     moveItem(LOGO_ITEM, null)
     expect(zoneOf(LOGO_ITEM, readShellPlacement(), false)).toBeNull()
     moveItem(LOGO_ITEM, 'sidebar')

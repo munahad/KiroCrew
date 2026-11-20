@@ -25,7 +25,7 @@
  * hides with Delete; every change is read out (WCAG 2.1.1, 2.5.7, 4.1.3).
  */
 import { useEffect, useMemo, useRef, useState, type DragEvent, type KeyboardEvent, type ReactNode } from 'react'
-import { ArrowDown, ArrowLeft, ArrowLeftToLine, ArrowRight, ArrowUp, ChevronDown, ChevronUp, EyeOff, MoreHorizontal, Plus, Search, X } from 'lucide-react'
+import { ArrowDown, ArrowLeft, ArrowLeftToLine, ArrowRight, ArrowUp, ChevronDown, ChevronLeft, ChevronRight, ChevronUp, EyeOff, MoreHorizontal, Plus, Search, X } from 'lucide-react'
 
 import { Btn } from '../../components/ui'
 import { OverlayPortal } from '../../components/overlayRoot'
@@ -42,7 +42,9 @@ import { columnIdsOf, columnOrder, isFootItem, isHeaderId } from '../../lib/side
 import { zoneLabel, startItemDrag } from './barItems'
 import { offersStyle } from './barStyleChooser'
 import { restoreLayout, snapshotLayout } from './dragOnlyEdit'
-import { announceStep, moveInto, spotOf, stepItem } from './keyboardMove'
+import { FixedLock } from './fixedLock'
+import { safeGetItem } from '../../utils/safeStorage'
+import { announceStep, canStepInList, moveInto, spotOf, stepItem } from './keyboardMove'
 import type { Candidate } from './layoutEditPanel'
 
 type Place = ShellZone | 'none'
@@ -174,10 +176,10 @@ export function PreviewEditor({ candidates, columnOf, categoryLabel, repeated, g
   const toggle = (id: string) => (where(id) === 'none' ? place(id, 'sidebar', labelOf(id)) : hide(id))
   const canStep = (id: string, earlier: boolean) => {
     const z = where(id)
-    if (z === 'none') return false
-    const order = inZone(z)
-    const i = order.indexOf(id)
-    return i >= 0 && (earlier ? i > 0 : i < order.length - 1)
+    if (z === 'none' || (id === LOGO_ITEM && z === 'sidebar')) return false
+    // The same list step as the move itself (checkpoint 57), so an arrow
+    // is on exactly when a press shows a move.
+    return canStepInList(id, z, earlier ? -1 : 1, groups)
   }
   const openMenu = (id: string, el: HTMLElement) => {
     const r = el.getBoundingClientRect()
@@ -187,7 +189,8 @@ export function PreviewEditor({ candidates, columnOf, categoryLabel, repeated, g
   const step = (id: string, key: string) => {
     const from = where(id)
     if (from === 'none' || (id === LOGO_ITEM && from === 'sidebar')) return
-    const to = stepItem(id, from, key)
+    // Its bars are lists: a step goes past the next item (checkpoint 57).
+    const to = stepItem(id, from, key, true, groups)
     if (to) {
       announceStep(labelOf(id), from, to, key)
       requestAnimationFrame(() => dialogRef.current?.querySelector<HTMLElement>(`[data-preview-chip="${CSS.escape(id)}"]`)?.focus())
@@ -329,22 +332,34 @@ export function PreviewEditor({ candidates, columnOf, categoryLabel, repeated, g
   /** An item no editor moves (the Crews switcher, the collapse button): drawn
    *  in place, with no drag and no menu. */
   const fixed = (label: string, icon: ReactNode, testId: string, iconOnlyChip = false) => (
+    // Focusable so keyboard users reach its lock and hear it is fixed
+    // (checkpoint 57): on hover or focus, a faded lock where a chip's handle
+    // would sit, and "Fixed in sidebar, can't be moved". No drag, no menu.
     <span
       data-preview-fixed={testId}
-      title={`${label} · ${i18nT('nav.layout_always_here')}`}
-      className={`flex h-6 min-w-0 shrink-0 items-center gap-1.5 rounded-md border border-dotted border-border px-1.5 text-[11px] text-muted ${iconOnlyChip ? 'w-6 justify-center px-0' : ''}`}
+      // eslint-disable-next-line jsx-a11y/no-noninteractive-tabindex
+      tabIndex={0}
+      role="img"
+      aria-label={i18nT('nav.layout_fixed_collapse')}
+      className="group/fixed relative flex shrink-0 items-center gap-0.5 rounded-md outline-none focus-visible:ring-2 focus-visible:ring-accent"
     >
-      <span aria-hidden="true" className="flex h-3.5 w-3.5 shrink-0 items-center justify-center [&_svg]:h-3.5 [&_svg]:w-3.5">{icon}</span>
-      <span className={iconOnlyChip ? 'sr-only' : 'min-w-0 truncate'}>{label}</span>
+      <FixedLock labelSide="below-end" />
+      <span className={`flex h-6 min-w-0 shrink-0 items-center gap-1.5 rounded-md border border-dotted border-border px-1.5 text-[11px] text-muted ${iconOnlyChip ? 'w-6 justify-center px-0' : ''}`}>
+        <span aria-hidden="true" className="flex h-3.5 w-3.5 shrink-0 items-center justify-center [&_svg]:h-3.5 [&_svg]:w-3.5">{icon}</span>
+        <span aria-hidden="true" className={iconOnlyChip ? 'sr-only' : 'min-w-0 truncate'}>{label}</span>
+      </span>
     </span>
   )
   /** The sidebar's head, as the window draws it: the logo (optional) and the
-   *  separate collapse button on one row. */
+   *  separate collapse button on one row. The window's rule (checkpoint 57):
+   *  a collapsed sidebar with the logo shows the logo only (it opens the
+   *  sidebar); without it, the expand button. Expanded, the button always. */
+  const navCollapsed = safeGetItem('mc-nav') !== '0'
   const sidebarHead = () => (
     <div data-preview-head="" className="flex shrink-0 flex-col gap-1">
       <div className="flex min-w-0 items-center gap-1">
         <div className="flex min-w-0 flex-1">{logoPlaced && chip(LOGO_ITEM, 'sidebar')}</div>
-        {fixed(i18nT('nav.layout_locked_toggle'), <ArrowLeftToLine />, 'collapse', true)}
+        {!(navCollapsed && logoPlaced) && fixed(i18nT('nav.layout_locked_toggle'), <ArrowLeftToLine />, 'collapse', true)}
       </div>
     </div>
   )
@@ -504,8 +519,10 @@ export function PreviewEditor({ candidates, columnOf, categoryLabel, repeated, g
                                 <span className="flex shrink-0 items-center">
                                   {[true, false].map(earlier => {
                                     const ok = canStep(id, earlier)
-                                    const key = earlier ? 'nav.layout_move_up' : 'nav.layout_move_down'
-                                    const Icon = earlier ? ChevronUp : ChevronDown
+                                    // A bar's rows step left and right (‹ ›), the sidebar's up and down (˄ ˅).
+                                    const bar = z === 'top' || z === 'bottom'
+                                    const key = bar ? (earlier ? 'nav.layout_move_left' : 'nav.layout_move_right') : (earlier ? 'nav.layout_move_up' : 'nav.layout_move_down')
+                                    const Icon = bar ? (earlier ? ChevronLeft : ChevronRight) : (earlier ? ChevronUp : ChevronDown)
                                     return (
                                       <button
                                         key={String(earlier)}

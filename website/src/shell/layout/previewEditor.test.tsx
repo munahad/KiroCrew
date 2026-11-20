@@ -76,6 +76,8 @@ describe('PreviewEditor Remove all', () => {
 
 describe('PreviewEditor drawing', () => {
   it('draws the collapse button fixed, no fixed Crews switcher, and the bell as its own chip', () => {
+    // Expanded: the collapse button always shows (checkpoint 57).
+    localStorage.setItem('mc-nav', '0')
     renderEditor()
     const side = zone('sidebar')
     expect(side.querySelector('[data-preview-fixed="crews"]')).toBeNull()
@@ -84,11 +86,14 @@ describe('PreviewEditor drawing', () => {
     expect(within(zone('top')).getByRole('button', { name: 'Notifications' })).toBeTruthy()
   })
 
-  it('draws the logo in the sidebar head, moves it to the top bar and back, never to the bottom bar', () => {
+  it('draws the logo in the sidebar head, moves it to the top bar, the bottom bar and back', () => {
     renderEditor()
     fireEvent.click(within(zone('sidebar')).getByRole('button', { name: 'Logo' }))
     let menu = screen.getByTestId('preview-chip-menu')
-    expect(within(menu).queryByText(i18nT('nav.layout_kbd_move_to', { place: zoneLabel('bottom') }))).toBeNull()
+    fireEvent.click(within(menu).getByText(i18nT('nav.layout_kbd_move_to', { place: zoneLabel('bottom') })))
+    expect(where(LOGO_ITEM)).toBe('bottom')
+    fireEvent.click(within(zone('bottom')).getByRole('button', { name: 'Logo' }))
+    menu = screen.getByTestId('preview-chip-menu')
     fireEvent.click(within(menu).getByText(i18nT('nav.layout_kbd_move_to', { place: zoneLabel('top') })))
     expect(where(LOGO_ITEM)).toBe('top')
     const chip = within(zone('top')).getByRole('button', { name: 'Logo' })

@@ -8,7 +8,8 @@ import { uiLocation } from '../../uiLocations/uiLocation'
 import { useGuideRevealScope } from '../../guide/GuideRevealScope'
 import { OverlayPortal } from '../../components/overlayRoot'
 import { useNavTip } from './navTip'
-import { LOGO_ITEM } from '../../lib/shellLayout'
+import { LOGO_ITEM, useLayoutEditing } from '../../lib/shellLayout'
+import { FixedLock } from '../layout/fixedLock'
 import { ItemMoreButton, useLayoutItemProps } from '../layout/keyboardMove'
 import { useDragOnlyEditing } from '../layout/dragOnlyEdit'
 import { startItemDrag } from '../layout/barItems'
@@ -196,19 +197,22 @@ function BrandText({ botName }: { botName: string }) {
 /** The logo at the sidebar's head. In option 1's edit mode (checkpoint 56) it
  *  is an item like any other: a drag handle and a ⋯ menu (Move to Top bar,
  *  Remove) on hover or focus, draggable to the top bar, and the keyboard path
- *  of every item (Space to pick up, Delete to remove). */
-function EditableLogo({ collapsed, children }: { collapsed: boolean; children: React.ReactNode }) {
+ *  of every item (Space to pick up, Delete to remove). Outside it, the logo
+ *  opens a collapsed sidebar, as in production (checkpoint 57). `onExpand`: a
+ *  click while collapsed, where the logo is the only way to open it. */
+function EditableLogo({ collapsed, onExpand, children }: { collapsed: boolean; onExpand?: () => void; children: React.ReactNode }) {
   const on = useDragOnlyEditing()
   const label = i18nT('nav.layout_locked_logo')
   const kbd = useLayoutItemProps(LOGO_ITEM, 'sidebar', label)
   if (!on) return <>{children}</>
   return (
     <div data-testid="sidebar-logo-item" className={`group/edit relative flex min-w-0 items-center gap-1 ${collapsed ? '' : 'flex-1'}`}>
-      {/* eslint-disable-next-line jsx-a11y/no-static-element-interactions -- `kbd` makes it a focusable button with its keyboard path */}
+      {/* eslint-disable-next-line jsx-a11y/no-static-element-interactions, jsx-a11y/click-events-have-key-events -- `kbd` makes it a focusable button with its keyboard path */}
       <div
         {...kbd}
         draggable
         onDragStart={e => startItemDrag(e, LOGO_ITEM)}
+        onClick={collapsed ? onExpand : undefined}
         className="flex min-w-0 flex-1 items-center gap-1 rounded-md outline-none cursor-grab active:cursor-grabbing [&_*]:cursor-grab hover:bg-bg-hover focus-visible:ring-2 focus-visible:ring-accent"
       >
         {!collapsed && <GripVertical size={12} aria-hidden="true" className="shrink-0 text-muted opacity-0 group-hover/edit:opacity-100 group-focus-within/edit:opacity-100" />}
@@ -220,11 +224,15 @@ function EditableLogo({ collapsed, children }: { collapsed: boolean; children: R
 }
 
 /**
- * The desktop sidebar's header (round 1): the optional logo, and the collapse
- * button as its own control. The logo used to BE the collapse toggle, so a
- * collapsed sidebar without it had no way back; now the button is always
- * here, whether or not the logo is shown. Collapsed, the logo (if shown)
- * sits above the expand button. The phone drawer keeps RailBrandToggle.
+ * The desktop sidebar's header: the optional logo, and the collapse button
+ * as its own control, drawn as production Crew draws it (checkpoint 57): the
+ * arrow-to-edge glyph at 15px, muted, at the header's right edge on the
+ * row's 23px control baseline, no hover tint; hovering the header tilts the
+ * logo. Collapsed with the logo in the sidebar, the logo is the only control
+ * and clicking it expands the sidebar, as in production. With the logo
+ * removed or in a bar, a collapsed sidebar shows an expand button instead,
+ * so it can always be opened. Expanded, the collapse button always shows.
+ * The phone drawer keeps RailBrandToggle.
  */
 export function RailHeader({ effectiveCollapsed, toggleNav, avatar, branding, botName, showLogo }: {
   effectiveCollapsed: boolean
@@ -235,47 +243,86 @@ export function RailHeader({ effectiveCollapsed, toggleNav, avatar, branding, bo
   showLogo: boolean
 }) {
   useGuideRevealScope('shell.nav-rail', !effectiveCollapsed)
-  // Collapsed, the button carries no text: the same instant hover label as the
-  // collapsed nav rows (#25743).
+  // Collapsed, the control carries no text: the same instant hover label as
+  // the collapsed nav rows (#25743).
   const { tip, tipOn, rowRef, showTip, hideTip, dismissTip, pointerProps } = useNavTip<HTMLButtonElement>(effectiveCollapsed)
   const label = effectiveCollapsed ? i18nT('app.expand_sidebar') : i18nT('app.collapse_sidebar')
+  const editing = useLayoutEditing()
+  const dragEditing = useDragOnlyEditing()
+  // Collapsed with the logo: the logo alone opens the sidebar.
+  const logoToggles = showLogo && effectiveCollapsed
+  const toggle = () => { dismissTip(); toggleNav() }
+  const tipProps = { ...pointerProps, onMouseEnter: showTip, onMouseLeave: hideTip, onFocus: showTip, onBlur: hideTip }
+  const expandTip = effectiveCollapsed && tip && (
+    <OverlayPortal>
+      <div
+        data-testid="rail-expand-tip"
+        className={`fixed flex items-center px-3 rounded-md bg-card border border-border shadow-lg text-text text-sm font-medium z-[9999] pointer-events-none whitespace-nowrap transition-opacity duration-150 ${tipOn ? 'opacity-100' : 'opacity-0'}`}
+        style={{ top: tip.top, left: tip.left + tip.width + 4, height: tip.height }}
+      >
+        {i18nT('app.expand_sidebar')}
+      </div>
+    </OverlayPortal>
+  )
+  const glyph = (
+    <span data-layout-logo className={`flex items-center gap-2.5 min-w-0 ${effectiveCollapsed ? '' : 'flex-1 pl-0.5'}`}>
+      <RailHeaderGlyph avatar={avatar} boxClass={branding?.logoClass ?? (effectiveCollapsed ? 'w-9 h-9' : 'w-7 h-7')} iconSize={effectiveCollapsed ? 24 : 18} />
+      {!effectiveCollapsed && <BrandText botName={botName} />}
+    </span>
+  )
   return (
-    <div data-testid="sidebar-header" className={`relative flex mb-1.5 ${effectiveCollapsed ? 'flex-col items-center gap-1 mt-1' : 'items-center gap-2 min-h-7'}`}>
+    // `group`: hovering the header tilts the logo (RailHeaderGlyph), production's hover look.
+    <div data-testid="sidebar-header" className={`group relative flex mb-1.5 ${effectiveCollapsed ? 'flex-col items-center gap-1 mt-1' : 'items-center gap-2 min-h-7'}`}>
       {showLogo && (
-        <EditableLogo collapsed={effectiveCollapsed}>
-          <span data-layout-logo className={`flex items-center gap-2.5 min-w-0 ${effectiveCollapsed ? '' : 'flex-1 pl-0.5'}`}>
-            <RailHeaderGlyph avatar={avatar} boxClass={branding?.logoClass ?? (effectiveCollapsed ? 'w-9 h-9' : 'w-7 h-7')} iconSize={effectiveCollapsed ? 24 : 18} />
-            {!effectiveCollapsed && <BrandText botName={botName} />}
-          </span>
+        <EditableLogo collapsed={effectiveCollapsed} onExpand={toggle}>
+          {dragEditing || !logoToggles ? glyph : (
+            // Collapsed, the logo opens the sidebar, as in production. Expanded
+            // it is not a second button: the collapse button does that, and
+            // two controls with one name would read as a duplicate.
+            <button
+              type="button"
+              onClick={toggle}
+              {...tipProps}
+              title={label}
+              aria-label={i18nT('app.expand_sidebar')}
+              aria-expanded={false}
+              data-testid="sidebar-logo-toggle"
+              className="flex min-w-0 items-center p-0 bg-transparent border-none cursor-pointer text-left rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+              // shortcut: the guide's 'shell.nav-toggle' stays on the collapse
+              // button only (one spread per location), so it is unnamed while the
+              // logo alone opens a collapsed sidebar; move it if the guide needs it.
+              ref={rowRef}
+            >
+              {glyph}
+              {expandTip}
+            </button>
+          )}
         </EditableLogo>
       )}
       {!showLogo && !effectiveCollapsed && <span className="flex-1" />}
-      <button
-        type="button"
-        onClick={() => { dismissTip(); toggleNav() }}
-        {...pointerProps}
-        onMouseEnter={showTip}
-        onMouseLeave={hideTip}
-        onFocus={showTip}
-        onBlur={hideTip}
-        title={label}
-        aria-label={effectiveCollapsed ? i18nT('app.expand_sidebar') : i18nT('app.collapse_sidebar')}
-        aria-expanded={!effectiveCollapsed}
-        data-testid="sidebar-collapse-toggle"
-        className="flex items-center justify-center w-7 h-7 shrink-0 rounded-md bg-transparent border-none cursor-pointer text-muted hover:text-text hover:bg-bg-hover transition-colors"
-        {...uiLocation('shell.nav-toggle', rowRef)}
-      >
-        {effectiveCollapsed ? <PanelLeft size={16} aria-hidden="true" /> : <ArrowLeftToLine size={15} aria-hidden="true" />}
-        {effectiveCollapsed && tip && <OverlayPortal>
-          <div
-            data-testid="rail-expand-tip"
-            className={`fixed flex items-center px-3 rounded-md bg-card border border-border shadow-lg text-text text-sm font-medium z-[9999] pointer-events-none whitespace-nowrap transition-opacity duration-150 ${tipOn ? 'opacity-100' : 'opacity-0'}`}
-            style={{ top: tip.top, left: tip.left + tip.width + 4, height: tip.height }}
+      {!logoToggles && (
+        // Editing (any option): the button is fixed; a faded lock where a
+        // handle would sit says so on hover or focus (note 20).
+        <span className={`group/fixed relative flex shrink-0 items-center ${editing ? 'gap-0.5' : ''} ${effectiveCollapsed ? '' : 'self-start -mr-1.5'}`}>
+          {editing && <FixedLock className={effectiveCollapsed ? 'absolute -left-3.5 top-1/2 -translate-y-1/2' : ''} labelSide={effectiveCollapsed ? 'right' : 'below-end'} />}
+          <button
+            type="button"
+            onClick={toggle}
+            {...tipProps}
+            title={label}
+            aria-label={editing ? (effectiveCollapsed ? i18nT('nav.layout_fixed_expand') : i18nT('nav.layout_fixed_collapse')) : effectiveCollapsed ? i18nT('app.expand_sidebar') : i18nT('app.collapse_sidebar')}
+            aria-expanded={!effectiveCollapsed}
+            data-testid="sidebar-collapse-toggle"
+            // Production's arrow: muted, no hover tint; its 28px box keeps the
+            // glyph's centre on the header's 14px line (production's top-[6px] h-4).
+            className={`flex items-center justify-center w-7 h-7 shrink-0 rounded-md bg-transparent border-none cursor-pointer text-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent ${effectiveCollapsed ? 'hover:text-text' : ''}`}
+            {...uiLocation('shell.nav-toggle', rowRef)}
           >
-            {i18nT('app.expand_sidebar')}
-          </div>
-        </OverlayPortal>}
-      </button>
+            {effectiveCollapsed ? <PanelLeft size={16} aria-hidden="true" /> : <ArrowLeftToLine size={15} aria-hidden="true" />}
+            {expandTip}
+          </button>
+        </span>
+      )}
     </div>
   )
 }

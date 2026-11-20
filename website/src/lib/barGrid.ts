@@ -201,7 +201,7 @@ export function spanOf(zone: BarZone, id: string): number {
   return spans[zone][id] ?? guessSpan(zone, id)
 }
 
-/** Every item in a bar: the logo (top bar only), its widgets, then its placed items. */
+/** Every item in a bar: the logo (if there), its widgets, then its placed items. */
 export function barIds(zone: BarZone): string[] {
   return [...(readLogoPlace() === zone ? [LOGO_ITEM] : []), ...WIDGET_ITEMS.filter(id => readPlace(id) === zone), ...readShellPlacement()[zone]]
 }
@@ -284,15 +284,76 @@ export function cellOf(zone: BarZone, id: string): { col: number; max: number } 
   return { col: resolveBar(zone, ids, readCells(zone), span, n)[id], max: n - span(id) }
 }
 
-/** Shift `id` one cell left (-1) or right (+1), pushing a neighbour aside.
+/** Swap `id` with neighbour `x` (right beside it), keeping both inside the
+ *  cells they held together: the left one's start and the right one's end. */
+function swapCells(zone: BarZone, id: string, x: string, delta: -1 | 1): void {
+  const ids = barIds(zone)
+  const span = (y: string) => spanOf(zone, y)
+  const now = resolveBar(zone, ids, readCells(zone), span, readBarColumns(zone))
+  const [l, r] = delta > 0 ? [id, x] : [x, id]
+  const start = now[l]
+  const end = now[r] + span(r)
+  writeCells(zone, { ...readCells(zone), ...now, [r]: start, [l]: end - span(l) })
+}
+
+/** The item beside `id` in its bar, in direction `delta`. `adjacent`: only
+ *  one that holds the very next cell; otherwise the next one, gaps skipped. */
+function neighbourOnBar(zone: BarZone, id: string, delta: -1 | 1, adjacent: boolean): string | null {
+  const ids = barIds(zone)
+  const span = (y: string) => spanOf(zone, y)
+  const now = resolveBar(zone, ids, readCells(zone), span, readBarColumns(zone))
+  const order = [...ids].sort((a, b) => now[a] - now[b])
+  const x = order[order.indexOf(id) + delta]
+  if (!x) return null
+  if (!adjacent) return x
+  const next = delta > 0 ? now[id] + span(id) : now[id] - 1
+  return now[x] <= next && next < now[x] + span(x) ? x : null
+}
+
+/** Shift `id` one cell left (-1) or right (+1). When that cell is taken, it
+ *  swaps places with the item there (checkpoint 57), so repeated presses
+ *  carry it along the whole bar; it stops only at the bar's real end.
  *  The keyboard path for the grid (WCAG 2.5.7). Returns whether it moved. */
 export function shiftOnBar(zone: BarZone, id: string, delta: -1 | 1): boolean {
   const at = cellOf(zone, id)
   if (!at) return false
   const col = at.col + delta
   if (col < 0 || col > at.max) return false
-  placeOnBar(zone, id, col)
+  const x = neighbourOnBar(zone, id, delta, true)
+  if (x) swapCells(zone, id, x, delta)
+  else placeOnBar(zone, id, col)
   return true
+}
+
+/** Swap `id` with the next item in its bar, gaps skipped: one step for a
+ *  list of the bar's items (options 2 and 3), where a one-cell move into a
+ *  gap would show no change. Returns whether it moved. */
+export function swapOnBar(zone: BarZone, id: string, delta: -1 | 1): boolean {
+  const x = neighbourOnBar(zone, id, delta, false)
+  if (!x) return false
+  swapCells(zone, id, x, delta)
+  return true
+}
+
+/** Whether `id` has an item after (or before) it in its bar. */
+export function canSwapOnBar(zone: BarZone, id: string, delta: -1 | 1): boolean {
+  return barIds(zone).includes(id) && neighbourOnBar(zone, id, delta, false) !== null
+}
+
+/** The start cell nearest `col` where `id` fits without covering another
+ *  item, for putting a removed item back (Undo). `col` itself when none is free. */
+export function freeCellNear(zone: BarZone, id: string, col: number): number {
+  const others = barIds(zone).filter(x => x !== id)
+  const span = (x: string) => spanOf(zone, x)
+  const n = readBarColumns(zone)
+  const now = resolveBar(zone, others, readCells(zone), span, n)
+  const s = span(id)
+  const free = (c: number) => c >= 0 && c + s <= n && others.every(x => now[x] + span(x) <= c || c + s <= now[x])
+  for (let d = 0; d <= n; d++) {
+    if (free(col - d)) return col - d
+    if (free(col + d)) return col + d
+  }
+  return col
 }
 
 /** The bar's items in the order they are drawn, left to right. */

@@ -15,8 +15,8 @@ import { useId } from 'react'
 
 import { i18nT } from '../../i18n/t'
 import {
-  DISCLOSURE_STYLES, EDIT_OPTIONS, GRID_STYLES, PANEL_STYLES, TILES_ENABLED, requestEditOption, setDisclosure, setGridStyle, setPanelStyle,
-  useDisclosure, useEditOption, useGridChoice, usePanelStyle,
+  DISCLOSURE_STYLES, EDIT_OPTIONS, GRID_STYLES, PANEL_COLUMNS, PANEL_STYLES, REVEAL_SWITCH, TILES_ENABLED, requestEditOption, setDisclosure, setGridStyle,
+  setPanelColumns, setPanelStyle, useDisclosure, useEditOption, useGridChoice, usePanelColumns, usePanelStyle,
 } from '../../lib/editOption'
 
 // Prototype-tool palette, intentionally outside the theme (see above).
@@ -75,6 +75,7 @@ export function EditOptionSwitcher() {
   const option = useEditOption()
   const grid = useGridChoice()
   const disclosure = useDisclosure()
+  const columns = usePanelColumns()
   const panelStyle = usePanelStyle()
   return (
     <div
@@ -88,9 +89,12 @@ export function EditOptionSwitcher() {
           the preview (its own drawing, no grid) has none. */}
       {/* Option 2 compared two panels: List (rows) and Tiles (Sketch's
           Customize Toolbar). Round 1: List only, so the Panel switch is
-          off (TILES_ENABLED in lib/editOption.ts) and Reveal always shows. */}
+          off (TILES_ENABLED in lib/editOption.ts). Checkpoint 57: Reveal is
+          off too (REVEAL_SWITCH; always Gradual), and Columns compares a 2-column list (Built in
+          | Yours) with a 3-column one (Top bar | Sidebar | Bottom bar). */}
       {TILES_ENABLED && option === 'panel' && <Segments label={i18nT('nav.layout_panel_style_label')} options={PANEL_STYLES} value={panelStyle} onChange={setPanelStyle} labelOf={p => i18nT(PANEL_STYLE_KEY[p])} />}
-      {option === 'panel' && panelStyle === 'list' && <Segments label={i18nT('nav.layout_disclosure_label')} options={DISCLOSURE_STYLES} value={disclosure} onChange={setDisclosure} labelOf={d => i18nT(DISCLOSURE_KEY[d])} />}
+      {REVEAL_SWITCH && option === 'panel' && panelStyle === 'list' && <Segments label={i18nT('nav.layout_disclosure_label')} options={DISCLOSURE_STYLES} value={disclosure} onChange={setDisclosure} labelOf={d => i18nT(DISCLOSURE_KEY[d])} />}
+      {option === 'panel' && panelStyle === 'list' && <Segments label={i18nT('nav.layout_columns_label')} options={PANEL_COLUMNS} value={columns} onChange={setPanelColumns} labelOf={n => n} />}
       {option === 'drag' && <Segments label={i18nT('nav.layout_grid_label')} options={GRID_STYLES} value={grid} onChange={setGridStyle} labelOf={g => i18nT(GRID_KEY[g])} />}
     </div>
   )

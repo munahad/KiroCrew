@@ -193,3 +193,46 @@ export function canShiftInSidebar(groups: readonly RailGroup[], id: string, delt
   const row = resolveColumn(ids, readSidebarRows(), rowCount)[id] + delta
   return row >= 0 && row < Math.max(rowCount, ids.length)
 }
+
+/** The row next to `id` in the column's drawn order, for a list of the
+ *  column's items (options 2 and 3): titles skipped, and a foot row ("You")
+ *  only beside another foot row, as the lists keep the foot rows last. */
+function listNeighbour(groups: readonly RailGroup[], id: string, delta: -1 | 1): string | null {
+  const ids = columnIdsOf(groups)
+  if (!ids.includes(id) || isHeaderId(id)) return null
+  const foot = FOOT.has(id)
+  const order = columnOrder(ids).filter(x => !isHeaderId(x) && FOOT.has(x) === foot)
+  return order[order.indexOf(id) + delta] ?? null
+}
+
+/** Swap a column row with the next row in the list's order (gaps and titles
+ *  skipped), so every press shows a move (checkpoint 57). */
+export function swapInSidebar(groups: readonly RailGroup[], id: string, delta: -1 | 1): boolean {
+  const x = listNeighbour(groups, id, delta)
+  if (!x) return false
+  const ids = columnIdsOf(groups)
+  const all = resolveColumn(ids, readSidebarRows(), rowCount)
+  const drawn = Object.fromEntries(Object.entries(all).filter(([y, r]) => !FOOT.has(y) && r < Number.MAX_SAFE_INTEGER))
+  const out = { ...readSidebarRows(), ...drawn, [id]: all[x], [x]: all[id] }
+  writeSidebarRows(out)
+  commitColumn(groups, ids, out)
+  return true
+}
+
+export function canSwapInSidebar(groups: readonly RailGroup[], id: string, delta: -1 | 1): boolean {
+  return listNeighbour(groups, id, delta) !== null
+}
+
+/** The row nearest `row` that no other item holds, for putting a removed
+ *  item back (Undo). `row` itself when every row is taken. */
+export function freeRowNear(groups: readonly RailGroup[], id: string, row: number): number {
+  const others = columnIdsOf(groups).filter(x => x !== id)
+  const size = Math.max(rowCount, others.length + 1)
+  const taken = new Set(Object.values(resolveColumn(others, readSidebarRows(), rowCount)))
+  const free = (r: number) => r >= 0 && r < size && !taken.has(r)
+  for (let d = 0; d <= size; d++) {
+    if (free(row - d)) return row - d
+    if (free(row + d)) return row + d
+  }
+  return row
+}

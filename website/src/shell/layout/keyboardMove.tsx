@@ -29,13 +29,13 @@ import { OverlayPortal } from '../../components/overlayRoot'
 import { useIsMobile } from '../../hooks/useIsMobile'
 import { i18nT } from '../../i18n/t'
 import { useEditOption } from '../../lib/editOption'
-import { cellOf, placeOnBar, setItemStyle, shiftOnBar, useItemStyle } from '../../lib/barGrid'
+import { canSwapOnBar, cellOf, freeCellNear, placeOnBar, setItemStyle, shiftOnBar, swapOnBar, useItemStyle } from '../../lib/barGrid'
 import { insertPin, isDemoApp, type RailGroup, updateRail } from '../../lib/railLayout'
 import {
   FEATURE2_ITEM, LOGO_ITEM, SEARCH_ITEM, announceLayout, canRemove, isSampleExtra, isWidgetItem, isWindowToggle, moveItem, moveWithinBar, placesOf, readShellPlacement, removeFromBars,
   setSearchStyle, setSidebarMembership, useLayoutEditing, useSearchStyle, zoneOf, type ShellZone,
 } from '../../lib/shellLayout'
-import { canShiftInSidebar, columnIdsOf, commitColumn, isHeaderId, placeInSidebar, readSidebarRowCount, readSidebarRows, resolveColumn, shiftInSidebar } from '../../lib/sidebarGrid'
+import { canShiftInSidebar, canSwapInSidebar, columnIdsOf, commitColumn, freeRowNear, isHeaderId, swapInSidebar, placeInSidebar, readSidebarRowCount, readSidebarRows, resolveColumn, shiftInSidebar } from '../../lib/sidebarGrid'
 import { zoneLabel } from './barItems'
 import { offersStyle } from './barStyleChooser'
 import { hideFromCanvas, restoreLayout, snapshotLayout, type LayoutSnapshot } from './dragOnlyEdit'
@@ -115,15 +115,21 @@ export function spotOf(id: string): ItemSpot | null {
   return { zone, pos: ids.includes(id) ? resolveColumn(ids, readSidebarRows(), readSidebarRowCount())[id] ?? 0 : 0 }
 }
 
-/** Put one item back where it was, leaving every other change as it is. */
+/** Put one item back where it was, leaving every other change as it is.
+ *  When that spot is taken now, the nearest free spot in the same area. */
 export function putBack(id: string, spot: ItemSpot): void {
-  moveInto(id, spot.zone, spot.pos)
+  const pos = spot.zone === 'sidebar' ? freeRowNear(sidebarGroups, id, spot.pos) : freeCellNear(spot.zone, id, spot.pos)
+  moveInto(id, spot.zone, pos)
 }
 
-/** One step in a direction from `zone`; returns the zone it ended in, or null. */
-export function stepItem(id: string, zone: ShellZone, key: string): ShellZone | null {
+/** One step in a direction from `zone`; returns the zone it ended in, or null.
+ *  In a bar a step is one cell, swapping past a neighbour in the way. `byOrder`
+ *  (a list of the items, options 2 and 3): past the next item in the list,
+ *  gaps and group titles skipped, so every press shows a move, and never out
+ *  of the area (checkpoint 57). `groups`: the sidebar groups that list draws. */
+export function stepItem(id: string, zone: ShellZone, key: string, byOrder = false, groups: readonly RailGroup[] = sidebarGroups): ShellZone | null {
   if (zone === 'top' || zone === 'bottom') {
-    if (key === 'ArrowLeft' || key === 'ArrowRight') return shiftOnBar(zone, id, key === 'ArrowLeft' ? -1 : 1) ? zone : null
+    if (key === 'ArrowLeft' || key === 'ArrowRight') return (byOrder ? swapOnBar : shiftOnBar)(zone, id, key === 'ArrowLeft' ? -1 : 1) ? zone : null
     if ((zone === 'top' && key === 'ArrowDown') || (zone === 'bottom' && key === 'ArrowUp')) {
       moveInto(id, 'sidebar', zone === 'top' ? 'start' : 'end')
       return 'sidebar'
@@ -135,6 +141,8 @@ export function stepItem(id: string, zone: ShellZone, key: string): ShellZone | 
   // Tool rows (window toggles) move within their own list; other rows in the column.
   if (readShellPlacement().side.includes(id)) {
     if (moveWithinBar(id, delta)) return 'sidebar'
+  } else if (byOrder) {
+    return swapInSidebar(groups, id, delta) ? 'sidebar' : null
   } else if (canShiftInSidebar(sidebarGroups, id, delta)) {
     shiftInSidebar(sidebarGroups, id, delta)
     return 'sidebar'
@@ -144,6 +152,14 @@ export function stepItem(id: string, zone: ShellZone, key: string): ShellZone | 
   const bar = delta < 0 ? 'top' : 'bottom'
   moveInto(id, bar, delta < 0 ? 'end' : 'start')
   return bar
+}
+
+/** Whether `stepItem(…, byOrder = true)` can move `id` one step in its list. */
+export function canStepInList(id: string, zone: ShellZone, delta: -1 | 1, groups: readonly RailGroup[] = sidebarGroups): boolean {
+  if (zone === 'top' || zone === 'bottom') return canSwapOnBar(zone, id, delta)
+  const side = readShellPlacement().side
+  if (side.includes(id)) { const i = side.indexOf(id); return i + delta >= 0 && i + delta < side.length }
+  return canSwapInSidebar(groups, id, delta)
 }
 
 export const announceStep = (label: string, from: ShellZone, to: ShellZone, key: string) => {

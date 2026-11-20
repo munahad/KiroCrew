@@ -135,7 +135,14 @@ export const DISCLOSURE_STYLES: readonly DisclosureStyle[] = ['all', 'gradual']
 const DISCLOSURE_KEY = 'mc-layout-disclosure'
 const DISCLOSURE_EVENT = 'mc:layout-disclosure-changed'
 
+/** Checkpoint 57 (note 17): option 2 always reveals gradually, so the band's
+ *  Reveal switch is gone and a stored 'all' no longer applies. The store and
+ *  its band switch stay behind this flag, like TILES_ENABLED, in case
+ *  review brings it back. */
+export const REVEAL_SWITCH = false
+
 export function readDisclosure(): DisclosureStyle {
+  if (!REVEAL_SWITCH) return 'gradual'
   return safeGetItem(DISCLOSURE_KEY) === 'gradual' ? 'gradual' : 'all'
 }
 
@@ -157,6 +164,40 @@ export function useDisclosure(): DisclosureStyle {
     }
   }, [])
   return style
+}
+
+/* ── How many columns the option 2 list has (prototype band, checkpoint 57) ──
+ *   2 — Built in | Yours, each with the place sections inside (as before).
+ *   3 — Top bar | Sidebar | Bottom bar, one column per place, no Built in /
+ *       Yours split; each ends with its own "Add an item". */
+export type PanelColumns = '2' | '3'
+export const PANEL_COLUMNS: readonly PanelColumns[] = ['2', '3']
+
+const COLUMNS_KEY = 'mc-layout-panel-columns'
+const COLUMNS_EVENT = 'mc:layout-panel-columns-changed'
+
+export function readPanelColumns(): PanelColumns {
+  return safeGetItem(COLUMNS_KEY) === '3' ? '3' : '2'
+}
+
+export function setPanelColumns(n: PanelColumns): void {
+  if (n === readPanelColumns()) return
+  safeSetItem(COLUMNS_KEY, n)
+  window.dispatchEvent(new Event(COLUMNS_EVENT))
+}
+
+export function usePanelColumns(): PanelColumns {
+  const [n, setN] = useState(readPanelColumns)
+  useEffect(() => {
+    const sync = () => setN(readPanelColumns())
+    window.addEventListener(COLUMNS_EVENT, sync)
+    window.addEventListener('storage', sync)
+    return () => {
+      window.removeEventListener(COLUMNS_EVENT, sync)
+      window.removeEventListener('storage', sync)
+    }
+  }, [])
+  return n
 }
 
 /* ── How the option 2 panel lays out its items (prototype band) ── */

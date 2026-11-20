@@ -71,7 +71,7 @@ export function canSitInBar(_id: string): boolean {
 }
 
 /** Every area an item may go to (lib/shellLayout.ts placesOf): all three for
- *  most items; the logo, the sidebar and the top bar only. */
+ *  every item except where placesOf says otherwise. */
 export function zonesFor(id: string): ShellZone[] {
   return placesOf(id).filter((z): z is ShellZone => z !== 'none')
 }

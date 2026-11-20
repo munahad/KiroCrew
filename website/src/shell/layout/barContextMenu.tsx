@@ -93,8 +93,9 @@ function BarMenu({ at, close }: { at: At; close: () => void }) {
     }
     if (canRemove(id)) items.push({ key: 'remove', icon: <EyeOff size={13} />, text: i18nT('nav.layout_kbd_remove'), run: () => hideFromCanvas(id, at.label) })
   }
-  // Empty bar space: Remove all, when the bar holds anything that can go.
-  if (!at.id && barOrder(at.zone).some(canRemove)) {
+  // Empty bar space: Remove all, when it saves clicks: two or more items that
+  // can go ("You" and the Crews switcher never count), as option 3's.
+  if (!at.id && barOrder(at.zone).filter(canRemove).length >= 2) {
     items.push({ key: 'remove-all', icon: <ListX size={13} />, text: i18nT('nav.layout_remove_all_from', { place: zoneLabel(at.zone) }), run: () => removeAllFrom(at.zone) })
   }
   if (!isLayoutEditing()) items.push({ key: 'edit', icon: <Settings2 size={13} />, text: i18nT('nav.rail_customize'), run: () => setLayoutEditing(true), divider: items.length > 0 })
